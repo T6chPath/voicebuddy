@@ -1,46 +1,60 @@
 package com.voicebuddy.app
 
+enum class Setting(val spoken: String) {
+    WIFI("Wi-Fi"), MOBILE_DATA("Mobile data"), BLUETOOTH("Bluetooth"),
+    HOTSPOT("Hotspot"), LOCATION("Location"), AIRPLANE("Airplane mode")
+}
+
+enum class VolumeDir { UP, DOWN, MUTE, MAX }
+
+enum class GlobalAct { SCREENSHOT, LOCK, HOME, BACK, NOTIFICATIONS }
+
+enum class SearchApp(val spoken: String) {
+    GOOGLE("Google"), CHROME("Chrome"), CHATGPT("ChatGPT"),
+    CLAUDE("Claude"), GEMINI("Gemini"), YOUTUBE("YouTube")
+}
+
 /** Everything the assistant knows how to do. */
 sealed class Command {
     data class PlayYouTube(val query: String) : Command()
     /** text may be blank: then the executor splits "name + text" using the contact list. */
     data class WhatsAppMessage(val name: String, val text: String) : Command()
     data class WhatsAppCall(val name: String, val video: Boolean) : Command()
-    data class PhoneCall(val name: String) : Command()
+    data class PhoneCall(val name: String, val sim: Int? = null) : Command()
     data class OpenApp(val appName: String) : Command()
+    data class Torch(val on: Boolean) : Command()
+    data class Toggle(val setting: Setting, val on: Boolean) : Command()
+    data class Volume(val dir: VolumeDir) : Command()
+    data class Global(val action: GlobalAct) : Command()
+    data class SearchIn(val app: SearchApp, val query: String) : Command()
     data class Unknown(val heard: String) : Command()
 }
 
 /**
  * Turns what the user said (English or Hinglish, Roman script) into a Command.
- *
- *  "papa ko whatsapp video call karo"        -> WhatsAppCall("papa", video = true)
- *  "video call papa on whatsapp"              -> WhatsAppCall("papa", video = true)
- *  "papa ko message bhejo ki main aa raha hoon" -> WhatsAppMessage("papa", "main aa raha hoon")
- *  "send message to rahul saying hello"       -> WhatsAppMessage("rahul", "hello")
- *  "youtube pe kesariya chalao" / "play kesariya" -> PlayYouTube("kesariya")
- *  "mummy ko call karo"                       -> PhoneCall("mummy")
- *  "open instagram" / "instagram kholo"       -> OpenApp("instagram")
+ * Pure Kotlin (no Android), so it is covered by unit tests in src/test.
  */
 object CommandParser {
 
     private val CALL_FILLERS = setOf(
-        "whatsapp", "whats", "app", "on", "pe", "par", "per", "se", "via", "using",
+        "whatsapp", "app", "on", "pe", "par", "per", "se", "via", "using", "from", "through", "with",
         "video", "voice", "audio", "call", "calling", "karo", "kar", "kardo", "do", "please",
-        "plz", "lagao", "laga", "ko", "to", "a", "an", "make", "start", "give", "place",
-        "ek", "me", "mein", "the", "phone", "dial", "now", "abhi", "jaldi", "open", "kholo", "and"
+        "plz", "lagao", "laga", "milao", "ko", "to", "a", "an", "make", "start", "give", "place",
+        "ek", "me", "mein", "the", "phone", "dial", "now", "abhi", "jaldi", "open", "kholo", "and",
+        "sim", "number"
     )
 
     private val MSG_FILLERS = setOf(
-        "whatsapp", "whats", "app", "on", "pe", "par", "per", "send", "a", "an", "the",
-        "message", "msg", "text", "messages", "bhejo", "bhej", "karo", "kar", "do", "dena",
+        "whatsapp", "app", "on", "pe", "par", "per", "send", "a", "an", "the",
+        "message", "msg", "text", "messages", "sms", "bhejo", "bhej", "karo", "kar", "kardo", "do", "dena",
         "ko", "to", "please", "plz", "ek", "write", "likho"
     )
 
     private val PLAY_FILLERS = setOf(
-        "play", "youtube", "you", "tube", "on", "pe", "par", "per", "chalao", "chala",
+        "play", "youtube", "on", "pe", "par", "per", "chalao", "chala",
         "bajao", "baja", "lagao", "laga", "do", "song", "songs", "gaana", "gana", "gaane",
-        "video", "please", "plz", "the", "a", "search", "open", "kholo", "khol", "and", "ke", "karo", "kar", "me", "mein"
+        "video", "please", "plz", "the", "a", "search", "open", "kholo", "khol", "and", "ke",
+        "karo", "kar", "me", "mein"
     )
 
     private val OPEN_FILLERS = setOf(
@@ -48,68 +62,207 @@ object CommandParser {
         "application", "please", "plz", "the", "my", "mera", "meri"
     )
 
+    /** Removed only from the start/end of a search query, so the question itself stays intact. */
+    private val EDGE_FILLERS = setOf(
+        "search", "karo", "kar", "kardo", "do", "pe", "par", "per", "se", "me", "mein", "on", "in",
+        "from", "using", "to", "pucho", "poocho", "puchho", "poochho", "puchiye", "ask", "dhundo",
+        "dhoondo", "dhundho", "find", "khojo", "batao", "bataiye", "bata", "please", "plz", "open",
+        "kholo", "and", "the", "a", "for", "about", "app", "ke", "baare", "bare", "ko", "aur", "then"
+    )
+
     private val MESSAGE_SEPARATORS = listOf(" ki ", " that ", " saying ", " bolo ", " likho ")
 
-    fun parse(raw: String): Command {
-        val s = " " + raw.lowercase()
-            .replace(Regex("[^a-z0-9\\s']"), " ")
+    private val MEDIA_WORDS = Regex(" (youtube|song|songs|gaana|gana|gaane|play|bajao|video|videos) ")
+    private val OFF_WORDS = Regex(" (off|band|bandh|bund|disable|bujhao|bujha|hatao|close|deactivate) ")
+    private val SEARCH_INTENT = Regex(
+        " (search|pucho|poocho|puchho|poochho|puchiye|ask|dhundo|dhoondo|dhundho|find|khojo|batao|bataiye|bata) "
+    )
+    private val VIA = Regex(" (pe|par|per|se|me|mein|on|in|from|using|to) ")
+
+    private val APP_WORDS: Map<SearchApp, List<String>> = linkedMapOf(
+        SearchApp.CHATGPT to listOf("chatgpt", "gpt", "chatgbt", "chatgtp"),
+        SearchApp.CLAUDE to listOf("claude", "claud", "cloude", "clawd", "cloud"),
+        SearchApp.GEMINI to listOf("gemini", "jemini", "gemni"),
+        SearchApp.CHROME to listOf("chrome", "crome", "krome"),
+        SearchApp.GOOGLE to listOf("google", "googal", "gugal"),
+        SearchApp.YOUTUBE to listOf("youtube")
+    )
+
+    private val SIM1 = Regex(" sim ?(1|one|ek|won) | (pehli|pahli|pehla|first|1st) sim ")
+    private val SIM2 = Regex(" sim ?(2|two|to|do|tu) | (dusri|doosri|dusra|doosra|second|2nd) sim ")
+    private val SIM_ANY = Regex(
+        " sim ?(1|one|ek|won|2|two|to|do|tu) | (pehli|pahli|pehla|first|1st|dusri|doosri|dusra|doosra|second|2nd) sim "
+    )
+
+    private val JOINS = listOf(
+        "wi fi" to "wifi", "why fi" to "wifi", "whats app" to "whatsapp", "you tube" to "youtube",
+        "chat gpt" to "chatgpt", "chat gbt" to "chatgpt", "chat g p t" to "chatgpt",
+        "blue tooth" to "bluetooth", "hot spot" to "hotspot", "flash light" to "flashlight",
+        "torch light" to "torch", "screen shot" to "screenshot", "aero plane" to "aeroplane",
+        "air plane" to "airplane", "g p s" to "gps", "turn of" to "turn off", "switch of" to "switch off",
+        "sim card" to "sim"
+    )
+
+    fun normalize(raw: String): String {
+        var s = " " + raw.lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim() + " "
+        for ((a, b) in JOINS) s = s.replace(" $a ", " $b ")
+        return s
+    }
 
-        val hasWhatsApp = s.contains("whatsapp") || s.contains("whats app")
+    fun parse(raw: String): Command {
+        val s = normalize(raw)
+        if (s.isBlank()) return Command.Unknown(raw)
 
-        // 1) Messages (checked first so "...ki mujhe call karna" stays a message)
-        if (Regex(" (message|msg|text|messages|bhejo) ").containsMatchIn(s)) {
-            val sep = MESSAGE_SEPARATORS.firstOrNull { s.contains(it) }
-            if (sep != null) {
-                val idx = s.indexOf(sep)
-                val name = strip(s.substring(0, idx), MSG_FILLERS)
-                val text = s.substring(idx + sep.length).trim()
-                if (name.isNotBlank() && text.isNotBlank()) return Command.WhatsAppMessage(name, text)
-            }
-            // "papa ko message karo main aa raha hoon"
-            val hinglish = Regex("^ ?(.+?) ko (?:whatsapp )?(?:pe |par )?(?:message|msg|text) (?:bhejo|karo|kar do|send karo|do)? ?(.*)$")
-                .find(s.trim())
-            if (hinglish != null) {
-                val name = strip(hinglish.groupValues[1], MSG_FILLERS)
-                val text = hinglish.groupValues[2].trim()
-                if (name.isNotBlank()) return Command.WhatsAppMessage(name, text)
-            }
-            // "message papa I am coming" -> executor splits name/text via contacts
-            val rest = strip(s, MSG_FILLERS)
-            if (rest.isNotBlank()) return Command.WhatsAppMessage(rest, "")
+        parseMessage(s)?.let { return it }
+        parseSearch(s)?.let { return it }
+        parseCall(s)?.let { return it }
+        if (!MEDIA_WORDS.containsMatchIn(s)) {
+            parseTorch(s)?.let { return it }
+            parseToggle(s)?.let { return it }
+            parseVolume(s)?.let { return it }
+            parseGlobal(s)?.let { return it }
         }
-
-        // 2) Calls
-        if (Regex(" (video|voice|audio) (call|calling) ").containsMatchIn(s) ||
-            Regex(" call| calling| dial ").containsMatchIn(s)
-        ) {
-            val isVideo = s.contains(" video ")
-            val name = strip(s, CALL_FILLERS)
-            if (name.isNotBlank()) {
-                return when {
-                    isVideo || hasWhatsApp || s.contains(" voice call") || s.contains(" audio call") ->
-                        Command.WhatsAppCall(name, video = isVideo)
-                    else -> Command.PhoneCall(name)
-                }
-            }
-        }
-
-        // 3) YouTube / play
-        if (Regex(" (play|chalao|chala do|bajao|baja do|lagao|laga do|youtube) ").containsMatchIn(s)) {
-            val query = strip(s, PLAY_FILLERS)
-            return if (query.isBlank()) Command.OpenApp("youtube") else Command.PlayYouTube(query)
-        }
-
-        // 4) Open any app
-        if (Regex(" (open|kholo|khol do|launch|start|chalu karo) ").containsMatchIn(s)) {
-            val app = strip(s, OPEN_FILLERS)
-            if (app.isNotBlank()) return Command.OpenApp(app)
-        }
-
+        parsePlay(s)?.let { return it }
+        parseOpen(s)?.let { return it }
         return Command.Unknown(raw)
+    }
+
+    // ---------- WhatsApp message ----------
+    private fun parseMessage(s: String): Command? {
+        val isMessage = Regex(" (message|msg|text|messages|sms|bhejo) ").containsMatchIn(s) ||
+            Regex(" whatsapp (karo|kar|kardo) ").containsMatchIn(s)
+        if (!isMessage) return null
+
+        val sep = MESSAGE_SEPARATORS.firstOrNull { s.contains(it) }
+        if (sep != null) {
+            val idx = s.indexOf(sep)
+            val name = strip(s.substring(0, idx), MSG_FILLERS)
+            val text = s.substring(idx + sep.length).trim()
+            if (name.isNotBlank() && text.isNotBlank()) return Command.WhatsAppMessage(name, text)
+        }
+        // "papa ko message karo main aa raha hoon"
+        val hinglish = Regex(
+            "^(.+?) ko (?:whatsapp )?(?:pe |par )?(?:message|msg|text|whatsapp) (?:bhejo|karo|kar do|kardo|send karo|do)? ?(.*)$"
+        ).find(s.trim())
+        if (hinglish != null) {
+            val name = strip(hinglish.groupValues[1], MSG_FILLERS)
+            val text = hinglish.groupValues[2].trim()
+            if (name.isNotBlank()) return Command.WhatsAppMessage(name, text)
+        }
+        // "message papa I am coming" -> executor splits name/text via contacts
+        val rest = strip(s, MSG_FILLERS)
+        return if (rest.isNotBlank()) Command.WhatsAppMessage(rest, "") else null
+    }
+
+    // ---------- Search in ChatGPT / Claude / Gemini / Google / Chrome / YouTube ----------
+    private fun parseSearch(s: String): Command? {
+        val app = APP_WORDS.entries.firstOrNull { (_, words) -> words.any { s.contains(" $it ") } }?.key
+        val hasIntent = SEARCH_INTENT.containsMatchIn(s)
+        if (app != null) {
+            if (app == SearchApp.YOUTUBE && !hasIntent) return null   // "youtube pe X chalao" = play
+            if (!hasIntent && !VIA.containsMatchIn(s)) return null      // "chrome kholo" = open app
+            val appWords = APP_WORDS.getValue(app).toSet()
+            val q = edgeStrip(s.trim().split(" ").filter { it.isNotBlank() && it !in appWords })
+            return if (q.isBlank()) Command.OpenApp(app.spoken.lowercase()) else Command.SearchIn(app, q)
+        }
+        if (s.contains(" search ")) {
+            val q = edgeStrip(s.trim().split(" ").filter { it.isNotBlank() })
+            if (q.isNotBlank()) return Command.SearchIn(SearchApp.GOOGLE, q)
+        }
+        return null
+    }
+
+    // ---------- Calls (SIM 1 / SIM 2 / WhatsApp voice / WhatsApp video) ----------
+    private fun parseCall(s0: String): Command? {
+        val isCall = Regex(" (call|calling|dial) ").containsMatchIn(s0) ||
+            Regex(" phone (karo|lagao|kar|kardo|milao) ").containsMatchIn(s0)
+        if (!isCall) return null
+
+        val sim = when {
+            SIM1.containsMatchIn(s0) -> 1
+            SIM2.containsMatchIn(s0) -> 2
+            else -> null
+        }
+        val s = SIM_ANY.replace(s0, " ")
+        val hasWhatsApp = s.contains(" whatsapp ")
+        val isVideo = s.contains(" video ")
+        val name = strip(s, CALL_FILLERS)
+        if (name.isBlank()) return null
+        return when {
+            isVideo || hasWhatsApp || s.contains(" voice call") || s.contains(" audio call") ->
+                Command.WhatsAppCall(name, video = isVideo)
+            else -> Command.PhoneCall(name, sim)
+        }
+    }
+
+    // ---------- Phone controls ----------
+    private fun parseTorch(s: String): Command? {
+        if (!Regex(" (torch|flashlight|flash|light|lights|lite|torchlight) ").containsMatchIn(s)) return null
+        return Command.Torch(!OFF_WORDS.containsMatchIn(s))
+    }
+
+    private fun parseToggle(s: String): Command? {
+        val setting = when {
+            Regex(" (hotspot|tethering) ").containsMatchIn(s) -> Setting.HOTSPOT
+            Regex(" (airplane|aeroplane|flight) ").containsMatchIn(s) -> Setting.AIRPLANE
+            Regex(" bluetooth ").containsMatchIn(s) -> Setting.BLUETOOTH
+            Regex(" (location|gps) ").containsMatchIn(s) -> Setting.LOCATION
+            Regex(" (data|cellular) ").containsMatchIn(s) -> Setting.MOBILE_DATA
+            Regex(" (wifi|wlan|wireless) ").containsMatchIn(s) -> Setting.WIFI
+            Regex(" (internet|net) ").containsMatchIn(s) -> Setting.MOBILE_DATA
+            else -> return null
+        }
+        return Command.Toggle(setting, !OFF_WORDS.containsMatchIn(s))
+    }
+
+    private fun parseVolume(s: String): Command? {
+        if (!Regex(" (volume|awaaz|aawaz|awaz|aawaaz|sound) ").containsMatchIn(s)) return null
+        val dir = when {
+            Regex(" (mute|silent|chup|band|bandh|off) ").containsMatchIn(s) -> VolumeDir.MUTE
+            Regex(" (full|max|maximum|poora|pura|puri|poori) ").containsMatchIn(s) -> VolumeDir.MAX
+            Regex(" (down|kam|kum|ghatao|ghata|decrease|low|lower|dheere|dheema|reduce) ").containsMatchIn(s) -> VolumeDir.DOWN
+            else -> VolumeDir.UP
+        }
+        return Command.Volume(dir)
+    }
+
+    private fun parseGlobal(s: String): Command? {
+        val act = when {
+            Regex(" (screenshot|ss) ").containsMatchIn(s) -> GlobalAct.SCREENSHOT
+            Regex(" lock ").containsMatchIn(s) -> GlobalAct.LOCK
+            Regex(" (notification|notifications) ").containsMatchIn(s) -> GlobalAct.NOTIFICATIONS
+            Regex(" (go|jao|chalo) home | home (screen|pe|par|jao|button) ").containsMatchIn(s) -> GlobalAct.HOME
+            Regex(" go back | (back|peeche|piche|wapas|vapas) (jao|chalo|ja) ").containsMatchIn(s) -> GlobalAct.BACK
+            else -> return null
+        }
+        return Command.Global(act)
+    }
+
+    // ---------- YouTube play ----------
+    private fun parsePlay(s: String): Command? {
+        if (!Regex(" (play|chalao|chala do|bajao|baja do|lagao|laga do|youtube) ").containsMatchIn(s)) return null
+        val query = strip(s, PLAY_FILLERS)
+        return if (query.isBlank()) Command.OpenApp("youtube") else Command.PlayYouTube(query)
+    }
+
+    // ---------- Open any app ----------
+    private fun parseOpen(s: String): Command? {
+        if (!Regex(" (open|kholo|khol do|launch|start|chalu karo) ").containsMatchIn(s)) return null
+        val app = strip(s, OPEN_FILLERS)
+        return if (app.isNotBlank()) Command.OpenApp(app) else null
     }
 
     private fun strip(text: String, fillers: Set<String>): String =
         text.trim().split(" ").filter { it.isNotBlank() && it !in fillers }.joinToString(" ")
+
+    private fun edgeStrip(words: List<String>): String {
+        var a = 0
+        var b = words.size
+        while (a < b && words[a] in EDGE_FILLERS) a++
+        while (b > a && words[b - 1] in EDGE_FILLERS) b--
+        return words.subList(a, b).joinToString(" ")
+    }
 }

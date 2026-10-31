@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="16dp"
         android:text="VoiceBuddy"
         android:textColor="@color/text"
         android:textSize="28sp"
@@ -19,30 +19,35 @@
         android:id="@+id/statusText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="center"
-        android:text="Mic dabao aur bolo"
+        android:text="Kahin bhi double-tap karo ya mic dabao, aur bolo"
         android:textColor="@color/muted"
         android:textSize="15sp" />
 
-    <TextView
-        android:id="@+id/heardText"
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="20dp"
         android:layout_weight="1"
-        android:background="@color/card"
-        android:gravity="center"
-        android:padding="20dp"
-        android:text="Try:\n\n“YouTube pe Kesariya chalao”\n“Papa ko message bhejo ki main aa raha hoon”\n“Papa ko WhatsApp video call karo”\n“Mummy ko call karo”\n“Open Instagram”"
-        android:textColor="@color/text"
-        android:textSize="16sp" />
+        android:background="@color/card">
+
+        <TextView
+            android:id="@+id/heardText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingExtra="4dp"
+            android:padding="20dp"
+            android:text="Try:\n\n• Torch on karo / Turn on light\n• Wi-Fi band karo · Bluetooth on karo · Mobile data on karo\n• Suraj ko message bhejo ki kal milte hain\n• YouTube pe Kesariya chalao\n• ChatGPT se pucho Bharat ki rajdhani kya hai\n• Claude / Gemini / Google / Chrome pe search karo …\n• Papa ko SIM 2 se call karo\n• Atharav ko WhatsApp audio call karo\n• Papa ko WhatsApp video call karo\n• Volume badhao · Screenshot lo · Phone lock karo\n• Instagram kholo"
+            android:textColor="@color/text"
+            android:textSize="15sp" />
+    </ScrollView>
 
     <ImageButton
         android:id="@+id/micButton"
         android:layout_width="96dp"
         android:layout_height="96dp"
-        android:layout_marginTop="28dp"
+        android:layout_marginTop="24dp"
         android:background="@drawable/mic_button"
         android:contentDescription="Speak"
         android:scaleType="centerInside"
@@ -52,10 +57,10 @@
         android:id="@+id/autoTapHint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="16dp"
         android:gravity="center"
         android:padding="8dp"
-        android:text="Turn on Auto-Tap (needed for auto-send and auto-play) — tap here"
+        android:text="Auto-Tap on karo (auto-send, auto-play, Wi-Fi/Bluetooth switch ke liye) — yahan tap karo"
         android:textColor="#FFB547"
         android:textSize="13sp" />
 </LinearLayout>

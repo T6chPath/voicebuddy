@@ -1,22 +1,36 @@
 package com.voicebuddy.app
 
-/** What the Auto-Tap service should press next, valid only for a few seconds after a command. */
+/** What the Auto-Tap service should press next. Valid only for a few seconds after a voice command. */
 object PendingAction {
-    enum class Kind { NONE, WHATSAPP_SEND, YOUTUBE_PLAY_FIRST }
 
-    @Volatile var kind: Kind = Kind.NONE
-        private set
+    sealed class Task {
+        /** Press Send in the WhatsApp chat VoiceBuddy just opened. */
+        object WhatsAppSend : Task()
+        /** Start the first video in the YouTube results VoiceBuddy just opened. */
+        object YouTubePlayFirst : Task()
+        /** Flip the matching switch on the Settings screen/panel VoiceBuddy just opened, then go back. */
+        data class ToggleSwitch(
+            val on: Boolean,
+            val keywords: List<String>,
+            val excludes: List<String>,
+            val firstSwitchOk: Boolean
+        ) : Task()
+        /** Press Send in an AI app (ChatGPT / Claude / Gemini) after sharing the question to it. */
+        data class AppSend(val pkg: String) : Task()
+    }
+
+    @Volatile private var task: Task? = null
     @Volatile private var expiresAt = 0L
 
-    fun set(k: Kind, validForMs: Long = 15_000) {
-        kind = k
+    fun set(t: Task, validForMs: Long = 15_000) {
+        task = t
         expiresAt = System.currentTimeMillis() + validForMs
     }
 
-    fun current(): Kind {
-        if (System.currentTimeMillis() > expiresAt) kind = Kind.NONE
-        return kind
+    fun current(): Task? {
+        if (System.currentTimeMillis() > expiresAt) task = null
+        return task
     }
 
-    fun clear() { kind = Kind.NONE }
+    fun clear() { task = null }
 }

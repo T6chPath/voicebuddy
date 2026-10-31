@@ -5,32 +5,81 @@ import android.provider.ContactsContract
 
 data class Contact(val id: Long, val name: String, val phone: String?)
 
-/** Finds a contact by a spoken name, understanding family words like papa / mummy. */
+/**
+ * Finds a contact by a spoken name. Understands family words (papa, mummy…) and
+ * forgives small spelling differences between speech and the saved name
+ * (Atharav / Atharv, Suraj / Sooraj, Rahul / Raahul).
+ */
 class ContactFinder(private val context: Context) {
 
     /** Country code added to 10-digit numbers saved without one (India = 91). */
     private val defaultCountryCode = "91"
 
-    private val aliases: Map<String, List<String>> = mapOf(
-        "papa" to listOf("papa", "pappa", "papaji", "papa ji", "dad", "daddy", "father", "pitaji", "abbu", "baba"),
-        "mummy" to listOf("mummy", "mumma", "mumy", "mom", "mommy", "mother", "maa", "mammi", "ammi", "mataji"),
-        "bhai" to listOf("bhai", "bhaiya", "brother", "bro", "veer", "veerji"),
-        "didi" to listOf("didi", "sister", "di", "behen", "sis"),
-        "dada" to listOf("dada", "dadaji", "grandfather", "grandpa"),
-        "dadi" to listOf("dadi", "dadiji", "grandmother", "grandma"),
-        "chacha" to listOf("chacha", "chachu", "chachaji", "uncle"),
-        "wife" to listOf("wife", "biwi", "patni", "jaan"),
-        "husband" to listOf("husband", "pati", "hubby")
+    private val aliases: List<List<String>> = listOf(
+        listOf("papa", "pappa", "papaji", "dad", "daddy", "father", "pitaji", "abbu", "baba"),
+        listOf("mummy", "mumma", "mumy", "mom", "mommy", "mother", "maa", "mammi", "ammi", "mataji"),
+        listOf("bhai", "bhaiya", "brother", "bro", "veer", "veerji"),
+        listOf("didi", "sister", "di", "behen", "sis"),
+        listOf("dada", "dadaji", "grandfather", "grandpa"),
+        listOf("dadi", "dadiji", "grandmother", "grandma"),
+        listOf("chacha", "chachu", "chachaji", "uncle"),
+        listOf("wife", "biwi", "patni", "jaan"),
+        listOf("husband", "pati", "hubby")
     )
 
     private fun spellingsFor(spoken: String): List<String> {
         val s = spoken.lowercase().trim()
-        val group = aliases.values.firstOrNull { list -> list.contains(s) }
-        return group ?: listOf(s)
+        return aliases.firstOrNull { it.contains(s) } ?: listOf(s)
+    }
+
+    private fun clean(s: String) =
+        s.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** "atharav" -> "athrv": keeps the sound skeleton so vowel spellings don't matter. */
+    private fun skeleton(w: String): String {
+        if (w.isEmpty()) return w
+        val rest = w.drop(1).filter { it !in "aeiouyh" }
+        return Regex("(.)\\1+").replace(w.first() + rest, "$1")
+    }
+
+    private fun distance(a: String, b: String): Int {
+        val dp = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..b.length) {
+                val tmp = dp[j]
+                dp[j] = minOf(dp[j] + 1, dp[j - 1] + 1, prev + if (a[i - 1] == b[j - 1]) 0 else 1)
+                prev = tmp
+            }
+        }
+        return dp[b.length]
+    }
+
+    /** How well one spoken word matches one word of a saved name (0 = no match). */
+    private fun wordScore(w: String, cw: String): Int = when {
+        w == cw -> 4
+        w.length >= 3 && cw.startsWith(w) -> 3
+        w.length >= 3 && skeleton(w) == skeleton(cw) -> 3
+        w.length >= 4 && distance(w, cw) <= 1 -> 2
+        w.length >= 6 && distance(w, cw) <= 2 -> 1
+        else -> 0
+    }
+
+    private fun nameScore(wanted: String, saved: String): Int {
+        if (wanted == saved) return 10
+        val savedWords = saved.split(" ")
+        val wantedWords = wanted.split(" ").filter { it.isNotBlank() }
+        if (wantedWords.isEmpty()) return 0
+        // every spoken word must match some word of the saved name; weakest link decides
+        val perWord = wantedWords.map { w -> savedWords.maxOf { cw -> wordScore(w, cw) } }
+        val worst = perWord.minOrNull() ?: 0
+        if (worst == 0) return if (saved.contains(wanted)) 1 else 0
+        return worst + if (wantedWords.size == savedWords.size) 1 else 0
     }
 
     fun find(spokenName: String): Contact? {
-        val wanted = spellingsFor(spokenName)
+        val wanted = spellingsFor(spokenName).map { clean(it) }
         var best: Contact? = null
         var bestScore = 0
 
@@ -42,17 +91,9 @@ class ContactFinder(private val context: Context) {
             while (c.moveToNext()) {
                 val id = c.getLong(0)
                 val name = c.getString(1) ?: continue
-                val n = name.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
-                val words = n.split(" ")
-                val score = wanted.maxOf { w ->
-                    when {
-                        n == w -> 4
-                        words.contains(w) || n.startsWith("$w ") -> 3
-                        n.startsWith(w) -> 2
-                        n.contains(w) -> 1
-                        else -> 0
-                    }
-                }
+                val n = clean(name)
+                if (n.isEmpty()) continue
+                val score = wanted.maxOf { nameScore(it, n) }
                 if (score > bestScore) {
                     bestScore = score
                     best = Contact(id, name, null)
@@ -100,14 +141,11 @@ class ContactFinder(private val context: Context) {
      * Returns the row id for the chosen kind, or null if this contact isn't on WhatsApp.
      */
     fun whatsAppCallRow(contactId: Long, video: Boolean, packageName: String): Long? {
-        val prefix = if (packageName == "com.whatsapp.w4b") "vnd.android.cursor.item/vnd.com.whatsapp.w4b"
-        else "vnd.android.cursor.item/vnd.com.whatsapp"
-        val mime = if (video) "$prefix.video.call" else "$prefix.voip.call"
         context.contentResolver.query(
             ContactsContract.Data.CONTENT_URI,
             arrayOf(ContactsContract.Data._ID),
             "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-            arrayOf(contactId.toString(), mime), null
+            arrayOf(contactId.toString(), whatsAppCallMime(video, packageName)), null
         )?.use { c ->
             if (c.moveToFirst()) return c.getLong(0)
         }

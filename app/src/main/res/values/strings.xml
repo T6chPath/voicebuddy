@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">VoiceBuddy</string>
+    <string name="listen_label">Bolo</string>
+    <string name="shortcut_listen_long">Bolo — start listening</string>
     <string name="accessibility_label">VoiceBuddy Auto-Tap</string>
-    <string name="accessibility_desc">Lets VoiceBuddy press the Send button in WhatsApp and start the first video in YouTube after you give a voice command. It only acts right after your own command.</string>
+    <string name="accessibility_desc">Lets VoiceBuddy finish what you asked by voice: press Send in WhatsApp, ChatGPT, Claude or Gemini, start the first YouTube video, flip the Wi-Fi / Bluetooth / mobile data / hotspot switch, and take a screenshot or lock the phone. It only acts for a few seconds right after your own voice command.</string>
 </resources>
