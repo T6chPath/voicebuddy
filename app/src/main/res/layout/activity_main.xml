@@ -1,31 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/scroll"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/drawer"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:overScrollMode="never"
-    android:scrollbars="none">
+    android:layout_height="match_parent">
 
+    <!-- Home -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingTop="18dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="32dp">
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="24dp">
 
-        <!-- Header: greeting + name, language chip -->
+        <!-- Top bar: ☰  VoiceBuddy  ⚙ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <ImageButton
+                android:id="@+id/menuButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Menu"
+                android:padding="12dp"
+                android:src="@drawable/ic_menu"
+                android:tint="@color/text" />
+
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -37,7 +46,7 @@
                     android:letterSpacing="0.04"
                     android:text="Namaste"
                     android:textColor="@color/marigold"
-                    android:textSize="14sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -46,158 +55,91 @@
                     android:letterSpacing="-0.02"
                     android:text="VoiceBuddy"
                     android:textColor="@color/text"
-                    android:textSize="30sp" />
+                    android:textSize="26sp" />
             </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/langToggle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/chip"
-                android:foreground="?android:attr/selectableItemBackgroundBorderless"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="12dp"
-                android:paddingTop="8dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="8dp">
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_translate"
-                    android:tint="@color/marigold" />
-
-                <TextView
-                    android:id="@+id/langText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="Hinglish"
-                    android:textColor="@color/text"
-                    android:textSize="13sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Auto-Tap status -->
-        <LinearLayout
-            android:id="@+id/autoTapHint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/card_surface"
-            android:foreground="?android:attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="14dp"
-            android:paddingTop="12dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="12dp">
-
-            <ImageView
-                android:id="@+id/autoTapIcon"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:background="@drawable/tile_icon_bg"
-                android:importantForAccessibility="no"
-                android:padding="6dp"
-                android:src="@drawable/ic_bolt" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/autoTapTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="Auto-Tap"
-                    android:textColor="@color/text"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/autoTapText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Send, play aur switch apne aap"
-                    android:textColor="@color/muted"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <ImageView
-                android:id="@+id/autoTapChevron"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_chevron"
-                android:tint="@color/muted" />
-        </LinearLayout>
-
-        <!-- Hero: the mic -->
-        <LinearLayout
-            android:id="@+id/hero"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/hero_card"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:paddingStart="20dp"
-            android:paddingTop="12dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="22dp">
 
             <FrameLayout
-                android:layout_width="220dp"
-                android:layout_height="220dp">
+                android:layout_width="48dp"
+                android:layout_height="48dp">
+
+                <ImageButton
+                    android:id="@+id/settingsButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Settings"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_settings"
+                    android:tint="@color/text" />
+
+                <!-- shows when Auto-Tap is off -->
+                <View
+                    android:id="@+id/settingsBadge"
+                    android:layout_width="11dp"
+                    android:layout_height="11dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@drawable/badge_dot"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- The mic, centred on the screen -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp">
+
+            <FrameLayout
+                android:layout_width="250dp"
+                android:layout_height="250dp">
 
                 <View
                     android:id="@+id/glow"
-                    android:layout_width="200dp"
-                    android:layout_height="200dp"
+                    android:layout_width="230dp"
+                    android:layout_height="230dp"
                     android:layout_gravity="center"
                     android:background="@drawable/glow" />
 
                 <View
                     android:id="@+id/ring1"
-                    android:layout_width="124dp"
-                    android:layout_height="124dp"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <View
                     android:id="@+id/ring2"
-                    android:layout_width="124dp"
-                    android:layout_height="124dp"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <View
                     android:id="@+id/ring3"
-                    android:layout_width="124dp"
-                    android:layout_height="124dp"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <ImageButton
                     android:id="@+id/micButton"
-                    android:layout_width="120dp"
-                    android:layout_height="120dp"
+                    android:layout_width="136dp"
+                    android:layout_height="136dp"
                     android:layout_gravity="center"
                     android:background="@drawable/mic_orb"
                     android:contentDescription="Bolne ke liye dabaiye"
                     android:elevation="10dp"
                     android:foreground="?android:attr/selectableItemBackgroundBorderless"
-                    android:padding="34dp"
+                    android:padding="38dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_mic_white" />
             </FrameLayout>
@@ -206,6 +148,7 @@
                 android:id="@+id/statusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:letterSpacing="0.02"
@@ -217,19 +160,19 @@
                 android:id="@+id/heardText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="14dp"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:lineSpacingExtra="2dp"
                 android:text="“Papa ko WhatsApp video call karo”"
                 android:textColor="@color/text"
-                android:textSize="21sp" />
+                android:textSize="22sp" />
 
             <LinearLayout
                 android:id="@+id/replyRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="16dp"
                 android:gravity="top"
                 android:orientation="horizontal"
                 android:visibility="gone">
@@ -257,88 +200,147 @@
                     android:textSize="15sp" />
             </LinearLayout>
         </LinearLayout>
+    </LinearLayout>
 
-        <!-- One-tap actions -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="26dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.08"
-            android:text="EK TAP MEIN"
-            android:textColor="@color/muted"
-            android:textSize="12sp" />
+    <!-- Sidebar -->
+    <LinearLayout
+        android:id="@+id/sidebar"
+        android:layout_width="300dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="@drawable/drawer_bg"
+        android:clickable="true"
+        android:orientation="vertical"
+        android:paddingTop="20dp">
 
-        <GridLayout
-            android:id="@+id/quickGrid"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:columnCount="4" />
-
-        <!-- Try saying -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.08"
-            android:text="BOL KE DEKHO"
-            android:textColor="@color/muted"
-            android:textSize="12sp" />
-
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="-20dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="-20dp"
-            android:clipToPadding="false"
-            android:overScrollMode="never"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingStart="20dp"
-            android:paddingEnd="20dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/mic_orb"
+                android:importantForAccessibility="no"
+                android:padding="10dp"
+                android:src="@drawable/ic_mic_white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:fontFamily="sans-serif-black"
+                android:text="VoiceBuddy"
+                android:textColor="@color/text"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:background="#FF22373A" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="6dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_history"
+                android:tint="@color/marigold" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium"
+                android:text="Previous commands"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/clearRecent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/selectableItemBackground"
+                android:padding="8dp"
+                android:text="Clear"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:scrollbars="none">
 
             <LinearLayout
-                android:id="@+id/suggestionRow"
-                android:layout_width="wrap_content"
+                android:id="@+id/recentList"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp" />
+        </ScrollView>
 
-        <!-- Recent -->
         <TextView
-            android:id="@+id/recentTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.08"
-            android:text="PICHLE COMMANDS"
-            android:textColor="@color/muted"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:id="@+id/recentList"
+            android:id="@+id/recentEmpty"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="vertical" />
-
-        <!-- Tips -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:background="@drawable/card_surface"
-            android:lineSpacingExtra="3dp"
-            android:paddingStart="16dp"
-            android:paddingTop="14dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="14dp"
-            android:text="Jaldi bolne ke tareeke\n• Orange “Bolo” icon: seedha sunna shuru\n• Quick Settings mein VoiceBuddy tile\n• Auto-Tap ka floating button: kisi bhi app ke andar se bolo"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="12dp"
+            android:text="Abhi koi command nahi. Mic dabake boliye — aapke commands yahan dikhenge, tap karke dobara chala sakte ho."
             android:textColor="@color/muted"
             android:textSize="13sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#FF22373A" />
+
+        <LinearLayout
+            android:id="@+id/drawerSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="20dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_settings"
+                android:tint="@color/muted" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="Settings"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+        </LinearLayout>
     </LinearLayout>
-</ScrollView>
+</androidx.drawerlayout.widget.DrawerLayout>

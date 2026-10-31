@@ -8,6 +8,16 @@
         <item name="android:navigationBarColor">#FF060B0C</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <style name="SectionLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">26dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textColor">@color/muted</item>
+        <item name="android:textSize">12sp</item>
+    </style>
     <color name="bg">#FF0B1516</color>
     <color name="card">#FF142224</color>
     <color name="card2">#FF1A2C2F</color>

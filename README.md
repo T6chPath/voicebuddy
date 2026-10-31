@@ -29,7 +29,7 @@
 | "Instagram kholo" | Opens any installed app |
 | Anything else | Searches it on Google |
 
-**Hindi, Hinglish and English all work.** Tap the "Bhasha" button in the app to switch speech between Hinglish/English and हिंदी; Hindi letters are understood too ("सूरज सिंह को सिम 1 से कॉल करो"), and contacts saved in Hindi letters are found.
+**Hindi, Hinglish and English all work.** Choose the speech language in ⚙ Settings (Hinglish · हिंदी · English); Hindi letters are understood too ("सूरज सिंह को सिम 1 से कॉल करो"), and contacts saved in Hindi letters are found.
 
 Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
 

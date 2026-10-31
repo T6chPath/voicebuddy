@@ -68,6 +68,12 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="Settings"
+            android:parentActivityName=".MainActivity" />
+
         <!-- Second home-screen icon "Bolo": opens straight into listening -->
         <activity-alias
             android:name=".ListenNow"
