@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.VoiceBuddy" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#5B4BFF</item>
+        <item name="android:statusBarColor">#0F0E1A</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+    <color name="bg">#0F0E1A</color>
+    <color name="card">#1C1A2E</color>
+    <color name="accent">#5B4BFF</color>
+    <color name="text">#F2F1FA</color>
+    <color name="muted">#9A97B5</color>
+</resources>
