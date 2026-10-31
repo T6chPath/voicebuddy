@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.TileService
 
-/** Quick Settings button: swipe down, tap "VoiceBuddy", and it starts listening. */
+/** Quick Settings button: swipe down, tap "zenvqo.voice", and it starts listening. */
 class ListenTileService : TileService() {
     override fun onClick() {
         super.onClick()

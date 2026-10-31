@@ -53,7 +53,7 @@
             android:layout_marginTop="4dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:text="Aap jis bhasha mein bologe, VoiceBuddy use sahi likhega. Teeno mein saare commands samajh aate hain."
+            android:text="Aap jis bhasha mein bologe, zenvqo.voice use sahi likhega. Teeno mein saare commands samajh aate hain."
             android:textColor="@color/muted"
             android:textSize="13sp" />
 
@@ -153,6 +153,21 @@
 
         <LinearLayout
             android:id="@+id/moreOptions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/card_surface"
+            android:orientation="vertical" />
+
+        <!-- Support -->
+        <TextView
+            style="@style/SectionLabel"
+            android:text="SUPPORT" />
+
+        <LinearLayout
+            android:id="@+id/supportOptions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"

@@ -57,7 +57,7 @@ class SettingsActivity : AppCompatActivity() {
         renderLanguages()
         buildMore()
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "" }
-        findViewById<TextView>(R.id.versionText).text = "VoiceBuddy $version"
+        findViewById<TextView>(R.id.versionText).text = "zenvqo.voice $version"
     }
 
     override fun onResume() {
@@ -136,17 +136,26 @@ class SettingsActivity : AppCompatActivity() {
     private fun buildMore() {
         val box = findViewById<LinearLayout>(R.id.moreOptions)
         addRow(box, R.drawable.ic_assistant, "Default assistant banao",
-            "Home / Power button daba ke rakhne par VoiceBuddy khule") {
+            "Home / Power button daba ke rakhne par zenvqo.voice khule") {
             open(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS), Intent(Settings.ACTION_SETTINGS))
         }
         addRow(box, R.drawable.ic_shield, "Permissions",
             "Mic, Contacts, Phone — SIM chunne ke liye Phone zaroori") {
             open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
         }
-        addRow(box, R.drawable.ic_info, "Jaldi bolne ke tareeke",
-            "Orange “Bolo” icon · Quick Settings tile · double-tap") {
-            findViewById<TextView>(R.id.versionText).text =
-                "• Orange “Bolo” icon: seedha sunna shuru\n• Quick Settings mein VoiceBuddy tile\n• App kholke turant ek aur tap, ya kahin bhi double-tap\n• Auto-Tap ka floating button: kisi bhi app ke andar se bolo"
+
+        val support = findViewById<LinearLayout>(R.id.supportOptions)
+        addRow(support, R.drawable.ic_policy, "Privacy Policy", "Aapka data kaise use hota hai") {
+            InfoActivity.open(this, InfoActivity.PRIVACY)
+        }
+        addRow(support, R.drawable.ic_doc, "Terms & Conditions", "App use karne ki shartein") {
+            InfoActivity.open(this, InfoActivity.TERMS)
+        }
+        addRow(support, R.drawable.ic_mail, "Contact Us", InfoActivity.CONTACT_EMAIL) {
+            InfoActivity.open(this, InfoActivity.CONTACT)
+        }
+        addRow(support, R.drawable.ic_info, "About", "zenvqo.voice ke baare mein") {
+            InfoActivity.open(this, InfoActivity.ABOUT)
         }
     }
 

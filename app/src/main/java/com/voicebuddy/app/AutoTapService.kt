@@ -15,13 +15,13 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Presses one button for you, only right after your own voice command:
- *  - WhatsApp: the Send button in the chat VoiceBuddy just opened
- *  - YouTube: the first video in the search results VoiceBuddy just opened
- *  - Settings: the Wi-Fi / Bluetooth / mobile data / hotspot switch VoiceBuddy just opened
- *  - ChatGPT / Claude / Gemini: Send, after VoiceBuddy shares your question
+ *  - WhatsApp: the Send button in the chat zenvqo.voice just opened
+ *  - YouTube: the first video in the search results zenvqo.voice just opened
+ *  - Settings: the Wi-Fi / Bluetooth / mobile data / hotspot switch zenvqo.voice just opened
+ *  - ChatGPT / Claude / Gemini: Send, after zenvqo.voice shares your question
  *  - Any app: press a button by its name, type text, scroll, use the app's search box
  * It also performs screenshot / lock / home when you ask, and shows the floating
- * VoiceBuddy button so you can talk from inside any app. It does nothing on its own.
+ * zenvqo.voice button so you can talk from inside any app. It does nothing on its own.
  */
 class AutoTapService : AccessibilityService() {
 
@@ -39,7 +39,7 @@ class AutoTapService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
-        // Floating accessibility button / nav-bar button -> talk to VoiceBuddy from any app
+        // Floating accessibility button / nav-bar button -> talk to zenvqo.voice from any app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             accessibilityButtonController.registerAccessibilityButtonCallback(
                 object : AccessibilityButtonController.AccessibilityButtonCallback() {
@@ -149,7 +149,7 @@ class AutoTapService : AccessibilityService() {
         }
     }
 
-    // ---------- Work inside the app on screen (called right after VoiceBuddy steps aside) ----------
+    // ---------- Work inside the app on screen (called right after zenvqo.voice steps aside) ----------
     /** Presses the button / item whose label best matches [target]. */
     fun tapOnText(target: String): Boolean {
         val root = rootInActiveWindow ?: return false

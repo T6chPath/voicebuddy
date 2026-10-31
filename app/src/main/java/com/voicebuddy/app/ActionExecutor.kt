@@ -454,7 +454,7 @@ class ActionExecutor(private val activity: Activity) {
     }
 
     // ---------- Inside the app on screen ----------
-    /** Steps out of VoiceBuddy so the app underneath is on screen, then Auto-Tap does the work. */
+    /** Steps out of zenvqo.voice so the app underneath is on screen, then Auto-Tap does the work. */
     private fun inApp(okReply: String, failReply: String, work: (AutoTapService) -> Boolean): String {
         val svc = AutoTapService.instance ?: return "Iske liye pehle Auto-Tap on kijiye."
         activity.moveTaskToBack(true)
@@ -483,7 +483,7 @@ class ActionExecutor(private val activity: Activity) {
     private fun copyToClipboard(text: String) {
         try {
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("VoiceBuddy", text))
+            cm.setPrimaryClip(ClipData.newPlainText("zenvqo.voice", text))
         } catch (e: Exception) {
         }
     }

@@ -4,11 +4,11 @@ package com.voicebuddy.app
 object PendingAction {
 
     sealed class Task {
-        /** Press Send in the WhatsApp chat VoiceBuddy just opened. */
+        /** Press Send in the WhatsApp chat zenvqo.voice just opened. */
         object WhatsAppSend : Task()
-        /** Start the first video in the YouTube results VoiceBuddy just opened. */
+        /** Start the first video in the YouTube results zenvqo.voice just opened. */
         object YouTubePlayFirst : Task()
-        /** Flip the matching switch on the Settings screen/panel VoiceBuddy just opened, then go back. */
+        /** Flip the matching switch on the Settings screen/panel zenvqo.voice just opened, then go back. */
         data class ToggleSwitch(
             val on: Boolean,
             val keywords: List<String>,

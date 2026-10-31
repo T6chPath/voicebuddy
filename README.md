@@ -1,4 +1,4 @@
-# VoiceBuddy — Hinglish voice assistant for Android
+# zenvqo.voice — Hinglish voice assistant for Android
 
 **Download:** https://github.com/T6chPath/voicebuddy/releases/download/latest/app-debug.apk
 
@@ -34,23 +34,23 @@
 Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
 
 ## Talk from inside any app
-After turning on Auto-Tap, Android offers a **floating VoiceBuddy button** (or a button in the navigation bar). If it doesn't appear: Settings → Accessibility → VoiceBuddy Auto-Tap → turn on **VoiceBuddy Auto-Tap shortcut**. Tap it inside Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". VoiceBuddy steps aside and does it in that app.
+After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or a button in the navigation bar). If it doesn't appear: Settings → Accessibility → zenvqo.voice Auto-Tap → turn on **zenvqo.voice Auto-Tap shortcut**. Tap it inside Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". zenvqo.voice steps aside and does it in that app.
 
 ## Start talking fast
 - **Tap the app icon** → home page opens. **Tap once more right away** (within 1.5 s) → it starts listening.
 - **Double-tap anywhere** on the home page → it starts listening.
-- **"Bolo" icon** (orange, added next to VoiceBuddy in your app list) → opens straight into listening. Drag it to your home screen.
-- **Long-press the VoiceBuddy icon → Bolo.**
-- **Quick Settings:** swipe down twice → pencil/edit → drag **VoiceBuddy** tile in → tap it to talk.
-- **Phone assistant:** Settings → Apps → Default apps → Digital assistant app → VoiceBuddy. Then long-press Home/Power to talk.
+- **"Bolo" icon** (orange, added next to zenvqo.voice in your app list) → opens straight into listening. Drag it to your home screen.
+- **Long-press the zenvqo.voice icon → Bolo.**
+- **Quick Settings:** swipe down twice → pencil/edit → drag **zenvqo.voice** tile in → tap it to talk.
+- **Phone assistant:** Settings → Apps → Default apps → Digital assistant app → zenvqo.voice. Then long-press Home/Power to talk.
 
 ## First-time setup
-1. Open VoiceBuddy → allow **Microphone, Contacts, Phone** (Phone is needed to pick SIM 1 / SIM 2).
-2. Tap the orange line → Accessibility → **VoiceBuddy Auto-Tap** → On.
+1. Open zenvqo.voice → allow **Microphone, Contacts, Phone** (Phone is needed to pick SIM 1 / SIM 2).
+2. Tap the orange line → Accessibility → **zenvqo.voice Auto-Tap** → On.
    Auto-Tap presses Send, plays the YouTube video, flips the Wi-Fi/Bluetooth/data switches and takes screenshots. It only acts for a few seconds right after your own voice command.
 
 ## Good to know
-- Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so VoiceBuddy opens the switch and Auto-Tap flips it. On some phone brands the switch screen looks different and you may need to tap it yourself.
+- Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so zenvqo.voice opens the switch and Auto-Tap flips it. On some phone brands the switch screen looks different and you may need to tap it yourself.
 - ChatGPT / Claude / Gemini: the question is sent into the app (and copied, so you can paste it if the app needs one tap).
 - Speech uses Google's recognizer in Indian English, so Hinglish comes out in Roman letters, which the app understands. Needs internet (or an offline speech pack).
 
@@ -58,3 +58,6 @@ After turning on Auto-Tap, Android offers a **floating VoiceBuddy button** (or a
 - Commands: `app/src/main/java/com/voicebuddy/app/CommandParser.kt` (unit tests in `app/src/test`).
 - Actions: `ActionExecutor.kt`. Auto-Tap logic: `AutoTapService.kt`.
 - Every push builds and tests the APK on GitHub Actions and publishes it to the `latest` release.
+
+## Contact
+zenvqo.voice@gmail.com
