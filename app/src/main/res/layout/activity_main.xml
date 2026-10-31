@@ -14,74 +14,113 @@
         android:paddingEnd="12dp"
         android:paddingBottom="24dp">
 
-        <!-- Top bar: ☰  zenvqo.voice  ⚙ -->
+        <!-- Header bar: (☰)  zenvqo.voice / greeting  (⚙) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/header_bar"
+            android:elevation="2dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp">
 
             <ImageButton
                 android:id="@+id/menuButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:background="@drawable/round_button"
                 android:contentDescription="Menu"
+                android:foreground="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="12dp"
+                android:scaleType="fitCenter"
                 android:src="@drawable/ic_menu"
                 android:tint="@color/text" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:fontFamily="sans-serif-black"
-                android:letterSpacing="-0.01"
-                android:maxLines="1"
-                android:text="zenvqo.voice"
-                android:textColor="@color/text"
-                android:textSize="24sp" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/titleText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-black"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="-0.01"
+                    android:maxLines="1"
+                    android:text="zenvqo.voice"
+                    android:textColor="@color/text"
+                    android:textSize="22sp" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/greetingIcon"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_sun"
+                        android:tint="@color/marigold" />
+
+                    <TextView
+                        android:id="@+id/greetingText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.03"
+                        android:maxLines="1"
+                        android:text="Namaste"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
 
             <FrameLayout
-                android:layout_width="48dp"
-                android:layout_height="48dp">
+                android:layout_width="46dp"
+                android:layout_height="46dp">
 
                 <ImageButton
                     android:id="@+id/settingsButton"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:background="@drawable/round_button"
                     android:contentDescription="Settings"
+                    android:foreground="?android:attr/selectableItemBackgroundBorderless"
                     android:padding="12dp"
+                    android:scaleType="fitCenter"
                     android:src="@drawable/ic_settings"
                     android:tint="@color/text" />
 
                 <!-- shows when Auto-Tap is off -->
                 <View
                     android:id="@+id/settingsBadge"
-                    android:layout_width="11dp"
-                    android:layout_height="11dp"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
                     android:layout_gravity="top|end"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginEnd="10dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginEnd="2dp"
                     android:background="@drawable/badge_dot"
+                    android:elevation="3dp"
                     android:visibility="gone" />
             </FrameLayout>
         </LinearLayout>
-
-        <!-- Greeting, just below the name -->
-        <TextView
-            android:id="@+id/greetingText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="52dp"
-            android:layout_marginTop="-6dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.04"
-            android:text="Namaste"
-            android:textColor="@color/marigold"
-            android:textSize="13sp" />
 
         <!-- The mic, centred on the screen -->
         <LinearLayout

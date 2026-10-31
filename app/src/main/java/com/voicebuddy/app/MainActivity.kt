@@ -136,6 +136,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         })
 
+        styleTitle()
         findViewById<TextView>(R.id.greetingText).text = greeting()
         renderRecent()
         startIdle()
@@ -198,7 +199,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             in 17..21 -> "Good evening"
             else -> "Shubh ratri"
         }
+        // sun by day, moon by night
+        findViewById<ImageView>(R.id.greetingIcon).setImageResource(
+            if (h in 6..17) R.drawable.ic_sun else R.drawable.ic_moon
+        )
         return "Namaste · $part"
+    }
+
+    /** "zenvqo" in white, ".voice" in saffron. */
+    private fun styleTitle() {
+        val name = "zenvqo.voice"
+        val dot = name.indexOf('.')
+        val span = android.text.SpannableString(name)
+        span.setSpan(
+            android.text.style.ForegroundColorSpan(accent), dot, name.length,
+            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        findViewById<TextView>(R.id.titleText).text = span
     }
 
     private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
