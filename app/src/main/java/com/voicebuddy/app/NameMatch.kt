@@ -7,8 +7,12 @@ package com.voicebuddy.app
  */
 object NameMatch {
 
+    /** Lowercase Roman letters only; Hindi-saved names ("सूरज") are turned into Roman ("suraj") first. */
     fun clean(s: String): String =
-        s.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+        Translit.toRoman(s).lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** Little words that can sneak into a spoken name ("suraj singh by", "papa ji ko"). */
+    private val STOP = setOf("by", "to", "ko", "se", "ke", "ka", "ki", "the", "a", "on", "from", "via", "sim", "number")
 
     /** Sound skeleton: first letter + consonants, vowels/h/y dropped, repeats merged. "pradhaman" -> "prdmn". */
     fun skeleton(w: String): String {
@@ -52,7 +56,8 @@ object NameMatch {
         val joinedSaved = saved.replace(" ", "")
         if (joinedWanted == joinedSaved) return 9
         val savedWords = saved.split(" ")
-        val wantedWords = wanted.split(" ")
+        val wantedWords = wanted.split(" ").filter { it !in STOP || savedWords.contains(it) }
+            .ifEmpty { wanted.split(" ") }
         val perWord = wantedWords.map { w -> savedWords.maxOf { cw -> wordScore(w, cw) } }
         val worst = perWord.minOrNull() ?: 0
         if (worst == 0) {

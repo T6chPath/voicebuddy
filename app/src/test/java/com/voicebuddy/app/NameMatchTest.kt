@@ -31,4 +31,21 @@ class NameMatchTest {
         assertEquals(NameMatch.skeleton("pradhaman"), NameMatch.skeleton("pradhuman"))
         assertTrue(NameMatch.distance("chartgpt", "chatgpt") == 1)
     }
+
+    @Test fun extraWordsAndHindi() {
+        assertEquals("Suraj Bhai", NameMatch.best("suraj by", contacts) { it })
+        assertEquals("Pradhuman Singh", NameMatch.best("pradyumn", contacts) { it })
+        assertEquals("Pradhuman Singh", NameMatch.best("pradhuman singh", contacts) { it })
+        val hindiSaved = listOf("सूरज सिंह", "पापा", "राहुल")
+        assertEquals("सूरज सिंह", NameMatch.best("suraj singh", hindiSaved) { it })
+        assertEquals("पापा", NameMatch.best("papa", hindiSaved) { it })
+    }
+
+    @Test fun translit() {
+        assertEquals("suraj sinh ko sim 1 se kol karo", Translit.toRoman("सूरज सिंह को सिम 1 से कॉल करो"))
+        assertEquals("papa", Translit.toRoman("पापा"))
+        assertEquals("band", Translit.toRoman("बंद"))
+        assertEquals("torch", Translit.toRoman("टॉर्च"))
+        assertEquals("kesariya", Translit.toRoman("केसरिया"))
+    }
 }

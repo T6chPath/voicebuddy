@@ -37,7 +37,7 @@ class ActionExecutor(private val activity: Activity) {
             is Command.PlayYouTube -> playOnYouTube(cmd.query)
             is Command.WhatsAppMessage -> sendWhatsApp(cmd.name, cmd.text)
             is Command.WhatsAppCall -> whatsAppCall(cmd.name, cmd.video)
-            is Command.PhoneCall -> phoneCall(cmd.name, cmd.sim)
+            is Command.PhoneCall -> phoneCall(cmd.name, cmd.sim, cmd.carrier)
             is Command.OpenApp -> openApp(cmd.appName)
             is Command.Torch -> torch(cmd.on)
             is Command.Toggle -> toggle(cmd.setting, cmd.on)
@@ -111,7 +111,7 @@ class ActionExecutor(private val activity: Activity) {
 
     // ---------- Normal phone call, optionally from SIM 1 / SIM 2 ----------
     @SuppressLint("MissingPermission")
-    private fun phoneCall(name: String, sim: Int?): String {
+    private fun phoneCall(name: String, sim: Int?, carrier: String? = null): String {
         val digits = name.filter { it.isDigit() }
         val (label, number) = if (digits.length >= 10) {
             digits to digits
@@ -128,22 +128,38 @@ class ActionExecutor(private val activity: Activity) {
 
         val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number"))
         var simNote = ""
-        if (sim != null) {
+        if (sim != null || carrier != null) {
+            val wanted = carrier?.let { "$it SIM" } ?: "SIM $sim"
             if (has(Manifest.permission.READ_PHONE_STATE)) {
                 val tm = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-                val handle = tm.callCapablePhoneAccounts.getOrNull(sim - 1)
+                val accounts = tm.callCapablePhoneAccounts
+                val handle = if (carrier != null) {
+                    val names = when (carrier) {
+                        "vodafone", "idea", "vi" -> listOf("vi", "vodafone", "idea")
+                        else -> listOf(carrier)
+                    }
+                    accounts.firstOrNull { h ->
+                        val label = try { tm.getPhoneAccount(h)?.label?.toString()?.lowercase() } catch (e: Exception) { null } ?: ""
+                        names.any { n -> Regex("\\b$n\\b").containsMatchIn(label) }
+                    }
+                } else {
+                    accounts.getOrNull(sim!! - 1)
+                }
                 if (handle != null) {
                     intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle)
-                    simNote = " SIM $sim se"
+                    simNote = " $wanted se"
+                    val slot = accounts.indexOf(handle)
+                    // Extra hints some phone brands read for the SIM slot (0 = SIM 1, 1 = SIM 2)
+                    listOf("com.android.phone.extra.slot", "slot", "simSlot", "sim_slot", "slotId", "slotIdx")
+                        .forEach { intent.putExtra(it, slot) }
                 } else {
-                    simNote = " (SIM $sim nahi mili, default SIM se)"
+                    simNote = " ($wanted nahi mili, default SIM se)"
                 }
             } else {
                 simNote = " (SIM chunne ke liye Phone permission dijiye)"
+                sim?.let { s -> listOf("com.android.phone.extra.slot", "slot", "simSlot", "sim_slot", "slotId", "slotIdx")
+                    .forEach { intent.putExtra(it, s - 1) } }
             }
-            // Extra hints some phone brands read for the SIM slot (0 = SIM 1, 1 = SIM 2)
-            listOf("com.android.phone.extra.slot", "slot", "simSlot", "sim_slot", "slotId", "slotIdx")
-                .forEach { intent.putExtra(it, sim - 1) }
         }
         launch(intent)
         return "$label ko$simNote call kar raha hoon"

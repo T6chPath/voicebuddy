@@ -25,6 +25,18 @@
         android:textColor="@color/muted"
         android:textSize="15sp" />
 
+    <TextView
+        android:id="@+id/langToggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/lang_chip"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:text="Bhasha: Hinglish / English"
+        android:textColor="@color/text"
+        android:textSize="13sp" />
+
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"

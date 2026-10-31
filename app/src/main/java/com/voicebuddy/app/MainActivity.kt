@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var listening = false
     private var secondTapUntil = 0L
     private var returnAfter = false
+    private lateinit var langToggle: TextView
+    /** "en-IN" = Hinglish / English in Roman letters, "hi-IN" = Hindi (हिंदी). Both are understood. */
+    private var speechLang = "en-IN"
 
     private val permissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
@@ -54,6 +57,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         status = findViewById(R.id.statusText)
         heard = findViewById(R.id.heardText)
         autoTapHint = findViewById(R.id.autoTapHint)
+        langToggle = findViewById(R.id.langToggle)
+        val prefs = getSharedPreferences("voicebuddy", MODE_PRIVATE)
+        speechLang = prefs.getString("lang", "en-IN") ?: "en-IN"
+        showLang()
+        langToggle.setOnClickListener {
+            speechLang = if (speechLang == "en-IN") "hi-IN" else "en-IN"
+            prefs.edit().putString("lang", speechLang).apply()
+            showLang()
+        }
         executor = ActionExecutor(this)
         tts = TextToSpeech(this, this)
 
@@ -110,6 +122,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         autoTapHint.visibility = if (AutoTapService.isRunning() || isAutoTapOn()) View.GONE else View.VISIBLE
     }
 
+    private fun showLang() {
+        langToggle.text = if (speechLang == "hi-IN") "भाषा: हिंदी  (tap: Hinglish)" else "Bhasha: Hinglish / English  (tap: हिंदी)"
+    }
+
     override fun onInit(result: Int) {
         if (result == TextToSpeech.SUCCESS) tts?.language = Locale("en", "IN")
     }
@@ -132,9 +148,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 // en-IN gives Hinglish in Roman letters ("papa ko call karo"), which the parser understands
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLang)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, speechLang)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             })
         }
         status.text = "Sun raha hoon…"

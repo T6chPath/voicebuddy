@@ -20,7 +20,7 @@ sealed class Command {
     /** text may be blank: then the executor splits "name + text" using the contact list. */
     data class WhatsAppMessage(val name: String, val text: String) : Command()
     data class WhatsAppCall(val name: String, val video: Boolean) : Command()
-    data class PhoneCall(val name: String, val sim: Int? = null) : Command()
+    data class PhoneCall(val name: String, val sim: Int? = null, val carrier: String? = null) : Command()
     data class OpenApp(val appName: String) : Command()
     data class Torch(val on: Boolean) : Command()
     data class Toggle(val setting: Setting, val on: Boolean) : Command()
@@ -48,7 +48,8 @@ object CommandParser {
         "video", "voice", "audio", "call", "calling", "karo", "kar", "kardo", "do", "please",
         "plz", "lagao", "laga", "milao", "ko", "to", "a", "an", "make", "start", "give", "place",
         "ek", "me", "mein", "the", "phone", "dial", "now", "abhi", "jaldi", "open", "kholo", "and",
-        "sim", "number"
+        "sim", "number", "no", "by", "ke", "ka", "ki", "my", "mere", "mera", "meri", "ring", "lagana",
+        "lagaiye", "karna", "kijiye", "kariye", "karwao", "card", "slot", "wali", "wala", "taraf"
     )
 
     private val MSG_FILLERS = setOf(
@@ -95,11 +96,18 @@ object CommandParser {
         SearchApp.YOUTUBE to listOf("youtube")
     )
 
-    private val SIM1 = Regex(" sim ?(1|one|ek|won) | (pehli|pahli|pehla|first|1st) sim ")
-    private val SIM2 = Regex(" sim ?(2|two|to|do|tu) | (dusri|doosri|dusra|doosra|second|2nd) sim ")
-    private val SIM_ANY = Regex(
-        " sim ?(1|one|ek|won|2|two|to|do|tu) | (pehli|pahli|pehla|first|1st|dusri|doosri|dusra|doosra|second|2nd) sim "
+    private const val SIM_WORD = "sim ?(?:number |no |card |slot )?"
+    private val SIM1 = Regex(
+        " $SIM_WORD(1|one|ek|won|van|wan|pehla|pahla|pehli|pahli|first) | (pehli|pahli|pahali|pehali|pehla|pahla|first|1st) sim "
     )
+    private val SIM2 = Regex(
+        " $SIM_WORD(2|two|to|too|tu|do|dusra|doosra|dusri|doosri|second) | (dusri|doosri|dusari|doosari|dusra|doosra|second|2nd) sim "
+    )
+    private val SIM_ANY = Regex(
+        " $SIM_WORD(1|one|ek|won|van|wan|pehla|pahla|pehli|pahli|first|2|two|to|too|tu|do|dusra|doosra|dusri|doosri|second) " +
+            "| (pehli|pahli|pahali|pehali|pehla|pahla|first|1st|dusri|doosri|dusari|doosari|dusra|doosra|second|2nd) sim "
+    )
+    private val CARRIERS = Regex(" (jio|airtel|vodafone|idea|vi|bsnl)( sim)? ")
 
     private val JOINS = listOf(
         "wi fi" to "wifi", "why fi" to "wifi", "whats app" to "whatsapp", "you tube" to "youtube",
@@ -108,7 +116,27 @@ object CommandParser {
         "torch light" to "torch", "screen shot" to "screenshot", "aero plane" to "aeroplane",
         "air plane" to "airplane", "g p s" to "gps", "turn of" to "turn off", "switch of" to "switch off",
         "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram",
-        "face book" to "facebook", "play store" to "playstore", "google maps" to "maps"
+        "face book" to "facebook", "play store" to "playstore", "google maps" to "maps",
+        "vai phai" to "wifi", "vai fai" to "wifi", "mobail deta" to "mobile data"
+    )
+
+    /** Single words that Hindi speech / Hindi letters turn into something else. */
+    private val WORD_FIXES = mapOf(
+        "kol" to "call", "kaul" to "call", "kall" to "call", "kaal" to "call",
+        "seem" to "sim", "sym" to "sim", "simm" to "sim", "nambar" to "number", "nambr" to "number",
+        "vidiyo" to "video", "vidio" to "video", "veedio" to "video",
+        "maisej" to "message", "mesej" to "message", "maisaj" to "message",
+        "vhatsaep" to "whatsapp", "vhatsep" to "whatsapp", "vhatsap" to "whatsapp", "vhatsaip" to "whatsapp",
+        "vatsap" to "whatsapp", "vatsaep" to "whatsapp", "whatsep" to "whatsapp",
+        "yutyub" to "youtube", "yutub" to "youtube", "yootyoob" to "youtube",
+        "lait" to "light", "vaiphai" to "wifi", "vaifai" to "wifi", "blututh" to "bluetooth",
+        "deta" to "data", "intaranet" to "internet", "intarnet" to "internet", "sarch" to "search",
+        "imel" to "email", "mel" to "mail", "jimel" to "gmail", "skrinshot" to "screenshot",
+        "skrinashot" to "screenshot", "barhao" to "badhao", "avaz" to "awaaz", "avaj" to "awaaz",
+        "volyum" to "volume", "phon" to "phone", "fon" to "phone", "chaitajipiti" to "chatgpt",
+        "chaitjipiti" to "chatgpt", "krom" to "chrome", "jiyo" to "jio", "eyaratel" to "airtel",
+        "hotaspot" to "hotspot", "lokeshan" to "location", "lok" to "lock", "oph" to "off",
+        "ple" to "play", "taip" to "type", "klik" to "click", "skrol" to "scroll", "instagrama" to "instagram"
     )
 
     /**
@@ -158,12 +186,13 @@ object CommandParser {
     }
 
     fun normalize(raw: String): String {
-        var s = " " + raw.lowercase()
+        var s = " " + Translit.toRoman(raw).lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim() + " "
         for ((a, b) in JOINS) s = s.replace(" $a ", " $b ")
-        val fixed = fixSpelling(s.trim().split(" ").filter { it.isNotBlank() })
+        val words = s.trim().split(" ").filter { it.isNotBlank() }.map { WORD_FIXES[it] ?: it }
+        val fixed = fixSpelling(words)
         return " " + fixed.joinToString(" ") + " "
     }
 
@@ -333,7 +362,7 @@ object CommandParser {
 
     // ---------- Calls (SIM 1 / SIM 2 / WhatsApp voice / WhatsApp video) ----------
     private fun parseCall(s0: String): Command? {
-        val isCall = Regex(" (call|calling|dial) ").containsMatchIn(s0) ||
+        val isCall = Regex(" (call|calling|dial|ring) ").containsMatchIn(s0) ||
             Regex(" phone (karo|lagao|kar|kardo|milao) ").containsMatchIn(s0)
         if (!isCall) return null
 
@@ -342,7 +371,10 @@ object CommandParser {
             SIM2.containsMatchIn(s0) -> 2
             else -> null
         }
-        val s = SIM_ANY.replace(s0, " ")
+        val carrier = if (sim == null) CARRIERS.find(s0)?.groupValues?.get(1) else null
+        var s = SIM_ANY.replace(s0, " ")
+        if (carrier != null) s = CARRIERS.replace(s, " ")
+        s = " " + s.trim().replace(Regex("\\s+"), " ") + " "
         val hasWhatsApp = s.contains(" whatsapp ")
         val isVideo = s.contains(" video ")
         val name = strip(s, CALL_FILLERS)
@@ -350,7 +382,7 @@ object CommandParser {
         return when {
             isVideo || hasWhatsApp || s.contains(" voice call") || s.contains(" audio call") ->
                 Command.WhatsAppCall(name, video = isVideo)
-            else -> Command.PhoneCall(name, sim)
+            else -> Command.PhoneCall(name, sim, carrier)
         }
     }
 

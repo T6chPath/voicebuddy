@@ -112,4 +112,34 @@ class CommandParserTest {
         check("amazon pe iphone 15 dhundo", Command.AppSearch("amazon", "iphone 15", "iphone 15"))
         check("search weather in amritsar", Command.AppSearch("amritsar", "weather", "weather in amritsar"))
     }
+
+    @Test fun callsWithSimEveryWay() {
+        check("call to suraj singh by sim 1", Command.PhoneCall("suraj singh", 1))
+        check("call pradhuman singh by sim 2", Command.PhoneCall("pradhuman singh", 2))
+        check("call karo suraj singh ko sim 1 se", Command.PhoneCall("suraj singh", 1))
+        check("call karo suraj singh ko sim 2 se", Command.PhoneCall("suraj singh", 2))
+        check("suraj singh ko sim 2 se call karo", Command.PhoneCall("suraj singh", 2))
+        check("make a call to suraj singh using sim one", Command.PhoneCall("suraj singh", 1))
+        check("call suraj singh via second sim", Command.PhoneCall("suraj singh", 2))
+        check("suraj singh ko pehli sim se phone lagao", Command.PhoneCall("suraj singh", 1))
+        check("suraj singh ko sim number 2 se call karo", Command.PhoneCall("suraj singh", 2))
+        check("Call Suraj Singh by SIM-1", Command.PhoneCall("suraj singh", 1))
+        check("call suraj singh from sim1", Command.PhoneCall("suraj singh", 1))
+        check("call pradhuman singh by seem 2", Command.PhoneCall("pradhuman singh", 2))
+        check("call suraj singh from jio", Command.PhoneCall("suraj singh", null, "jio"))
+        check("airtel se papa ko call karo", Command.PhoneCall("papa", null, "airtel"))
+        check("call suraj singh", Command.PhoneCall("suraj singh", null))
+        check("video call to suraj singh", Command.WhatsAppCall("suraj singh", true))
+        check("suraj singh ko whatsapp pe audio call karo", Command.WhatsAppCall("suraj singh", false))
+    }
+
+    @Test fun hindiLetters() {
+        check("सूरज सिंह को सिम 1 से कॉल करो", Command.PhoneCall("suraj sinh", 1))
+        check("प्रद्युम्न को सिम दो से कॉल करो", Command.PhoneCall("pradyumn", 2))
+        check("पापा को व्हाट्सएप वीडियो कॉल करो", Command.WhatsAppCall("papa", true))
+        check("प्रद्युम्न को मैसेज भेजो कि कल मिलते हैं", Command.WhatsAppMessage("pradyumn", "kal milate hain"))
+        check("यूट्यूब पे केसरिया चलाओ", Command.PlayYouTube("kesariya"))
+        check("टॉर्च ऑन करो", Command.Torch(true))
+        check("वाईफाई बंद करो", Command.Toggle(Setting.WIFI, false))
+    }
 }

@@ -18,7 +18,7 @@
 | "ChatGPT se pucho Bharat ki rajdhani kya hai" | Asks ChatGPT |
 | "Ask Claude …" · "Gemini pe search karo …" | Asks Claude / Gemini |
 | "Google pe search karo …" · "Search … on Chrome" | Google / Chrome search |
-| "Papa ko SIM 2 se call karo" · "Call Suraj from SIM 1" | Phone call from the chosen SIM |
+| "Papa ko SIM 2 se call karo" · "Call Suraj from SIM 1" · "Call to Suraj Singh by SIM 1" · "Suraj Singh ko pehli/dusri sim se phone lagao" · "Call Suraj via second SIM" · "Call Suraj from Jio / Airtel" | Phone call from the chosen SIM |
 | "Mummy ko call karo" | Phone call (default SIM) |
 | "Atharav ko WhatsApp audio call karo" | WhatsApp voice call |
 | "Papa ko WhatsApp video call karo" | WhatsApp video call |
@@ -28,6 +28,8 @@
 | Inside any app: "Like dabao" · "Follow pe tap karo" · "Type hello" · "Scroll down" | Presses that button / types / scrolls in the app on screen |
 | "Instagram kholo" | Opens any installed app |
 | Anything else | Searches it on Google |
+
+**Hindi, Hinglish and English all work.** Tap the "Bhasha" button in the app to switch speech between Hinglish/English and हिंदी; Hindi letters are understood too ("सूरज सिंह को सिम 1 से कॉल करो"), and contacts saved in Hindi letters are found.
 
 Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
 
