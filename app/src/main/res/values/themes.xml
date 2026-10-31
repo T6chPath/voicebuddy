@@ -1,12 +1,19 @@
 <resources>
-    <style name="Theme.VoiceBuddy" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#5B4BFF</item>
-        <item name="android:statusBarColor">#0F0E1A</item>
-        <item name="android:windowBackground">@color/bg</item>
+    <!-- Night teal with a saffron accent: warm, calm, easy to read at a glance -->
+    <style name="Theme.VoiceBuddy" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@drawable/bg_app</item>
+        <item name="android:statusBarColor">#FF10201F</item>
+        <item name="android:navigationBarColor">#FF060B0C</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
-    <color name="bg">#0F0E1A</color>
-    <color name="card">#1C1A2E</color>
-    <color name="accent">#5B4BFF</color>
-    <color name="text">#F2F1FA</color>
-    <color name="muted">#9A97B5</color>
+    <color name="bg">#FF0B1516</color>
+    <color name="card">#FF142224</color>
+    <color name="card2">#FF1A2C2F</color>
+    <color name="accent">#FFFF8A3D</color>
+    <color name="marigold">#FFFFB547</color>
+    <color name="mint">#FF3DDC97</color>
+    <color name="text">#FFF2F7F6</color>
+    <color name="muted">#FF8EA5A2</color>
 </resources>
