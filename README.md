@@ -22,10 +22,17 @@
 | "Mummy ko call karo" | Phone call (default SIM) |
 | "Atharav ko WhatsApp audio call karo" | WhatsApp voice call |
 | "Papa ko WhatsApp video call karo" | WhatsApp video call |
+| "Pradhuman ko email bhejo ki kal meeting hai" | Gmail to that contact's saved email, sent automatically |
+| "Send email to Atharav subject project saying please send the file" | Gmail with a subject |
+| "Instagram pe search karo Virat Kohli" · "Amazon pe iPhone 15 dhundo" | Searches inside that app (Maps, Play Store, Spotify, Amazon, Flipkart open straight on results) |
+| Inside any app: "Like dabao" · "Follow pe tap karo" · "Type hello" · "Scroll down" | Presses that button / types / scrolls in the app on screen |
 | "Instagram kholo" | Opens any installed app |
 | Anything else | Searches it on Google |
 
-Names are matched forgivingly: "Atharav" finds a contact saved as "Atharv", and "papa" finds "Dad" / "Father".
+Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
+
+## Talk from inside any app
+After turning on Auto-Tap, Android offers a **floating VoiceBuddy button** (or a button in the navigation bar). If it doesn't appear: Settings → Accessibility → VoiceBuddy Auto-Tap → turn on **VoiceBuddy Auto-Tap shortcut**. Tap it inside Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". VoiceBuddy steps aside and does it in that app.
 
 ## Start talking fast
 - **Tap the app icon** → home page opens. **Tap once more right away** (within 1.5 s) → it starts listening.

@@ -38,7 +38,7 @@
             android:layout_height="wrap_content"
             android:lineSpacingExtra="4dp"
             android:padding="20dp"
-            android:text="Try:\n\n• Torch on karo / Turn on light\n• Wi-Fi band karo · Bluetooth on karo · Mobile data on karo\n• Suraj ko message bhejo ki kal milte hain\n• YouTube pe Kesariya chalao\n• ChatGPT se pucho Bharat ki rajdhani kya hai\n• Claude / Gemini / Google / Chrome pe search karo …\n• Papa ko SIM 2 se call karo\n• Atharav ko WhatsApp audio call karo\n• Papa ko WhatsApp video call karo\n• Volume badhao · Screenshot lo · Phone lock karo\n• Instagram kholo"
+            android:text="Try:\n\n• Torch on karo / Turn on light\n• Wi-Fi band karo · Bluetooth on karo · Mobile data on karo\n• Suraj ko message bhejo ki kal milte hain\n• Pradhuman ko email bhejo ki kal meeting hai\n• YouTube pe Kesariya chalao\n• ChatGPT se pucho Bharat ki rajdhani kya hai\n• Instagram pe search karo Virat Kohli\n• Papa ko SIM 2 se call karo\n• Papa ko WhatsApp video call karo\n• Inside any app: Like dabao · Type hello · Scroll down\n• Volume badhao · Screenshot lo · Phone lock karo\n\nSpelling galat ho to bhi chalega: chart gpt, watsapp, pradhaman…"
             android:textColor="@color/text"
             android:textSize="15sp" />
     </ScrollView>

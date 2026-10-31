@@ -24,6 +24,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val ACTION_LISTEN = "com.voicebuddy.app.LISTEN"
+        /** Started from the floating button while another app was open: go back to it afterwards. */
+        const val EXTRA_FROM_BUTTON = "from_button"
         /** A tap within this time after opening the app counts as the "second tap" of a double tap. */
         private const val SECOND_TAP_WINDOW_MS = 1500L
     }
@@ -37,6 +39,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var gestures: GestureDetector
     private var listening = false
     private var secondTapUntil = 0L
+    private var returnAfter = false
 
     private val permissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
@@ -85,6 +88,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun handleLaunch(i: Intent?) {
         val fromBoloIcon = i?.component?.className?.endsWith(".ListenNow") == true
         if (i?.action == ACTION_LISTEN || i?.action == Intent.ACTION_ASSIST || fromBoloIcon) {
+            returnAfter = i?.getBooleanExtra(EXTRA_FROM_BUTTON, false) == true
             startListening()
         } else if (i?.action == Intent.ACTION_MAIN) {
             secondTapUntil = SystemClock.uptimeMillis() + SECOND_TAP_WINDOW_MS
@@ -152,6 +156,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val reply = executor.execute(cmd)
             status.text = reply
             tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "reply")
+            // Opened from the floating button over another app: quick jobs return you to that app
+            if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume)) moveTaskToBack(true)
+            returnAfter = false
         }
         override fun onError(error: Int) {
             listening = false

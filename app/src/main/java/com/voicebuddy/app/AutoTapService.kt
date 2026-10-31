@@ -1,7 +1,13 @@
 package com.voicebuddy.app
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
+import android.graphics.Rect
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -13,7 +19,9 @@ import android.view.accessibility.AccessibilityNodeInfo
  *  - YouTube: the first video in the search results VoiceBuddy just opened
  *  - Settings: the Wi-Fi / Bluetooth / mobile data / hotspot switch VoiceBuddy just opened
  *  - ChatGPT / Claude / Gemini: Send, after VoiceBuddy shares your question
- * It also performs screenshot / lock / home when you ask. It does nothing at any other time.
+ *  - Any app: press a button by its name, type text, scroll, use the app's search box
+ * It also performs screenshot / lock / home when you ask, and shows the floating
+ * VoiceBuddy button so you can talk from inside any app. It does nothing on its own.
  */
 class AutoTapService : AccessibilityService() {
 
@@ -26,8 +34,30 @@ class AutoTapService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var scheduled = false
 
+    private var searchStep = 0
+    private var searchTask: PendingAction.Task.InAppSearch? = null
+
     override fun onServiceConnected() {
         instance = this
+        // Floating accessibility button / nav-bar button -> talk to VoiceBuddy from any app
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            accessibilityButtonController.registerAccessibilityButtonCallback(
+                object : AccessibilityButtonController.AccessibilityButtonCallback() {
+                    override fun onClicked(controller: AccessibilityButtonController) {
+                        openListener()
+                    }
+                }
+            )
+        }
+    }
+
+    fun openListener() {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_LISTEN)
+                .putExtra(MainActivity.EXTRA_FROM_BUTTON, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -50,6 +80,7 @@ class AutoTapService : AccessibilityService() {
             PendingAction.Task.YouTubePlayFirst -> 900L
             is PendingAction.Task.ToggleSwitch -> 700L
             is PendingAction.Task.AppSend -> 1000L
+            is PendingAction.Task.InAppSearch -> 1200L
         }
         handler.postDelayed({
             scheduled = false
@@ -70,7 +101,141 @@ class AutoTapService : AccessibilityService() {
                 if (rootPkg.contains("settings") || rootPkg.contains("systemui")) toggle(root, task)
             is PendingAction.Task.AppSend ->
                 if (rootPkg == task.pkg) appSend(root)
+            is PendingAction.Task.InAppSearch ->
+                if (rootPkg == task.pkg) inAppSearch(root, task)
         }
+    }
+
+    // ---------- Search inside an app ----------
+    private fun inAppSearch(root: AccessibilityNodeInfo, task: PendingAction.Task.InAppSearch) {
+        if (searchTask != task) { searchTask = task; searchStep = 0 }
+        val field = findSearchField(root)
+        if (field != null) {
+            if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (setText(field, task.query)) {
+                PendingAction.clear()
+                handler.postDelayed({ pressEnter() }, 500)
+            }
+            return
+        }
+        if (searchStep < 3) {
+            searchStep++
+            val opener = findNode(root) {
+                val t = (it.text?.toString() ?: "") + " " + (it.contentDescription?.toString() ?: "")
+                val id = it.viewIdResourceName?.lowercase() ?: ""
+                it.isVisibleToUser && (t.lowercase().contains("search") || id.contains("search"))
+            }
+            opener?.let { clickUp(it) }
+        }
+    }
+
+    private fun findSearchField(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val edits = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, edits) { it.isEditable && it.isVisibleToUser }
+        if (edits.isEmpty()) return null
+        return edits.firstOrNull {
+            val hint = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.hintText?.toString() ?: "" else ""
+            val all = (hint + " " + (it.text ?: "") + " " + (it.contentDescription ?: "") + " " +
+                (it.viewIdResourceName ?: "")).lowercase()
+            all.contains("search")
+        } ?: edits.firstOrNull { it.isFocused } ?: if (edits.size == 1) edits.first() else null
+    }
+
+    private fun pressEnter() {
+        val root = rootInActiveWindow ?: return
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            focused.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        }
+    }
+
+    // ---------- Work inside the app on screen (called right after VoiceBuddy steps aside) ----------
+    /** Presses the button / item whose label best matches [target]. */
+    fun tapOnText(target: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() == packageName) return false
+        val want = NameMatch.clean(target)
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, nodes) { n ->
+            n.isVisibleToUser && (!n.text.isNullOrBlank() || !n.contentDescription.isNullOrBlank())
+        }
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = 0
+        for (n in nodes) {
+            val label = NameMatch.clean((n.text ?: n.contentDescription ?: "").toString())
+            if (label.isEmpty() || label.length > 60) continue
+            val score = when {
+                label == want -> 20
+                label.startsWith(want) -> 12
+                label.split(" ").contains(want) -> 10
+                label.contains(want) -> 6
+                else -> NameMatch.score(want, label)
+            }
+            if (score > bestScore) { bestScore = score; best = n }
+        }
+        val node = best ?: return false
+        if (clickUp(node)) return true
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        return tapAt(r.exactCenterX(), r.exactCenterY())
+    }
+
+    /** Types into the focused text box (or the only one on screen). */
+    fun typeText(text: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() == packageName) return false
+        val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
+            ?: run {
+                val edits = mutableListOf<AccessibilityNodeInfo>()
+                collect(root, edits) { it.isEditable && it.isVisibleToUser }
+                edits.firstOrNull()
+            } ?: return false
+        if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val existing = field.text?.toString().orEmpty()
+        val hint = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) field.hintText?.toString() else null
+        val keep = existing.isNotBlank() && existing != hint && !field.isShowingHintTextCompat()
+        return setText(field, if (keep) "$existing $text" else text)
+    }
+
+    private fun AccessibilityNodeInfo.isShowingHintTextCompat(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isShowingHintText
+
+    /** Scrolls the main list on screen; falls back to a swipe. */
+    fun scroll(down: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() == packageName) return false
+        val scrollables = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, scrollables) { it.isScrollable && it.isVisibleToUser }
+        val biggest = scrollables.maxByOrNull { n -> Rect().also { n.getBoundsInScreen(it) }.let { it.width() * it.height() } }
+        val action = if (down) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        if (biggest != null && biggest.performAction(action)) return true
+        val dm = resources.displayMetrics
+        val x = dm.widthPixels / 2f
+        val (y1, y2) = if (down) dm.heightPixels * 0.75f to dm.heightPixels * 0.3f
+        else dm.heightPixels * 0.3f to dm.heightPixels * 0.75f
+        return swipe(x, y1, x, y2)
+    }
+
+    private fun setText(field: AccessibilityNodeInfo, text: String): Boolean {
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        return field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    private fun tapAt(x: Float, y: Float): Boolean {
+        val path = Path().apply { moveTo(x, y) }
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
+            .build()
+        return dispatchGesture(g, null, null)
+    }
+
+    private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
+        val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 350))
+            .build()
+        return dispatchGesture(g, null, null)
     }
 
     private fun whatsAppSend(root: AccessibilityNodeInfo, pkg: String) {

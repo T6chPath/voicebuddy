@@ -27,6 +27,13 @@ sealed class Command {
     data class Volume(val dir: VolumeDir) : Command()
     data class Global(val action: GlobalAct) : Command()
     data class SearchIn(val app: SearchApp, val query: String) : Command()
+    /** Search inside any other app ("instagram pe virat kohli search karo"); falls back to Google with [fullQuery]. */
+    data class AppSearch(val appName: String, val query: String, val fullQuery: String) : Command()
+    data class Email(val name: String, val subject: String, val body: String) : Command()
+    /** Work inside the app on screen: press a button by its name, type text, scroll. */
+    data class TapOn(val target: String) : Command()
+    data class TypeText(val text: String) : Command()
+    data class Scroll(val down: Boolean) : Command()
     data class Unknown(val heard: String) : Command()
 }
 
@@ -100,8 +107,55 @@ object CommandParser {
         "blue tooth" to "bluetooth", "hot spot" to "hotspot", "flash light" to "flashlight",
         "torch light" to "torch", "screen shot" to "screenshot", "aero plane" to "aeroplane",
         "air plane" to "airplane", "g p s" to "gps", "turn of" to "turn off", "switch of" to "switch off",
-        "sim card" to "sim"
+        "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram",
+        "face book" to "facebook", "play store" to "playstore", "google maps" to "maps"
     )
+
+    /**
+     * App and command words that speech often mis-spells. Close variants are corrected:
+     * "chart gpt" / "chat gbd" -> chatgpt, "blutooth" -> bluetooth, "watsapp" -> whatsapp.
+     */
+    private val VOCAB = listOf(
+        "chatgpt", "claude", "gemini", "google", "chrome", "youtube", "whatsapp", "gmail",
+        "instagram", "facebook", "telegram", "snapchat", "spotify", "netflix", "flipkart", "amazon",
+        "playstore", "bluetooth", "hotspot", "flashlight", "screenshot", "location", "airplane",
+        "notification", "notifications", "volume"
+    )
+    private val VOCAB_SET = VOCAB.toSet()
+
+    private fun closeWord(w: String, maxLenForOne: Int = 6): String? {
+        if (w.length < 5 || w in VOCAB_SET) return null
+        var best: String? = null
+        var bestD = Int.MAX_VALUE
+        for (v in VOCAB) {
+            if (v[0] != w[0]) continue
+            val limit = if (v.length > maxLenForOne) 2 else 1
+            val d = NameMatch.distance(w, v)
+            if (d <= limit && d < bestD) { bestD = d; best = v }
+        }
+        return best
+    }
+
+    /** Corrects mis-heard app words, joining split words first ("chart gpt" -> "chatgpt"). */
+    private fun fixSpelling(words: List<String>): List<String> {
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < words.size) {
+            val w = words[i]
+            if (i + 1 < words.size) {
+                val joined = w + words[i + 1]
+                if (joined.length >= 6 && words[i + 1].length >= 2) {
+                    val fixed = if (joined in VOCAB_SET) joined else closeWord(joined)
+                    if (fixed != null && w !in VOCAB_SET && words[i + 1] !in VOCAB_SET && closeWord(w) == null) {
+                        out.add(fixed); i += 2; continue
+                    }
+                }
+            }
+            out.add(closeWord(w) ?: w)
+            i++
+        }
+        return out
+    }
 
     fun normalize(raw: String): String {
         var s = " " + raw.lowercase()
@@ -109,13 +163,18 @@ object CommandParser {
             .replace(Regex("\\s+"), " ")
             .trim() + " "
         for ((a, b) in JOINS) s = s.replace(" $a ", " $b ")
-        return s
+        val fixed = fixSpelling(s.trim().split(" ").filter { it.isNotBlank() })
+        return " " + fixed.joinToString(" ") + " "
     }
 
     fun parse(raw: String): Command {
         val s = normalize(raw)
         if (s.isBlank()) return Command.Unknown(raw)
 
+        parseTap(s)?.let { return it }
+        parseScroll(s)?.let { return it }
+        parseType(s, raw)?.let { return it }
+        parseEmail(s)?.let { return it }
         parseMessage(s)?.let { return it }
         parseSearch(s)?.let { return it }
         parseCall(s)?.let { return it }
@@ -168,9 +227,106 @@ object CommandParser {
             val q = edgeStrip(s.trim().split(" ").filter { it.isNotBlank() && it !in appWords })
             return if (q.isBlank()) Command.OpenApp(app.spoken.lowercase()) else Command.SearchIn(app, q)
         }
+        if (hasIntent) {
+            val words = s.trim().split(" ").filter { it.isNotBlank() }
+            // Hinglish: "<app> pe/par/me <query> search karo"
+            val viaIdx = words.indexOfFirst { it in setOf("pe", "par", "per", "me", "mein") }
+            if (viaIdx in 1..3) {
+                val appName = strip(words.take(viaIdx).joinToString(" "), OPEN_FILLERS)
+                val q = edgeStrip(words.drop(viaIdx + 1))
+                if (appName.isNotBlank() && q.isNotBlank()) return Command.AppSearch(appName, q, q)
+            }
+            // English: "search <query> on/in <app>"
+            val onIdx = words.indexOfLast { it == "on" || it == "in" }
+            if (onIdx >= 1 && onIdx < words.size - 1 && onIdx >= words.size - 3) {
+                val appName = words.drop(onIdx + 1).joinToString(" ")
+                val q = edgeStrip(words.take(onIdx))
+                if (q.isNotBlank()) return Command.AppSearch(appName, q, edgeStrip(words))
+            }
+        }
         if (s.contains(" search ")) {
             val q = edgeStrip(s.trim().split(" ").filter { it.isNotBlank() })
             if (q.isNotBlank()) return Command.SearchIn(SearchApp.GOOGLE, q)
+        }
+        return null
+    }
+
+    // ---------- Gmail ----------
+    private val EMAIL_FILLERS = setOf(
+        "send", "email", "emails", "mail", "gmail", "ko", "to", "bhejo", "bhej", "karo", "kar", "kardo",
+        "do", "a", "an", "on", "pe", "par", "per", "ek", "write", "likho", "please", "plz", "kholo",
+        "open", "the", "new", "compose"
+    )
+    private val BODY_SEPS = listOf(" ki ", " that ", " saying ", " message ", " body ", " likho ")
+
+    private fun parseEmail(s: String): Command? {
+        if (!Regex(" (email|emails|mail|gmail) ").containsMatchIn(s)) return null
+        val subjIdx = s.indexOf(" subject ")
+        val name: String
+        var subject = ""
+        var body = ""
+        if (subjIdx >= 0) {
+            name = strip(s.substring(0, subjIdx), EMAIL_FILLERS)
+            val rest = s.substring(subjIdx + " subject".length)
+            val sep = BODY_SEPS.firstOrNull { rest.contains(it) }
+            if (sep != null) {
+                val i = rest.indexOf(sep)
+                subject = rest.substring(0, i).trim()
+                body = rest.substring(i + sep.length).trim()
+            } else {
+                subject = rest.trim()
+            }
+        } else {
+            val sep = BODY_SEPS.firstOrNull { s.contains(it) }
+            if (sep != null) {
+                val i = s.indexOf(sep)
+                name = strip(s.substring(0, i), EMAIL_FILLERS)
+                body = s.substring(i + sep.length).trim()
+            } else {
+                name = strip(s, EMAIL_FILLERS)
+            }
+        }
+        if (name.isBlank()) return null
+        return Command.Email(name, subject, body)
+    }
+
+    // ---------- Inside the app on screen ----------
+    private val TAP_FILLERS = setOf(
+        "the", "button", "icon", "option", "wala", "wali", "wale", "on", "pe", "par", "per", "ko",
+        "a", "an", "karo", "kar", "do", "please", "plz"
+    )
+
+    private fun parseTap(s: String): Command? {
+        val patterns = listOf(
+            Regex("^ (?:tap|click|press|touch)(?: karo| kar do)? (?:on |the |pe |par )*(.+?) $"),
+            Regex("^ (.+?) (?:pe |par |per |ko |on )?(?:tap|click|press|touch)(?: karo| kar do| kardo| kar)? $"),
+            Regex("^ (.+?) (?:dabao|daba do|dabaiye) $")
+        )
+        for (p in patterns) {
+            val m = p.find(s) ?: continue
+            val target = strip(m.groupValues[1], TAP_FILLERS)
+            if (target.isNotBlank()) return Command.TapOn(target)
+        }
+        return null
+    }
+
+    private fun parseScroll(s: String): Command? {
+        if (!Regex(" scroll | page (down|up) ").containsMatchIn(s)) return null
+        val up = Regex(" (up|upar|uper|oopar|top) ").containsMatchIn(s)
+        return Command.Scroll(down = !up)
+    }
+
+    private fun parseType(s: String, raw: String): Command? {
+        Regex("^ (?:type karo|likh do|type|likho) (.+) $").find(s)?.let { m ->
+            val r = raw.trim()
+            // keep the user's own capital letters for "type Hello Rahul"
+            val text = if (r.lowercase().startsWith("type ") && !r.lowercase().startsWith("type karo "))
+                r.substring(5).trim() else m.groupValues[1].trim()
+            return if (text.isNotBlank()) Command.TypeText(text) else null
+        }
+        Regex("^ (.+?) (?:type|likho) (?:karo |kar do |kardo )?$").find(s)?.let { m ->
+            val text = m.groupValues[1].trim()
+            return if (text.isNotBlank()) Command.TypeText(text) else null
         }
         return null
     }

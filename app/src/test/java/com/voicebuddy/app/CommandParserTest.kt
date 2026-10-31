@@ -80,4 +80,36 @@ class CommandParserTest {
         check("chrome kholo", Command.OpenApp("chrome"))
         check("youtube kholo", Command.OpenApp("youtube"))
     }
+
+    @Test fun spellingMistakes() {
+        check("chart gpt se pucho india ka capital kya hai", Command.SearchIn(SearchApp.CHATGPT, "india ka capital kya hai"))
+        check("chat gbd se pucho aaj kya date hai", Command.SearchIn(SearchApp.CHATGPT, "aaj kya date hai"))
+        check("blutooth on karo", Command.Toggle(Setting.BLUETOOTH, true))
+        check("open insta gram", Command.OpenApp("instagram"))
+        check("watsapp kholo", Command.OpenApp("whatsapp"))
+        check("pradhaman ko message bhejo ki aa jao", Command.WhatsAppMessage("pradhaman", "aa jao"))
+    }
+
+    @Test fun email() {
+        check("suraj ko email bhejo ki kal meeting hai", Command.Email("suraj", "", "kal meeting hai"))
+        check("send email to atharav subject project saying please send the file",
+            Command.Email("atharav", "project", "please send the file"))
+        check("papa ko mail karo subject leave ki main kal nahi aaunga",
+            Command.Email("papa", "leave", "main kal nahi aaunga"))
+        check("gmail kholo", Command.OpenApp("gmail"))
+    }
+
+    @Test fun insideApps() {
+        check("send pe tap karo", Command.TapOn("send"))
+        check("tap on search", Command.TapOn("search"))
+        check("click on the follow button", Command.TapOn("follow"))
+        check("like dabao", Command.TapOn("like"))
+        check("scroll down", Command.Scroll(true))
+        check("upar scroll karo", Command.Scroll(false))
+        check("type hello how are you", Command.TypeText("hello how are you"))
+        check("Type Hello Rahul", Command.TypeText("Hello Rahul"))
+        check("instagram pe search karo virat kohli", Command.AppSearch("instagram", "virat kohli", "virat kohli"))
+        check("amazon pe iphone 15 dhundo", Command.AppSearch("amazon", "iphone 15", "iphone 15"))
+        check("search weather in amritsar", Command.AppSearch("amritsar", "weather", "weather in amritsar"))
+    }
 }

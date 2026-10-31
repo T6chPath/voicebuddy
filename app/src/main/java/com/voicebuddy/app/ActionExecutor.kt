@@ -44,6 +44,11 @@ class ActionExecutor(private val activity: Activity) {
             is Command.Volume -> volume(cmd.dir)
             is Command.Global -> global(cmd.action)
             is Command.SearchIn -> searchIn(cmd.app, cmd.query)
+            is Command.AppSearch -> appSearch(cmd.appName, cmd.query, cmd.fullQuery)
+            is Command.Email -> sendEmail(cmd.name, cmd.subject, cmd.body)
+            is Command.TapOn -> inApp("\"${cmd.target}\" dabaya", "\"${cmd.target}\" screen pe nahi mila") { it.tapOnText(cmd.target) }
+            is Command.TypeText -> inApp("Likh raha hoon: ${cmd.text}", "Likhne ki jagah nahi mili. Pehle text box pe tap karwaiye.") { it.typeText(cmd.text) }
+            is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
             is Command.Unknown -> searchIn(SearchApp.GOOGLE, cmd.heard).let { "Samajh nahi aaya, Google pe dhundh raha hoon" }
         }
     } catch (e: ActivityNotFoundException) {
@@ -332,30 +337,115 @@ class ActionExecutor(private val activity: Activity) {
     }
 
     // ---------- Open any app ----------
-    private fun openApp(spoken: String): String {
+    /** Finds an installed app by a spoken name; forgives spelling ("insta", "watsapp", "chart gpt"). */
+    private fun findApp(spoken: String): android.content.pm.ResolveInfo? {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val target = spoken.lowercase().replace(" ", "")
         val apps = pm.queryIntentActivities(launcher, 0)
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { it to it.loadLabel(pm).toString() }
+        val target = spoken.lowercase().replace(" ", "")
 
-        val match = apps
-            .map { it to it.loadLabel(pm).toString().lowercase().replace(" ", "") }
-            .sortedBy { (_, label) ->
+        val direct = apps
+            .map { (ri, label) -> Triple(ri, label, label.lowercase().replace(" ", "")) }
+            .filter { (_, _, l) -> l.contains(target) || (l.length > 2 && target.contains(l)) }
+            .sortedBy { (_, _, l) ->
                 when {
-                    label == target -> 0
-                    label.startsWith(target) -> 1
-                    label.contains(target) -> 2
-                    target.contains(label) -> 3
-                    else -> 9
+                    l == target -> 0
+                    l.startsWith(target) -> 1
+                    l.contains(target) -> 2
+                    else -> 3
                 }
             }
-            .firstOrNull { (_, label) ->
-                label.contains(target) || (label.length > 2 && target.contains(label))
-            }?.first ?: return "$spoken app nahi mila."
+            .firstOrNull()?.first
+        return direct ?: NameMatch.best(spoken, apps, minScore = 2) { it.second }?.first
+    }
 
+    private fun openApp(spoken: String): String {
+        val match = findApp(spoken) ?: return "$spoken app nahi mila."
+        val pm = context.packageManager
         val intent = pm.getLaunchIntentForPackage(match.activityInfo.packageName) ?: return "$spoken khul nahi raha."
         launch(intent)
         return "${match.loadLabel(pm)} khol raha hoon"
+    }
+
+    // ---------- Search inside any app ----------
+    private fun appSearch(appName: String, q: String, fullQuery: String): String {
+        val app = findApp(appName) ?: return searchIn(SearchApp.GOOGLE, fullQuery)
+        val pm = context.packageManager
+        val pkg = app.activityInfo.packageName
+        val label = app.loadLabel(pm).toString()
+
+        // Apps with a proper search link open straight on the results
+        val e = enc(q)
+        val deepLink: Intent? = when (pkg) {
+            "com.google.android.apps.maps" -> Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$e"))
+            "com.android.vending" -> view("market://search?q=$e")
+            "com.spotify.music" -> view("spotify:search:$e")
+            "in.amazon.mShop.android.shopping", "com.amazon.mShop.android.shopping" -> view("https://www.amazon.in/s?k=$e")
+            "com.flipkart.android" -> view("https://www.flipkart.com/search?q=$e")
+            "com.google.android.youtube" -> Intent(Intent.ACTION_SEARCH).putExtra("query", q)
+            "com.google.android.apps.youtube.music" -> view("https://music.youtube.com/search?q=$e")
+            "com.google.android.googlequicksearchbox" -> Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, q)
+            else -> null
+        }?.setPackage(pkg)
+        if (deepLink != null && launchFirst(listOf(deepLink))) return "$label pe $q dhundh raha hoon"
+
+        // Everything else: open the app and let Auto-Tap use its search box
+        val open = pm.getLaunchIntentForPackage(pkg) ?: return "$label khul nahi raha."
+        copyToClipboard(q)
+        val auto = AutoTapService.isRunning()
+        if (auto) PendingAction.set(PendingAction.Task.InAppSearch(pkg, q), 20_000)
+        launch(open)
+        return if (auto) "$label mein $q dhundh raha hoon"
+        else "$label khol diya. \"$q\" copy kar diya hai, search mein paste kijiye. Auto-Tap on karne se ye apne aap hoga."
+    }
+
+    // ---------- Gmail ----------
+    /** "suraj 123 at gmail dot com" -> "suraj123@gmail.com" */
+    private fun spokenEmail(name: String): String? {
+        val t = " ${name.lowercase()} "
+            .replace(" at the rate ", "@").replace(" at rate ", "@").replace(" at ", "@")
+            .replace(" dot ", ".").replace(" underscore ", "_").replace(" ", "")
+        return if (Regex("^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$").matches(t)) t else null
+    }
+
+    private fun sendEmail(name: String, subject: String, body: String): String {
+        val (who, address) = spokenEmail(name)?.let { it to it } ?: run {
+            if (!has(Manifest.permission.READ_CONTACTS)) return "Contacts ki permission dijiye."
+            val c = contacts.find(name, requirePhone = false) ?: return "$name contacts mein nahi mila."
+            val a = contacts.emailFor(c.id) ?: return "${c.name} ka email contacts mein save nahi hai."
+            c.name to a
+        }
+        val subj = subject.ifBlank { body.split(" ").take(6).joinToString(" ") }
+            .replaceFirstChar { it.uppercase() }
+        val uri = Uri.parse("mailto:$address?subject=${enc(subj)}&body=${enc(body)}")
+        val intent = Intent(Intent.ACTION_SENDTO, uri)
+            .putExtra(Intent.EXTRA_EMAIL, arrayOf(address))
+            .putExtra(Intent.EXTRA_SUBJECT, subj)
+            .putExtra(Intent.EXTRA_TEXT, body)
+        val gmail = "com.google.android.gm"
+        val hasGmail = isInstalled(gmail)
+        if (hasGmail) intent.setPackage(gmail)
+        val autoSend = hasGmail && body.isNotBlank() && AutoTapService.isRunning()
+        if (autoSend) PendingAction.set(PendingAction.Task.AppSend(gmail))
+        launch(intent)
+        return when {
+            body.isBlank() -> "$who ke liye email khol diya. Kya likhna hai, wahan likhiye."
+            autoSend -> "$who ko email bhej raha hoon: $body"
+            else -> "$who ke liye email taiyaar hai, Send dabaiye."
+        }
+    }
+
+    // ---------- Inside the app on screen ----------
+    /** Steps out of VoiceBuddy so the app underneath is on screen, then Auto-Tap does the work. */
+    private fun inApp(okReply: String, failReply: String, work: (AutoTapService) -> Boolean): String {
+        val svc = AutoTapService.instance ?: return "Iske liye pehle Auto-Tap on kijiye."
+        activity.moveTaskToBack(true)
+        handler.postDelayed({
+            if (!work(svc)) android.widget.Toast.makeText(context, failReply, android.widget.Toast.LENGTH_LONG).show()
+        }, 900)
+        return okReply
     }
 
     // ---------- helpers ----------

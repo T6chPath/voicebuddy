@@ -17,6 +17,8 @@ object PendingAction {
         ) : Task()
         /** Press Send in an AI app (ChatGPT / Claude / Gemini) after sharing the question to it. */
         data class AppSend(val pkg: String) : Task()
+        /** Open the app's search box, type the query and press search. */
+        data class InAppSearch(val pkg: String, val query: String) : Task()
     }
 
     @Volatile private var task: Task? = null
