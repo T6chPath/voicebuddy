@@ -72,6 +72,7 @@ class AutoTapService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val task = PendingAction.current() ?: return
+        if (task is PendingAction.Task.Flow) { if (!flowRunning) kickFlow(); return }
         val pkg = event?.packageName?.toString() ?: return
         if (pkg == packageName || scheduled) return
         scheduled = true
@@ -81,6 +82,7 @@ class AutoTapService : AccessibilityService() {
             is PendingAction.Task.ToggleSwitch -> 700L
             is PendingAction.Task.AppSend -> 1000L
             is PendingAction.Task.InAppSearch -> 1200L
+            is PendingAction.Task.Flow -> return
         }
         handler.postDelayed({
             scheduled = false
@@ -103,7 +105,243 @@ class AutoTapService : AccessibilityService() {
                 if (rootPkg == task.pkg) appSend(root)
             is PendingAction.Task.InAppSearch ->
                 if (rootPkg == task.pkg) inAppSearch(root, task)
+            is PendingAction.Task.Flow -> Unit
         }
+    }
+
+    // ---------- Multi-step flows (WhatsApp reply, status, settings…) ----------
+    private var flow: PendingAction.Task.Flow? = null
+    private var flowIdx = 0
+    private var stepStart = 0L
+    private var stepTries = 0
+    @Volatile private var flowRunning = false
+    private val flowTick = Runnable { tickFlow() }
+
+    /** Starts (or restarts) working on the current flow. Called right after zenvqo.voice sets one. */
+    fun kickFlow() {
+        handler.removeCallbacks(flowTick)
+        flowRunning = true
+        handler.postDelayed(flowTick, 900)
+    }
+
+    private fun tickFlow() {
+        val task = PendingAction.current() as? PendingAction.Task.Flow
+        if (task == null) { flowRunning = false; flow = null; return }
+        if (flow !== task) { flow = task; flowIdx = 0; stepStart = System.currentTimeMillis(); stepTries = 0 }
+        if (flowIdx >= task.steps.size) { endFlow(task.doneMessage); return }
+
+        val step = task.steps[flowIdx]
+        val now = System.currentTimeMillis()
+        if (step.kind == PendingAction.Step.Kind.FINISH) { endFlow(step.text); return }
+
+        val root = rootInActiveWindow
+        val rootPkg = root?.packageName?.toString() ?: ""
+        val rightApp = step.anyApp || rootPkg.startsWith(task.pkgPrefix)
+        stepTries++
+        var nextDelay = 450L
+        val done = when {
+            step.kind == PendingAction.Step.Kind.WAIT -> now - stepStart >= step.ms
+            root == null || !rightApp -> false
+            else -> try { runStep(root, step).also { if (it && step.kind == PendingAction.Step.Kind.HOLD) nextDelay = step.ms + 1200 } }
+                    catch (e: Exception) { false }
+        }
+
+        if (done) {
+            flowIdx++
+            stepStart = System.currentTimeMillis()
+            stepTries = 0
+            if (nextDelay == 450L) nextDelay = 750L
+        } else if (now - stepStart > step.timeoutMs) {
+            if (step.optional) {
+                flowIdx++; stepStart = System.currentTimeMillis(); stepTries = 0
+            } else {
+                val what = step.labels.firstOrNull() ?: "next step"
+                endFlow("WhatsApp mein \"$what\" nahi mila. Ye step aap khud kar lijiye.")
+                return
+            }
+        }
+        if (flowIdx >= task.steps.size) { endFlow(task.doneMessage); return }
+        handler.postDelayed(flowTick, nextDelay)
+    }
+
+    private fun endFlow(message: String?) {
+        PendingAction.clear()
+        flow = null
+        flowRunning = false
+        handler.removeCallbacks(flowTick)
+        if (!message.isNullOrBlank()) android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    private fun runStep(root: AccessibilityNodeInfo, step: PendingAction.Step): Boolean {
+        val pkg = root.packageName?.toString() ?: ""
+        return when (step.kind) {
+            PendingAction.Step.Kind.TAP -> {
+                val node = findLabeled(root, pkg, step.labels, step.ids, step.exact)
+                if (node != null) return pressNode(node)
+                val elapsed = System.currentTimeMillis() - stepStart
+                if (step.orFirst && elapsed > step.timeoutMs / 2) return firstResult(root)
+                if (step.scroll && stepTries % 2 == 0) scrollBiggest(root, true)
+                false
+            }
+            PendingAction.Step.Kind.LONG_PRESS_MESSAGE -> longPressMessage(root, step.outgoing)
+            PendingAction.Step.Kind.TYPE -> {
+                val field = findField(root, step.labels) ?: return false
+                if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                setText(field, step.text)
+            }
+            PendingAction.Step.Kind.TYPE_EMPTY -> {
+                val edits = mutableListOf<AccessibilityNodeInfo>()
+                collect(root, edits) { it.isEditable && it.isVisibleToUser }
+                val field = edits.firstOrNull { it.text.isNullOrBlank() || it.isShowingHintTextCompat() } ?: return false
+                field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                setText(field, step.text)
+            }
+            PendingAction.Step.Kind.FIRST_RESULT -> firstResult(root)
+            PendingAction.Step.Kind.HOLD -> {
+                val node = findLabeled(root, pkg, step.labels, step.ids, false) ?: return false
+                val r = Rect()
+                node.getBoundsInScreen(r)
+                holdAt(r.exactCenterX(), r.exactCenterY(), step.ms)
+            }
+            PendingAction.Step.Kind.ENTER -> { pressEnter(); true }
+            PendingAction.Step.Kind.WAIT, PendingAction.Step.Kind.FINISH -> true
+        }
+    }
+
+    /** Best visible button/item for the labels (exact text first), or by view id. Text boxes are skipped. */
+    private fun findLabeled(
+        root: AccessibilityNodeInfo, pkg: String, labels: List<String>, ids: List<String>, exact: Boolean
+    ): AccessibilityNodeInfo? {
+        for (id in ids) {
+            root.findAccessibilityNodeInfosByViewId("$pkg:id/$id").firstOrNull { it.isVisibleToUser }?.let { return it }
+        }
+        if (labels.isEmpty()) return null
+        val wanted = labels.map { it.lowercase().trim() }
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = 0
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, nodes) { n ->
+            n.isVisibleToUser && !n.isEditable && (!n.text.isNullOrBlank() || !n.contentDescription.isNullOrBlank())
+        }
+        for (n in nodes) {
+            for (raw in listOf(n.text, n.contentDescription)) {
+                val t = raw?.toString()?.lowercase()?.trim() ?: continue
+                if (t.isEmpty() || t.length > 90) continue
+                for (w in wanted) {
+                    val score = when {
+                        t == w -> 4
+                        exact -> 0
+                        t.startsWith("$w ") || t.startsWith("$w,") -> 3
+                        Regex("(^|\\W)${Regex.escape(w)}(\\W|$)").containsMatchIn(t) -> 2
+                        w.length >= 4 && t.contains(w) -> 1
+                        else -> 0
+                    }
+                    if (score > bestScore) { bestScore = score; best = n }
+                }
+            }
+        }
+        return best
+    }
+
+    private fun pressNode(node: AccessibilityNodeInfo): Boolean {
+        if (clickUp(node)) return true
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        return tapAt(r.exactCenterX(), r.exactCenterY())
+    }
+
+    private fun findField(root: AccessibilityNodeInfo, hints: List<String>): AccessibilityNodeInfo? {
+        val edits = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, edits) { it.isEditable && it.isVisibleToUser }
+        if (edits.isEmpty()) return null
+        if (hints.isNotEmpty()) {
+            edits.firstOrNull { e ->
+                val hint = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) e.hintText?.toString() ?: "" else ""
+                val all = (hint + " " + (e.text ?: "") + " " + (e.contentDescription ?: "") + " " + (e.viewIdResourceName ?: "")).lowercase()
+                hints.any { all.contains(it) }
+            }?.let { return it }
+        }
+        return edits.firstOrNull { it.isFocused } ?: edits.first()
+    }
+
+    /** First item of the list/grid under the search box (first GIF, sticker, song, file, wallpaper…). */
+    private fun firstResult(root: AccessibilityNodeInfo): Boolean {
+        val edits = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, edits) { it.isEditable && it.isVisibleToUser }
+        val floor = edits.maxOfOrNull { Rect().also { r -> it.getBoundsInScreen(r) }.bottom } ?: 0
+        val items = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, items) { n ->
+            if (!n.isVisibleToUser || !n.isClickable || n.isEditable) return@collect false
+            val r = Rect().also { n.getBoundsInScreen(it) }
+            r.top >= floor && r.width() > 40 && r.height() > 40 && insideScrollable(n)
+        }
+        val first = items.minWithOrNull(compareBy<AccessibilityNodeInfo>(
+            { Rect().also { r -> it.getBoundsInScreen(r) }.top / 40 },
+            { Rect().also { r -> it.getBoundsInScreen(r) }.left }
+        )) ?: return false
+        return pressNode(first)
+    }
+
+    private fun insideScrollable(n: AccessibilityNodeInfo): Boolean {
+        var p = n.parent
+        var i = 0
+        while (p != null && i < 10) {
+            if (p.isScrollable) return true
+            p = p.parent; i++
+        }
+        return false
+    }
+
+    /**
+     * Long-presses the newest chat bubble. My messages sit on the right, theirs on the left,
+     * date/system notes in the middle (skipped).
+     */
+    private fun longPressMessage(root: AccessibilityNodeInfo, outgoing: Boolean?): Boolean {
+        val width = resources.displayMetrics.widthPixels
+        val pkg = root.packageName?.toString() ?: ""
+        var bubbles = listOf("message_text", "caption", "conversation_text_row").flatMap {
+            root.findAccessibilityNodeInfosByViewId("$pkg:id/$it")
+        }.filter { it.isVisibleToUser }
+        if (bubbles.isEmpty()) {
+            val lists = mutableListOf<AccessibilityNodeInfo>()
+            collect(root, lists) { it.isScrollable && it.isVisibleToUser }
+            val chat = lists.maxByOrNull { n -> Rect().also { n.getBoundsInScreen(it) }.let { it.height() } } ?: return false
+            val texts = mutableListOf<AccessibilityNodeInfo>()
+            collect(chat, texts) { it.isVisibleToUser && !it.text.isNullOrBlank() && !it.isEditable }
+            bubbles = texts
+        }
+        val picked = bubbles.mapNotNull { n ->
+            val r = Rect().also { n.getBoundsInScreen(it) }
+            val left = r.left
+            val right = width - r.right
+            if (kotlin.math.abs(left - right) < width * 0.08) return@mapNotNull null   // centred = date / system note
+            val mine = right < left
+            if (outgoing != null && mine != outgoing) null else n to r
+        }.maxByOrNull { it.second.bottom } ?: return false
+
+        var n: AccessibilityNodeInfo? = picked.first
+        while (n != null) {
+            if (n.isLongClickable) return n.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
+            n = n.parent
+        }
+        return holdAt(picked.second.exactCenterX(), picked.second.exactCenterY(), 800)
+    }
+
+    private fun scrollBiggest(root: AccessibilityNodeInfo, down: Boolean) {
+        val list = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, list) { it.isScrollable && it.isVisibleToUser }
+        list.maxByOrNull { n -> Rect().also { n.getBoundsInScreen(it) }.let { it.width() * it.height() } }
+            ?.performAction(if (down) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+    }
+
+    /** Press and hold (voice / video note recording). */
+    private fun holdAt(x: Float, y: Float, ms: Long): Boolean {
+        val path = Path().apply { moveTo(x, y) }
+        val max = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) GestureDescription.getMaxGestureDuration() else 60_000L
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, ms.coerceAtMost(max - 100)))
+            .build()
+        return dispatchGesture(g, null, null)
     }
 
     // ---------- Search inside an app ----------

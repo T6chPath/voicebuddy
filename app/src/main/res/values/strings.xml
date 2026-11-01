@@ -3,5 +3,5 @@
     <string name="listen_label">Bolo</string>
     <string name="shortcut_listen_long">Bolo — start listening</string>
     <string name="accessibility_label">zenvqo.voice Auto-Tap</string>
-    <string name="accessibility_desc">Lets zenvqo.voice finish what you asked by voice: press Send in WhatsApp, ChatGPT, Claude or Gemini, start the first YouTube video, flip the Wi-Fi / Bluetooth / mobile data / hotspot switch, take a screenshot or lock the phone, press a button by its name, type or scroll in the app on screen, and search inside apps. It also adds a floating zenvqo.voice button so you can talk from inside any app. It only acts right after your own voice command.</string>
+    <string name="accessibility_desc">Lets zenvqo.voice finish what you asked by voice: press Send in WhatsApp and do WhatsApp steps you ask for (reply, voice note, status, settings…), ChatGPT, Claude or Gemini, start the first YouTube video, flip the Wi-Fi / Bluetooth / mobile data / hotspot switch, take a screenshot or lock the phone, press a button by its name, type or scroll in the app on screen, and search inside apps. It also adds a floating zenvqo.voice button so you can talk from inside any app. It only acts right after your own voice command.</string>
 </resources>

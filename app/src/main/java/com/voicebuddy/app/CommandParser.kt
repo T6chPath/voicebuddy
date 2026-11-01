@@ -34,6 +34,11 @@ sealed class Command {
     data class TapOn(val target: String) : Command()
     data class TypeText(val text: String) : Command()
     data class Scroll(val down: Boolean) : Command()
+    /** Any other WhatsApp job (voice note, reply, status, channels, settings…), see [WhatsAppParser]. */
+    data class WhatsApp(
+        val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
+        val split: Boolean = false
+    ) : Command()
     data class Unknown(val heard: String) : Command()
 }
 
@@ -203,6 +208,7 @@ object CommandParser {
         parseTap(s)?.let { return it }
         parseScroll(s)?.let { return it }
         parseType(s, raw)?.let { return it }
+        WhatsAppParser.parse(s)?.let { return it }
         parseEmail(s)?.let { return it }
         parseMessage(s)?.let { return it }
         parseSearch(s)?.let { return it }

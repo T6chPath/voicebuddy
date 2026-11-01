@@ -85,6 +85,17 @@ class InfoActivity : AppCompatActivity() {
         audio aur video call, YouTube par gaana, Gmail, ChatGPT / Claude / Gemini / Google par sawaal,
         torch, Wi-Fi, Bluetooth, volume, screenshot, aur kisi bhi app ke andar tap, type aur scroll.<br><br>
         Galat spelling ho to bhi samajh jaata hai — “chart gpt”, “watsapp”, “pradhaman”.<br><br>
+        <b>WhatsApp mein bolke</b> (Auto-Tap on hona chahiye)<br>
+        • “Papa ko voice message bhejo” / “20 second ka voice message”<br>
+        • “Papa ke message ka reply karo ki haan” · “heart react karo”<br>
+        • “Papa ka last message edit karo ki …” · “sabke liye delete karo”<br>
+        • “Papa ka last message rahul ko forward karo”<br>
+        • “Rahul ko happy birthday ka gif / sticker bhejo”<br>
+        • “Papa ko location / resume pdf / rahul ka contact bhejo”<br>
+        • “Family group ko poll bhejo kahan chalein options goa aur manali”<br>
+        • “Status lagao ki …” · “photo status lagao kesariya gaane ke saath”<br>
+        • “Virat kohli channel follow karo” · “rahul ko block karo”<br>
+        • “WhatsApp dark mode on karo” · “whatsapp ki language hindi karo”<br><br>
         <b>Jaldi bolne ke tareeke</b><br>
         • Orange “Bolo” icon: seedha sunna shuru<br>
         • Quick Settings mein zenvqo.voice tile<br>

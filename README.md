@@ -33,6 +33,38 @@
 
 Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
 
+## WhatsApp by voice
+
+Needs **Auto-Tap** on (it does the tapping inside WhatsApp, only right after your command). WhatsApp must be in English.
+
+| Say | What happens |
+|---|---|
+| "Papa ko voice message bhejo" / "20 second ka voice message" | Holds the mic and records a voice note (video message too) |
+| "Papa ke message ka reply karo ki haan aa raha hoon" | Replies (quote-reply) to their last message |
+| "Papa ka last message edit karo ki main 5 baje aaunga" | Edits your last message |
+| "Papa wala last message delete karo" / "…sabke liye delete karo" | Delete for me / for everyone |
+| "Papa ka last message rahul ko forward karo" | Forwards it |
+| "Papa ke message pe heart react karo" | Emoji reaction (like, heart, haha, wow, sad, pray) |
+| "Rahul ko happy birthday ka gif bhejo" / "…sticker bhejo" | First matching GIF / sticker |
+| "Papa ko link bhejo google dot com" | Sends the link |
+| "Papa ko rahul ka contact bhejo" / "…ka number bhejo" | Contact card / phone number |
+| "Papa ko location bhejo" | Current location |
+| "Papa ko resume pdf bhejo" / "project zip bhejo" | Document / PDF / ZIP from WhatsApp's file list |
+| "Family group ko poll bhejo kahan chalein options goa aur manali" | Poll |
+| "Rahul ko event invite bhejo birthday party" | Event invitation |
+| "Papa ko view once photo bhejo" | Your latest photo / video as view once |
+| "WhatsApp call history dikhao" / "screen share karo" | Calls tab / share screen + audio in a call |
+| "Status lagao ki aaj mera birthday hai" | Text status |
+| "Photo status lagao kesariya gaane ke saath" | Latest photo / video / GIF as status, with music or a sticker |
+| "Family community mein naya group banao cousins" | New group inside a community |
+| "Virat kohli channel follow karo" / "unfollow" / "search" / "create channel zenvqo" | Channels |
+| "WhatsApp naam rahul rakho" / "about change karo ki busy hoon" / "dp change karo" | Profile |
+| "Rahul ko block karo" / "unblock rahul" | Block / unblock |
+| "WhatsApp number change karo" / "account delete karo" | Opens the screen; you finish it yourself (never auto-confirmed) |
+| "WhatsApp ki language hindi karo" / "dark mode on karo" / "wallpaper change karo" / "notification band karo" | Settings |
+
+Groups work too: say "group" in the name ("family group ko …") and WhatsApp's own search finds the chat.
+
 ## Talk from inside any app
 After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or a button in the navigation bar). If it doesn't appear: Settings → Accessibility → zenvqo.voice Auto-Tap → turn on **zenvqo.voice Auto-Tap shortcut**. Tap it inside Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". zenvqo.voice steps aside and does it in that app.
 
