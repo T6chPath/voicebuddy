@@ -78,8 +78,12 @@ After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or
 
 ## First-time setup
 1. Open zenvqo.voice → allow **Microphone, Contacts, Phone** (Phone is needed to pick SIM 1 / SIM 2).
-2. Tap the orange line → Accessibility → **zenvqo.voice Auto-Tap** → On.
-   Auto-Tap presses Send, plays the YouTube video, flips the Wi-Fi/Bluetooth/data switches and takes screenshots. It only acts for a few seconds right after your own voice command.
+2. Tap **On karo** on the home screen (or just say **"auto tap on karo"**). It opens zenvqo.voice's own switch — turn it on, tap Allow, and the app comes back by itself.
+   Auto-Tap presses Send, plays the YouTube video, flips the Wi-Fi/Bluetooth/data switches, does the WhatsApp steps and takes screenshots. It only acts right after your own voice command.
+   - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) Tap "Switch nahi chal raha": App info → ⋮ → **Allow restricted settings**, then turn it on.
+   - **Never do it again (optional):** connect the phone to a computer once and run
+     `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.
+     After that Auto-Tap turns itself on automatically, even after every update.
 
 ## Good to know
 - Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so zenvqo.voice opens the switch and Auto-Tap flips it. On some phone brands the switch screen looks different and you may need to tap it yourself.

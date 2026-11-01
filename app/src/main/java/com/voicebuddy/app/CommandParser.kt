@@ -39,6 +39,8 @@ sealed class Command {
         val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
         val split: Boolean = false
     ) : Command()
+    /** "auto tap on karo" -> the one-tap Auto-Tap setup. */
+    object AutoTapSetup : Command()
     data class Unknown(val heard: String) : Command()
 }
 
@@ -120,7 +122,7 @@ object CommandParser {
         "blue tooth" to "bluetooth", "hot spot" to "hotspot", "flash light" to "flashlight",
         "torch light" to "torch", "screen shot" to "screenshot", "aero plane" to "aeroplane",
         "air plane" to "airplane", "g p s" to "gps", "turn of" to "turn off", "switch of" to "switch off",
-        "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram",
+        "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram", "auto tap" to "autotap", "otto tap" to "autotap", "auto tab" to "autotap",
         "face book" to "facebook", "play store" to "playstore", "google maps" to "maps",
         "vai phai" to "wifi", "vai fai" to "wifi", "mobail deta" to "mobile data"
     )
@@ -205,6 +207,7 @@ object CommandParser {
         val s = normalize(raw)
         if (s.isBlank()) return Command.Unknown(raw)
 
+        if (s.contains(" autotap ")) return Command.AutoTapSetup
         parseTap(s)?.let { return it }
         parseScroll(s)?.let { return it }
         parseType(s, raw)?.let { return it }

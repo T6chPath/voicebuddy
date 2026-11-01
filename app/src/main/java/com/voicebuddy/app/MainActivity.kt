@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         const val ACTION_LISTEN = "com.voicebuddy.app.LISTEN"
         /** Started from the floating button while another app was open: go back to it afterwards. */
         const val EXTRA_FROM_BUTTON = "from_button"
+        const val EXTRA_AUTOTAP_DONE = "autotap_done"
         /** A tap within this time after opening the app counts as the "second tap" of a double tap. */
         private const val SECOND_TAP_WINDOW_MS = 1500L
         private const val MAX_RECENT = 20
@@ -68,6 +69,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var listening = false
     private var secondTapUntil = 0L
     private var returnAfter = false
+    private var autoTapPrompted = false
     /** "en-IN" = Hinglish / English in Roman letters, "hi-IN" = Hindi (हिंदी). Both are understood. */
     private var speechLang = "en-IN"
 
@@ -136,6 +138,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         })
 
+        findViewById<View>(R.id.autoTapBanner).setOnClickListener { AutoTapHelper.turnOn(this) }
+        findViewById<View>(R.id.autoTapBannerButton).setOnClickListener { AutoTapHelper.turnOn(this) }
         styleTitle()
         findViewById<TextView>(R.id.greetingText).text = greeting()
         renderRecent()
@@ -160,6 +164,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * the Quick Settings button, the phone's assistant gesture, or a quick second tap after opening.
      */
     private fun handleLaunch(i: Intent?) {
+        if (i?.getBooleanExtra(EXTRA_AUTOTAP_DONE, false) == true) {
+            i.removeExtra(EXTRA_AUTOTAP_DONE)
+            val msg = "Auto-Tap ON ho gaya. Ab sab kaam apne aap honge."
+            showReply(msg)
+            tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "autotap")
+            return
+        }
         val fromBoloIcon = i?.component?.className?.endsWith(".ListenNow") == true
         if (i?.action == ACTION_LISTEN || i?.action == Intent.ACTION_ASSIST || fromBoloIcon) {
             returnAfter = i?.getBooleanExtra(EXTRA_FROM_BUTTON, false) == true
@@ -182,7 +193,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         speechLang = SpeechLanguage.get(this)
-        settingsBadge.visibility = if (SettingsActivity.isAutoTapOn(this)) View.GONE else View.VISIBLE
+        AutoTapHelper.tryEnableSilently(this)   // only works if WRITE_SECURE_SETTINGS was granted once
+        val autoTapOn = SettingsActivity.isAutoTapOn(this)
+        settingsBadge.visibility = if (autoTapOn) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.autoTapBanner).visibility = if (autoTapOn) View.GONE else View.VISIBLE
+        val allGranted = permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+        if (allGranted) AutoTapHelper.askOnce(this)
         findViewById<TextView>(R.id.greetingText).text = greeting()
     }
 
@@ -273,6 +289,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         showReply(reply)
         tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "reply")
         if (fromVoice) rememberCommand(text)
+        // A job needed Auto-Tap and it's off: offer the one-tap way to turn it on
+        if (!autoTapPrompted && cmd !is Command.AutoTapSetup && reply.contains("Auto-Tap") &&
+            !SettingsActivity.isAutoTapOn(this)) {
+            autoTapPrompted = true
+            AutoTapHelper.turnOn(this)
+        }
         // Opened from the floating button over another app: quick jobs return you to that app
         if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume)) moveTaskToBack(true)
         returnAfter = false

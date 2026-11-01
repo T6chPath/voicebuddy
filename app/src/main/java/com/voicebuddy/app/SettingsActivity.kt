@@ -52,7 +52,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.backButton).setOnClickListener { finish() }
         langOptions = findViewById(R.id.langOptions)
         findViewById<View>(R.id.autoTapButton).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            if (isAutoTapOn(this)) AutoTapHelper.openSwitch(this) else AutoTapHelper.turnOn(this)
         }
         renderLanguages()
         buildMore()

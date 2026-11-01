@@ -39,6 +39,7 @@ class AutoTapService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        AutoTapHelper.onServiceStarted(this)
         // Floating accessibility button / nav-bar button -> talk to zenvqo.voice from any app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             accessibilityButtonController.registerAccessibilityButtonCallback(

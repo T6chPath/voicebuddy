@@ -48,6 +48,11 @@ class ActionExecutor(private val activity: Activity) {
             is Command.AppSearch -> appSearch(cmd.appName, cmd.query, cmd.fullQuery)
             is Command.Email -> sendEmail(cmd.name, cmd.subject, cmd.body)
             is Command.WhatsApp -> whatsApp.run(cmd)
+            is Command.AutoTapSetup -> {
+                val wasOn = SettingsActivity.isAutoTapOn(context)
+                AutoTapHelper.turnOn(activity)
+                if (wasOn) "Auto-Tap pehle se ON hai" else "Auto-Tap on karne ka button khol diya"
+            }
             is Command.TapOn -> inApp("\"${cmd.target}\" dabaya", "\"${cmd.target}\" screen pe nahi mila") { it.tapOnText(cmd.target) }
             is Command.TypeText -> inApp("Likh raha hoon: ${cmd.text}", "Likhne ki jagah nahi mili. Pehle text box pe tap karwaiye.") { it.typeText(cmd.text) }
             is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
