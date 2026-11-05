@@ -40,9 +40,20 @@ class AutoTapService : AccessibilityService() {
     private var searchStep = 0
     private var searchTask: PendingAction.Task.InAppSearch? = null
 
+    /** The crowned bird floating over every app (tap → talk). */
+    var bubble: BirdBubble? = null
+        private set
+
+    /** Show the bird when the ⚡ switch is ON and the user wants it; hide otherwise. */
+    fun refreshBubble() {
+        val b = bubble ?: BirdBubble(this) { openListener() }.also { bubble = it }
+        if (!paused && BirdBubble.isEnabled(this)) b.show() else b.hide()
+    }
+
     override fun onServiceConnected() {
         instance = this
         paused = !AutoTapHelper.wanted(this)
+        refreshBubble()
         AutoTapHelper.onServiceStarted(this)
         // Floating accessibility button / nav-bar button -> talk to zenvqo.voice from any app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -66,11 +77,13 @@ class AutoTapService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        bubble?.hide()
         instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        bubble?.hide()
         instance = null
         super.onDestroy()
     }

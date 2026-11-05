@@ -48,6 +48,7 @@ object AutoTapHelper {
     private fun setWanted(c: Context, on: Boolean) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WANTED, on).apply()
         AutoTapService.paused = !on
+        AutoTapService.instance?.refreshBubble()
     }
 
     /** What the ⚡ switch shows: permission granted AND switched on. */

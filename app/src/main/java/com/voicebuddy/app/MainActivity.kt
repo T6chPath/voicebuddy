@@ -209,8 +209,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         AutoTapKeeper.ensure(this)
         settingsBadge.visibility = View.GONE
         autoToggle.setOn(AutoTapHelper.isActive(this), animate = false)
+        // The floating bird: back if it was hidden, but not on top of our own screen
+        AutoTapService.instance?.let { svc ->
+            svc.bubble?.snoozed = false
+            svc.refreshBubble()
+            svc.bubble?.setVisibleNow(false)
+        }
         AutoTapHelper.checkReturned(this)
         findViewById<TextView>(R.id.greetingText).text = greeting()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        AutoTapService.instance?.bubble?.setVisibleNow(true)
     }
 
     override fun onInit(result: Int) {
@@ -335,7 +346,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, if (ask != null) "ask" else "reply")
         if (fromVoice) rememberCommand(text)
         // Opened from the floating button over another app: quick jobs return you to that app
-        if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume)) moveTaskToBack(true)
+        if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume || cmd is Command.System)) moveTaskToBack(true)
         returnAfter = false
     }
 

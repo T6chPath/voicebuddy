@@ -114,6 +114,15 @@ class SettingsActivity : AppCompatActivity() {
     // ---------- More ----------
     private fun buildMore() {
         val box = findViewById<LinearLayout>(R.id.moreOptions)
+        val birdOn = BirdBubble.isEnabled(this)
+        addRow(box, R.drawable.ic_sparkle, if (birdOn) "Floating chidiya: ON" else "Floating chidiya: OFF",
+            "Har app mein chidiya dikhe — tap karke bolo") {
+            BirdBubble.setEnabled(this, !birdOn)
+            AutoTapService.instance?.let { it.bubble?.snoozed = false; it.refreshBubble() }
+            android.widget.Toast.makeText(this,
+                if (!birdOn) "Chidiya ab har app mein dikhegi" else "Chidiya band kar di", android.widget.Toast.LENGTH_SHORT).show()
+            recreate()
+        }
         addRow(box, R.drawable.ic_assistant, "Default assistant banao",
             "Home / Power button daba ke rakhne par zenvqo.voice khule") {
             open(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS), Intent(Settings.ACTION_SETTINGS))
