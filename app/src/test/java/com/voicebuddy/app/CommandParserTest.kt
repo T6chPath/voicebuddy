@@ -57,6 +57,21 @@ class CommandParserTest {
         check("security settings kholo", Command.OpenSetting("SECURITY", "Security"))
     }
 
+    @Test fun doInApp() {
+        check("like karo", Command.DoInApp("like", "like karo"))
+        check("download karo", Command.DoInApp("download", "download karo"))
+        check("share karo", Command.DoInApp("share", "share karo"))
+        check("follow karo", Command.DoInApp("follow", "follow karo"))
+        check("subscribe", Command.DoInApp("subscribe", "subscribe"))
+        check("next", Command.DoInApp("next", "next"))
+        check("add to cart karo", Command.DoInApp("add to cart", "add to cart karo"))
+    }
+
+    @Test fun doInAppDoesNotEatQuestions() {
+        // questions still go to Google (Unknown), not a button tap
+        check("aaj mausam kaisa hai", Command.Unknown("aaj mausam kaisa hai"))
+    }
+
     @Test fun messages() {
         check("suraj ko message bhejo ki kal milte hain", Command.WhatsAppMessage("suraj", "kal milte hain"))
         check("send message to atharav saying happy birthday", Command.WhatsAppMessage("atharav", "happy birthday"))

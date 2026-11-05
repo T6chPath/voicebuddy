@@ -85,6 +85,8 @@ class InfoActivity : AppCompatActivity() {
         audio aur video call, YouTube par gaana, Gmail, ChatGPT / Claude / Gemini / Google par sawaal,
         torch, Wi-Fi, Bluetooth, volume, screenshot, silent/DND, battery saver, auto brightness, reading mode, screen record,
         aur kisi bhi app ke andar tap, type aur scroll.<br><br>
+        Kisi bhi app mein bolke button dabwa sakte ho — “like karo”, “share karo”, “download karo”,
+        “follow karo”, “next”, “ok”, ya kisi bhi button ka naam. English, Hindi ya Hinglish, teeno chalte hain.<br><br>
         Galat spelling ho to bhi samajh jaata hai — “chart gpt”, “watsapp”, “pradhaman”.<br><br>
         <b>WhatsApp mein bolke</b> (sab apne aap hota hai)<br>
         • “Papa ko voice message bhejo” / “20 second ka voice message”<br>

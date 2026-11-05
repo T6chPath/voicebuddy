@@ -404,6 +404,41 @@ class AutoTapService : AccessibilityService() {
 
     // ---------- Work inside the app on screen (called right after zenvqo.voice steps aside) ----------
     /** Presses the button / item whose label best matches [target]. */
+    /** Taps the best on-screen control matching ANY of [labels] (English + Hindi candidates). */
+    fun tapAnyText(labels: List<String>): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() == packageName) return false
+        val wants = labels.map { NameMatch.clean(it) }.filter { it.isNotEmpty() }
+        if (wants.isEmpty()) return false
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        collect(root, nodes) { n ->
+            n.isVisibleToUser && (!n.text.isNullOrBlank() || !n.contentDescription.isNullOrBlank())
+        }
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = 3
+        for (n in nodes) {
+            for (raw in listOf(n.text, n.contentDescription)) {
+                val label = NameMatch.clean((raw ?: "").toString())
+                if (label.isEmpty() || label.length > 60) continue
+                for (want in wants) {
+                    val score = when {
+                        label == want -> 20
+                        label.startsWith("$want ") -> 13
+                        label.split(" ").contains(want) -> 11
+                        want.length >= 4 && label.contains(want) -> 7
+                        else -> NameMatch.score(want, label)
+                    }
+                    if (score > bestScore) { bestScore = score; best = n }
+                }
+            }
+        }
+        val node = best ?: return false
+        if (clickUp(node)) return true
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        return tapAt(r.exactCenterX(), r.exactCenterY())
+    }
+
     fun tapOnText(target: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (root.packageName?.toString() == packageName) return false

@@ -77,6 +77,9 @@ Everything happens by itself — the message is sent, not just typed. WhatsApp m
 
 Groups work too: say "group" in the name ("family group ko …") and WhatsApp's own search finds the chat.
 
+## Do anything in the app you're in
+Say the action and it presses that button in whatever app is open — in English, Hindi or Hinglish: "like karo", "share karo", "download karo", "follow karo", "subscribe karo", "comment karo", "next", "skip", "cancel", "ok", "add to cart", "buy now", or literally any button's name ("<button> karo"). It matches your words to the buttons on screen, so it works across apps. It presses buttons you can see; it doesn't understand an app's features on its own.
+
 ## Talk from inside any app
 Open zenvqo.voice from the Quick Settings tile, the **Bolo** icon or the phone's assistant gesture while you're in Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". zenvqo.voice steps aside and does it in that app.
 

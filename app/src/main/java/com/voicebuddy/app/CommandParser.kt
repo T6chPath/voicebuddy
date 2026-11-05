@@ -45,6 +45,8 @@ sealed class Command {
     data class System(val action: SysAct, val on: Boolean) : Command()
     /** Jump straight to a settings screen ("display settings kholo", "storage dikhao"). */
     data class OpenSetting(val key: String, val label: String) : Command()
+    /** Press a button by name in whatever app is open ("like karo", "download", "share karo"). */
+    data class DoInApp(val target: String, val heard: String) : Command()
     /** Any other WhatsApp job (voice note, reply, status, channels, settings…), see [WhatsAppParser]. */
     data class WhatsApp(
         val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
@@ -239,6 +241,7 @@ object CommandParser {
         }
         parsePlay(s)?.let { return it }
         parseOpen(s)?.let { return it }
+        parseDoInApp(s)?.let { return it }
         return Command.Unknown(raw)
     }
 
@@ -537,6 +540,28 @@ object CommandParser {
         if (!settingish) return null
         val hit = SETTING_WORDS.firstOrNull { it.third.containsMatchIn(s) } ?: return null
         return Command.OpenSetting(hit.first, hit.second)
+    }
+
+    // ---------- Do anything in the current app (press a button by name) ----------
+    private val DO_FILLERS = setOf(
+        "karo", "kar", "kardo", "do", "dena", "please", "plz", "isko", "ise", "is", "this", "yeh", "ye",
+        "pe", "par", "per", "ko", "app", "me", "mein", "now", "abhi", "zara", "jara", "button", "wala", "wali",
+        "option", "icon", "us", "usko", "wala", "dabao", "daba", "dabaiye", "press", "tap", "click", "kijiye",
+        "a", "an", "the", "mera", "meri", "apna", "jaldi"
+    )
+    private val ACTION_CUE = Regex(" (karo|kar do|kardo|kar|do|dabao|daba do|daba|dabaiye|press|tap|click|lagao|laga do|kijiye|kardena|kr do|krdo) ")
+    private val QUESTION = Regex(" (kya|kaun|kon|kaha|kahan|kab|kyun|kyu|kitna|kitne|how|what|why|when|where|who|which|matlab|meaning|batao|bataiye|samjhao|define) ")
+
+    private fun parseDoInApp(s: String): Command? {
+        if (QUESTION.containsMatchIn(s)) return null
+        val core = strip(s, DO_FILLERS).trim()
+        if (core.isBlank()) return null
+        val words = core.split(" ").filter { it.isNotBlank() }
+        if (words.size > 4) return null                         // long phrase -> probably a question -> Google
+        val hasCue = ACTION_CUE.containsMatchIn(s)
+        val knownVerb = ActionWords.isAction(core) || words.any { ActionWords.isAction(it) }
+        if (!hasCue && !knownVerb) return null                   // no "karo"/verb -> not an app action
+        return Command.DoInApp(core, s.trim())
     }
 
     // ---------- Open any app ----------

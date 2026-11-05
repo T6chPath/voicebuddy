@@ -54,6 +54,9 @@ class ActionExecutor(private val activity: Activity) {
             is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
             is Command.System -> system(cmd.action, cmd.on)
             is Command.OpenSetting -> openSetting(cmd.key, cmd.label)
+            is Command.DoInApp -> inApp("\"${cmd.target}\" kar diya", "\"${cmd.target}\" screen pe nahi mila") {
+                it.tapAnyText(ActionWords.expand(cmd.target))
+            }
             is Command.Unknown -> searchIn(SearchApp.GOOGLE, cmd.heard).let { "Samajh nahi aaya, Google pe dhundh raha hoon" }
         }
     } catch (e: ActivityNotFoundException) {
