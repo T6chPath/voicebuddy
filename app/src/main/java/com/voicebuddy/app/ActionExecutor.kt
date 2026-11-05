@@ -109,9 +109,22 @@ class ActionExecutor(private val activity: Activity) {
         val pkg = whatsAppPackage() ?: return "WhatsApp install nahi hai."
 
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${enc(message)}")
-        PendingAction.set(PendingAction.Task.WhatsAppSend)
+        val auto = AutoTapService.isRunning()
+        if (auto) {
+            // Keep trying to press Send for several seconds (chat opens slowly on some phones)
+            PendingAction.set(
+                PendingAction.Task.Flow(
+                    "com.whatsapp",
+                    listOf(
+                        PendingAction.Step.wait(1200),
+                        PendingAction.Step.tap("send", "send message", ids = listOf("send"), exact = true, timeoutMs = 10_000)
+                    )
+                ), 14_000
+            )
+        }
         launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))
-        return if (AutoTapService.isRunning()) "${contact.name} ko message bhej raha hoon: $message"
+        if (auto) AutoTapService.instance?.kickFlow()
+        return if (auto) "${contact.name} ko message bhej raha hoon: $message"
         else "${contact.name} ka chat khol diya, message likh diya — Send dabaiye"
     }
 
