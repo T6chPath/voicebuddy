@@ -25,8 +25,56 @@ object AutoTapHelper {
 
     private const val PREFS = "autotap"
     private const val KEY_WAITING = "waiting_since"
-    private const val KEY_ASKED = "asked_once"
-    private const val KEY_PENDING = "pending_command"
+        private const val KEY_PENDING = "pending_command"
+    private const val KEY_WANTED = "wanted"
+
+    /** The user's choice on the home-screen switch (default ON). */
+    fun wanted(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_WANTED, true)
+    private fun setWanted(c: Context, on: Boolean) =
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WANTED, on).apply()
+
+    /**
+     * Switch flipped ON. Instant if the one-time PC permission exists; otherwise goes straight to
+     * zenvqo.voice's own switch (no extra dialog) and comes back by itself. Returns true if already on.
+     */
+    fun switchOn(a: Activity, pendingCommand: String? = null): Boolean {
+        setWanted(a, true)
+        if (isOn(a) || tryEnableSilently(a)) return true
+        if (pendingCommand != null) a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_PENDING, pendingCommand).apply()
+        openSwitch(a)
+        return false
+    }
+
+    /** Switch flipped OFF: always instant (an app may turn its own helper off). */
+    fun switchOff(c: Context) {
+        setWanted(c, false)
+        PendingAction.clear()
+        val svc = AutoTapService.instance
+        if (svc != null) svc.disableSelf()
+        else if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val me = component(c).flattenToString()
+                val cr = c.contentResolver
+                val list = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                    .split(':').filter { it.isNotBlank() && !it.equals(me, true) }
+                Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, list.joinToString(":"))
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Back from Android's switch page but still OFF: on Android 13+ the switch is usually greyed out
+     * for apps installed from an APK, so explain the one fix. Shown once per attempt.
+     */
+    fun checkReturned(a: Activity) {
+        val p = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val since = p.getLong(KEY_WAITING, 0)
+        if (since == 0L || isOn(a)) return
+        p.edit().remove(KEY_WAITING).remove(KEY_PENDING).apply()
+        if (System.currentTimeMillis() - since < 10 * 60_000 && Build.VERSION.SDK_INT >= 33) openRestrictedHelp(a)
+    }
 
     fun component(c: Context) = ComponentName(c, AutoTapService::class.java)
 
@@ -34,6 +82,7 @@ object AutoTapHelper {
 
     /** Switches the helper on without any screen, if the app was given WRITE_SECURE_SETTINGS once. */
     fun tryEnableSilently(c: Context): Boolean {
+        if (!wanted(c)) return isOn(c)
         if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return isOn(c)
         return try {
             val me = component(c).flattenToString()
@@ -56,19 +105,8 @@ object AutoTapHelper {
      */
     fun ensureReady(a: Activity, pendingCommand: String? = null): Boolean {
         if (isOn(a) || tryEnableSilently(a)) return true
-        val p = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (pendingCommand != null) p.edit().putString(KEY_PENDING, pendingCommand).apply()
-        p.edit().putBoolean(KEY_ASKED, true).apply()
-        askPermission(a)
-        return false
-    }
-
-    /** First launch: ask once, together with the other permissions. */
-    fun askOnce(a: Activity) {
-        val p = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (isOn(a) || tryEnableSilently(a) || p.getBoolean(KEY_ASKED, false)) return
-        p.edit().putBoolean(KEY_ASKED, true).apply()
-        askPermission(a)
+        Toast.makeText(a, "“zenvqo.voice” ON karo — phir ye kaam apne aap ho jayega", Toast.LENGTH_LONG).show()
+        return switchOn(a, pendingCommand)
     }
 
     /** The command that was waiting for permission (taken once). */
@@ -77,24 +115,6 @@ object AutoTapHelper {
         val cmd = p.getString(KEY_PENDING, null)
         p.edit().remove(KEY_PENDING).apply()
         return cmd
-    }
-
-    private fun askPermission(a: Activity) {
-        val restricted = Build.VERSION.SDK_INT >= 33
-        val steps = buildString {
-            append("Message apne aap bhejne, video chalane aur baaki kaam khud karne ke liye Android ek baar permission maangta hai.\n\n")
-            append("1. “Permission do” dabao\n")
-            append("2. “zenvqo.voice” ON karo → Allow\n")
-            append("3. App wapas aayega aur aapka kaam khud kar dega")
-            if (restricted) append("\n\nSwitch grey hai? “Switch band hai” dabao.")
-        }
-        val b = AlertDialog.Builder(a)
-            .setTitle("Bas ek baar")
-            .setMessage(steps)
-            .setPositiveButton("Permission do") { _, _ -> openSwitch(a) }
-            .setNegativeButton("Baad mein") { _, _ -> takePending(a) }
-        if (restricted) b.setNeutralButton("Switch band hai") { _, _ -> openRestrictedHelp(a) }
-        b.show()
     }
 
     /** Opens zenvqo.voice's own switch; falls back to the Accessibility list with our row highlighted. */
@@ -111,7 +131,6 @@ object AutoTapHelper {
             try {
                 if (i.resolveActivity(a.packageManager) != null) {
                     a.startActivity(i)
-                    Toast.makeText(a, "“zenvqo.voice” ON karo", Toast.LENGTH_LONG).show()
                     return
                 }
             } catch (e: Exception) {
@@ -130,7 +149,7 @@ object AutoTapHelper {
                     "1. “App info kholo” dabao\n" +
                     "2. Upar right ⋮ (teen dots) dabao\n" +
                     "3. “Allow restricted settings” → phone ka lock daalo\n" +
-                    "4. Wapas aake dobara boliye — switch ab chalega"
+                    "4. Wapas aake ⚡ switch ON karo — ab chalega"
             )
             .setPositiveButton("App info kholo") { _, _ ->
                 a.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${a.packageName}")))

@@ -137,6 +137,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         })
 
+        autoToggle = findViewById(R.id.autoToggle)
+        autoToggle.onToggle = { on ->
+            if (on) {
+                if (AutoTapHelper.switchOn(this)) toast("⚡ Apne aap mode ON — sab kaam khud honge")
+            } else {
+                AutoTapHelper.switchOff(this)
+                toast("Apne aap mode OFF — Send jaise button aap khud dabayenge")
+            }
+        }
         styleTitle()
         findViewById<TextView>(R.id.greetingText).text = greeting()
         renderRecent()
@@ -199,8 +208,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         AutoTapHelper.tryEnableSilently(this)   // only works if WRITE_SECURE_SETTINGS was granted once
         AutoTapKeeper.ensure(this)
         settingsBadge.visibility = View.GONE
-        val allGranted = permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
-        if (allGranted) AutoTapHelper.askOnce(this)
+        autoToggle.setOn(AutoTapHelper.isOn(this), animate = false)
+        AutoTapHelper.checkReturned(this)
         findViewById<TextView>(R.id.greetingText).text = greeting()
     }
 
@@ -291,6 +300,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------- Running a command ----------
+    private lateinit var autoToggle: AutoToggleView
+
+    private fun toast(t: String) = android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_SHORT).show()
+
     /** Who the next spoken words go to, after "kya message bhejna hai X ko?". */
     private var followUpName: String? = null
 
@@ -306,8 +319,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         heard.text = "“$text”"
         // Jobs that finish themselves (send, play, switch…) need Android's one-time permission.
         // If it's missing, ask once; the command then runs by itself as soon as it's given.
-        if (needsHelper(cmd) && !AutoTapHelper.ensureReady(this, text)) {
-            val wait = "Bas ek baar permission dijiye — phir ye kaam apne aap ho jayega."
+        if (needsHelper(cmd) && AutoTapHelper.wanted(this) && !AutoTapHelper.ensureReady(this, text)) {
+            autoToggle.setOn(true)
+            val wait = "zenvqo.voice ON kijiye — phir ye kaam apne aap ho jayega."
             showReply(wait)
             tts?.speak(wait, TextToSpeech.QUEUE_FLUSH, null, "reply")
             if (fromVoice) rememberCommand(text)

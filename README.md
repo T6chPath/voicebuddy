@@ -82,8 +82,8 @@ Open zenvqo.voice from the Quick Settings tile, the **Bolo** icon or the phone's
 
 ## First-time setup
 1. Open zenvqo.voice → allow **Microphone, Contacts, Phone** (Phone is needed to pick SIM 1 / SIM 2).
-2. That's it. The first time you ask for something that has to be finished on screen (send a message, flip Wi-Fi…), Android asks **once** for zenvqo.voice's accessibility permission: tap **Permission do**, turn **zenvqo.voice** on, tap Allow. The app comes back by itself and finishes what you asked. You never see it again.
-   - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) Tap "Switch band hai": App info → ⋮ → **Allow restricted settings**, then turn it on.
+2. **⚡ switch** (top of the home screen, like YouTube's autoplay toggle): **ON** = everything finishes by itself (messages are sent, switches flipped); **OFF** = the app opens things and you press Send yourself. Turning it OFF is instant. Turning it ON the first time shows Android's own zenvqo.voice switch once (Android requires this) — turn it on and the app comes back by itself and finishes what you asked.
+   - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) The app shows the fix: App info → ⋮ → **Allow restricted settings**, then turn it on.
    - **Skip even that one step:** from a Windows PC, enable USB debugging on the phone, plug it in and double-click
      [`tools/AutoTap-Hamesha-ON.bat`](tools/AutoTap-Hamesha-ON.bat). The permission then switches itself on silently — and back on after restarts, updates or battery clean-ups.
      (Or by hand: `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.)

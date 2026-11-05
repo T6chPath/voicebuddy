@@ -108,7 +108,8 @@ class ActionExecutor(private val activity: Activity) {
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${enc(message)}")
         PendingAction.set(PendingAction.Task.WhatsAppSend)
         launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))
-        return "${contact.name} ko message bhej raha hoon: $message"
+        return if (AutoTapService.isRunning()) "${contact.name} ko message bhej raha hoon: $message"
+        else "${contact.name} ka chat khol diya, message likh diya — Send dabaiye"
     }
 
     // ---------- WhatsApp voice / video call ----------

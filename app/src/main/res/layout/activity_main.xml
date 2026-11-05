@@ -45,8 +45,8 @@
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -60,7 +60,8 @@
                     android:maxLines="1"
                     android:text="zenvqo.voice"
                     android:textColor="@color/text"
-                    android:textSize="22sp" />
+                    android:textSize="20sp"
+                    android:ellipsize="end" />
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -87,10 +88,19 @@
                         android:letterSpacing="0.03"
                         android:maxLines="1"
                         android:text="Namaste"
+                        android:ellipsize="end"
+                        android:singleLine="true"
                         android:textColor="@color/muted"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
+
+            <!-- ⚡ on/off switch, like YouTube's autoplay toggle: ON = everything finishes by itself -->
+            <com.voicebuddy.app.AutoToggleView
+                android:id="@+id/autoToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" />
 
             <FrameLayout
                 android:layout_width="46dp"

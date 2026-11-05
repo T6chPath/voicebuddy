@@ -36,7 +36,7 @@ object AutoTapKeeper {
     /** Re-enables Auto-Tap if needed and makes sure the watchers are running. */
     fun ensure(c: Context) {
         val app = c.applicationContext
-        if (!canKeepOn(app)) return
+        if (!canKeepOn(app) || !AutoTapHelper.wanted(app)) return
         AutoTapHelper.tryEnableSilently(app)
         watch(app)
         scheduleCheck(app)
