@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 /**
  * Presses one button for you, only right after your own voice command:
@@ -64,19 +65,42 @@ class AutoTapService : AccessibilityService() {
         return homePkgs
     }
 
-    /** An app came to the front: show the bird in apps, hide it on the home screen and in zenvqo.voice. */
-    private fun followApp(pkg: String?) {
-        val b = bubble ?: return
-        if (pkg.isNullOrEmpty()) return
-        // ignore the notification shade and keyboards: they sit on top of the same app
-        if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
-        val inApp = pkg != packageName && pkg !in homePackages() && !pkg.contains("launcher")
-        b.setVisibleNow(inApp)
+    /**
+     * Something changed on screen: look at the real app window (not the bird's own overlay, toasts or
+     * pop-ups) and show the bird inside apps, hide it on the home screen and in zenvqo.voice.
+     * Debounced, so a burst of window changes gives one decision.
+     */
+    private val followCheck = Runnable { decideBubble() }
+
+    private fun followApp(@Suppress("UNUSED_PARAMETER") eventPkg: String?) {
+        handler.removeCallbacks(followCheck)
+        handler.postDelayed(followCheck, 350)
     }
 
     /** Re-check what's on screen now (after zenvqo.voice steps aside, or when the bird first appears). */
     fun syncBubble() {
-        handler.postDelayed({ followApp(rootInActiveWindow?.packageName?.toString()) }, 450)
+        handler.removeCallbacks(followCheck)
+        handler.postDelayed(followCheck, 450)
+    }
+
+    /** Package of the full-screen app the user is looking at (ignores overlays, keyboards, the shade). */
+    private fun currentAppPackage(): String? {
+        val ws = try { windows } catch (e: Exception) { null }
+        if (!ws.isNullOrEmpty()) {
+            val apps = ws.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            val w = apps.firstOrNull { it.isActive } ?: apps.firstOrNull { it.isFocused } ?: apps.firstOrNull()
+            val pkg = try { w?.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (!pkg.isNullOrEmpty()) return pkg
+        }
+        return rootInActiveWindow?.packageName?.toString()
+    }
+
+    private fun decideBubble() {
+        val b = bubble ?: return
+        val pkg = currentAppPackage() ?: return                      // unsure -> leave it as it is
+        if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
+        val home = pkg in homePackages() || pkg.contains("launcher")
+        b.setVisibleNow(!home && pkg != packageName)
     }
 
     override fun onServiceConnected() {
