@@ -70,17 +70,27 @@ class AutoTapService : AccessibilityService() {
      * pop-ups) and show the bird inside apps, hide it on the home screen and in zenvqo.voice.
      * Debounced, so a burst of window changes gives one decision.
      */
-    private val followCheck = Runnable { decideBubble() }
+    @Volatile private var quickCheckPending = false
+    private val quickCheck = Runnable { quickCheckPending = false; decideBubble() }
+    /** Second look once app-switch animations have finished (fixes "sometimes not shown"). */
+    private val settleCheck = Runnable { decideBubble() }
 
     private fun followApp(@Suppress("UNUSED_PARAMETER") eventPkg: String?) {
-        handler.removeCallbacks(followCheck)
-        handler.postDelayed(followCheck, 350)
+        if (!quickCheckPending) { quickCheckPending = true; handler.postDelayed(quickCheck, 300) }
+        handler.removeCallbacks(settleCheck)
+        handler.postDelayed(settleCheck, 1200)
     }
 
     /** Re-check what's on screen now (after zenvqo.voice steps aside, or when the bird first appears). */
-    fun syncBubble() {
-        handler.removeCallbacks(followCheck)
-        handler.postDelayed(followCheck, 450)
+    fun syncBubble() = followApp(null)
+
+    /** Safety net: every few seconds while the screen is on, make sure the bird matches the screen. */
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            if (pm.isInteractive) decideBubble()
+            handler.postDelayed(this, 2500)
+        }
     }
 
     /** Package of the full-screen app the user is looking at (ignores overlays, keyboards, the shade). */
@@ -97,16 +107,21 @@ class AutoTapService : AccessibilityService() {
 
     private fun decideBubble() {
         val b = bubble ?: return
+        if (paused || !BirdBubble.isEnabled(this) || b.snoozed) return
         val pkg = currentAppPackage() ?: return                      // unsure -> leave it as it is
         if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
         val home = pkg in homePackages() || pkg.contains("launcher")
-        b.setVisibleNow(!home && pkg != packageName)
+        val show = !home && pkg != packageName
+        if (show && !b.isShowing) b.show()          // the bird went missing (system removed it): bring it back
+        b.setVisibleNow(show)
     }
 
     override fun onServiceConnected() {
         instance = this
         paused = !AutoTapHelper.wanted(this)
         refreshBubble()
+        handler.removeCallbacks(heartbeat)
+        handler.postDelayed(heartbeat, 2500)
         AutoTapHelper.onServiceStarted(this)
         // Floating accessibility button / nav-bar button -> talk to zenvqo.voice from any app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -130,19 +145,24 @@ class AutoTapService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        handler.removeCallbacks(heartbeat)
         bubble?.hide()
         instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(heartbeat)
         bubble?.hide()
         instance = null
         super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) followApp(event.packageName?.toString())
+        val type = event?.eventType
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+            followApp(event.packageName?.toString())
+        }
         if (paused) return
         val task = PendingAction.current() ?: return
         if (task is PendingAction.Task.Flow) { if (!flowRunning) kickFlow(); return }

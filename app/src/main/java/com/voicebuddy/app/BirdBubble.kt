@@ -127,7 +127,9 @@ class BirdBubble(private val ctx: Context, private val onTap: () -> Unit) {
 
     /** Hide while our own screen is up, show again elsewhere. */
     fun setVisibleNow(visible: Boolean) {
-        view?.visibility = if (visible) View.VISIBLE else View.GONE
+        val v = view ?: return
+        val want = if (visible) View.VISIBLE else View.GONE
+        if (v.visibility != want) v.visibility = want
     }
 
     private fun snapToEdge(v: View, lp: WindowManager.LayoutParams) {

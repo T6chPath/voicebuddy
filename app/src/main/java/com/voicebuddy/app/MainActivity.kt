@@ -209,6 +209,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         AutoTapKeeper.ensure(this)
         settingsBadge.visibility = View.GONE
         autoToggle.setOn(AutoTapHelper.isActive(this), animate = false)
+        askBatteryOnce()
         // The floating bird: back if it was hidden, but not on top of our own screen
         AutoTapService.instance?.let { svc ->
             svc.bubble?.snoozed = false
@@ -312,6 +313,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---------- Running a command ----------
     private lateinit var autoToggle: AutoToggleView
+
+    /** Once: the small Android box "Let app always run in background?" so the bird isn't killed. */
+    @android.annotation.SuppressLint("BatteryLife")
+    private fun askBatteryOnce() {
+        val p = getSharedPreferences("bubble", MODE_PRIVATE)
+        if (p.getBoolean("battery_asked", false) || !AutoTapHelper.isActive(this) || AutoTapKeeper.isBatteryFree(this)) return
+        p.edit().putBoolean("battery_asked", true).apply()
+        try { startActivity(AutoTapKeeper.batteryIntent(this)) } catch (e: Exception) { }
+    }
 
     private fun toast(t: String) = android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_SHORT).show()
 

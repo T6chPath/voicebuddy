@@ -123,6 +123,11 @@ class SettingsActivity : AppCompatActivity() {
                 if (!birdOn) "Chidiya ab har app mein dikhegi" else "Chidiya band kar di", android.widget.Toast.LENGTH_SHORT).show()
             recreate()
         }
+        addRow(box, R.drawable.ic_bolt, "Chidiya gayab ho jaati hai?",
+            if (AutoTapKeeper.isBatteryFree(this)) "Battery: no restriction ✓" else "Battery restriction hatao — chidiya hamesha rahegi") {
+            try { startActivity(AutoTapKeeper.batteryIntent(this)) }
+            catch (e: Exception) { open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        }
         addRow(box, R.drawable.ic_assistant, "Default assistant banao",
             "Home / Power button daba ke rakhne par zenvqo.voice khule") {
             open(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS), Intent(Settings.ACTION_SETTINGS))
