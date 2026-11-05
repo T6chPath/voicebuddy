@@ -221,7 +221,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         super.onPause()
-        AutoTapService.instance?.bubble?.setVisibleNow(true)
+        AutoTapService.instance?.syncBubble()
     }
 
     override fun onInit(result: Int) {

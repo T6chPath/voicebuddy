@@ -78,7 +78,7 @@ Everything happens by itself — the message is sent, not just typed. WhatsApp m
 Groups work too: say "group" in the name ("family group ko …") and WhatsApp's own search finds the chat.
 
 ## Floating bird in every app
-Once the ⚡ switch is ON, the crowned bird floats on top of every app. **Tap it** inside YouTube, Instagram, anything → zenvqo.voice listens → say "like karo", "download karo", "save karo"… and it's done in that app. Drag the bird anywhere (it sticks to the side). Long-press to hide it until you next open zenvqo.voice; turn it off for good in Settings → "Floating chidiya". No extra permission needed.
+Once the ⚡ switch is ON, the crowned bird appears whenever you open any app and disappears when you close it and go back to the home screen. **Tap it** inside YouTube, Instagram, anything → zenvqo.voice listens → say "like karo", "download karo", "save karo"… and it's done in that app. Drag the bird anywhere (it sticks to the side). Long-press to hide it until you next open zenvqo.voice; turn it off for good in Settings → "Floating chidiya". No extra permission needed.
 
 ## Do anything in the app you're in
 Say the action and it presses that button in whatever app is open — in English, Hindi or Hinglish: "like karo", "share karo", "download karo", "follow karo", "subscribe karo", "comment karo", "next", "skip", "cancel", "ok", "add to cart", "buy now", or literally any button's name ("<button> karo"). It matches your words to the buttons on screen, so it works across apps. It presses buttons you can see; it doesn't understand an app's features on its own.

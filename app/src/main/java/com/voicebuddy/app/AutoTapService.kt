@@ -47,7 +47,36 @@ class AutoTapService : AccessibilityService() {
     /** Show the bird when the ⚡ switch is ON and the user wants it; hide otherwise. */
     fun refreshBubble() {
         val b = bubble ?: BirdBubble(this) { openListener() }.also { bubble = it }
-        if (!paused && BirdBubble.isEnabled(this)) b.show() else b.hide()
+        if (!paused && BirdBubble.isEnabled(this)) { b.show(); syncBubble() } else b.hide()
+    }
+
+    // ---------- Bird follows the app: visible inside apps, gone on the home screen ----------
+    private var homePkgs: Set<String> = emptySet()
+
+    private fun homePackages(): Set<String> {
+        if (homePkgs.isEmpty()) {
+            homePkgs = try {
+                packageManager.queryIntentActivities(
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
+                ).map { it.activityInfo.packageName }.toSet()
+            } catch (e: Exception) { emptySet() }
+        }
+        return homePkgs
+    }
+
+    /** An app came to the front: show the bird in apps, hide it on the home screen and in zenvqo.voice. */
+    private fun followApp(pkg: String?) {
+        val b = bubble ?: return
+        if (pkg.isNullOrEmpty()) return
+        // ignore the notification shade and keyboards: they sit on top of the same app
+        if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
+        val inApp = pkg != packageName && pkg !in homePackages() && !pkg.contains("launcher")
+        b.setVisibleNow(inApp)
+    }
+
+    /** Re-check what's on screen now (after zenvqo.voice steps aside, or when the bird first appears). */
+    fun syncBubble() {
+        handler.postDelayed({ followApp(rootInActiveWindow?.packageName?.toString()) }, 450)
     }
 
     override fun onServiceConnected() {
@@ -89,6 +118,7 @@ class AutoTapService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) followApp(event.packageName?.toString())
         if (paused) return
         val task = PendingAction.current() ?: return
         if (task is PendingAction.Task.Flow) { if (!flowRunning) kickFlow(); return }
