@@ -69,7 +69,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var listening = false
     private var secondTapUntil = 0L
     private var returnAfter = false
-    private var autoTapPrompted = false
     /** "en-IN" = Hinglish / English in Roman letters, "hi-IN" = Hindi (हिंदी). Both are understood. */
     private var speechLang = "en-IN"
 
@@ -138,8 +137,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         })
 
-        findViewById<View>(R.id.autoTapBanner).setOnClickListener { AutoTapHelper.turnOn(this) }
-        findViewById<View>(R.id.autoTapBannerButton).setOnClickListener { AutoTapHelper.turnOn(this) }
         styleTitle()
         findViewById<TextView>(R.id.greetingText).text = greeting()
         renderRecent()
@@ -166,10 +163,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun handleLaunch(i: Intent?) {
         if (i?.getBooleanExtra(EXTRA_AUTOTAP_DONE, false) == true) {
             i.removeExtra(EXTRA_AUTOTAP_DONE)
-            val msg = if (AutoTapKeeper.canKeepOn(this)) "Auto-Tap ON ho gaya. Ab sab kaam apne aap honge."
-                else "Auto-Tap ON ho gaya. Ise hamesha ON rakhne ke liye Settings mein \"Hamesha ON rakho\" dabaiye."
-            showReply(msg)
-            tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "autotap")
+            // Permission just given: finish the command that was waiting for it
+            val pending = AutoTapHelper.takePending(this)
+            if (pending != null) {
+                mic.postDelayed({ runText(pending, fromVoice = false) }, 700)
+            } else {
+                val msg = "Ho gaya! Ab sab kaam apne aap honge."
+                showReply(msg)
+                tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "ready")
+            }
             return
         }
         val fromBoloIcon = i?.component?.className?.endsWith(".ListenNow") == true
@@ -195,9 +197,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         super.onResume()
         speechLang = SpeechLanguage.get(this)
         AutoTapHelper.tryEnableSilently(this)   // only works if WRITE_SECURE_SETTINGS was granted once
-        val autoTapOn = SettingsActivity.isAutoTapOn(this)
-        settingsBadge.visibility = if (autoTapOn) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.autoTapBanner).visibility = if (autoTapOn) View.GONE else View.VISIBLE
+        AutoTapKeeper.ensure(this)
+        settingsBadge.visibility = View.GONE
         val allGranted = permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
         if (allGranted) AutoTapHelper.askOnce(this)
         findViewById<TextView>(R.id.greetingText).text = greeting()
@@ -205,6 +206,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(result: Int) {
         if (result == TextToSpeech.SUCCESS) tts?.language = Locale("en", "IN")
+        // After asking "kya message bhejna hai?", start listening for the answer by itself
+        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(id: String?) = Unit
+            override fun onDone(id: String?) { if (id == "ask") runOnUiThread { if (!listening) startListening() } }
+            @Deprecated("Deprecated in Java")
+            override fun onError(id: String?) = Unit
+        })
     }
 
     // ---------- Home page pieces ----------
@@ -283,22 +291,47 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------- Running a command ----------
+    /** Who the next spoken words go to, after "kya message bhejna hai X ko?". */
+    private var followUpName: String? = null
+
     private fun runText(text: String, fromVoice: Boolean) {
-        val cmd = CommandParser.parse(text)
+        val askedFor = followUpName
+        followUpName = null
+        if (askedFor != null && Regex("^\\s*(cancel|rehne do|rahne do|chhodo|chodo|mat bhejo|nahi|no|stop)\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)) {
+            showReply("Theek hai, nahi bheja.")
+            tts?.speak("Theek hai", TextToSpeech.QUEUE_FLUSH, null, "reply")
+            return
+        }
+        val cmd = if (askedFor != null) Command.WhatsAppMessage(askedFor, text.trim()) else CommandParser.parse(text)
         heard.text = "“$text”"
+        // Jobs that finish themselves (send, play, switch…) need Android's one-time permission.
+        // If it's missing, ask once; the command then runs by itself as soon as it's given.
+        if (needsHelper(cmd) && !AutoTapHelper.ensureReady(this, text)) {
+            val wait = "Bas ek baar permission dijiye — phir ye kaam apne aap ho jayega."
+            showReply(wait)
+            tts?.speak(wait, TextToSpeech.QUEUE_FLUSH, null, "reply")
+            if (fromVoice) rememberCommand(text)
+            return
+        }
         val reply = executor.execute(cmd)
         showReply(reply)
-        tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "reply")
+        // "papa ko message karo" with no message: ask, then listen and send the answer
+        val ask = Regex("^Kya message bhejna hai (.+) ko\\?$").find(reply)
+        if (ask != null) followUpName = ask.groupValues[1]
+        tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, if (ask != null) "ask" else "reply")
         if (fromVoice) rememberCommand(text)
-        // A job needed Auto-Tap and it's off: offer the one-tap way to turn it on
-        if (!autoTapPrompted && cmd !is Command.AutoTapSetup && cmd !is Command.AutoTapAlways && reply.contains("Auto-Tap") &&
-            !SettingsActivity.isAutoTapOn(this)) {
-            autoTapPrompted = true
-            AutoTapHelper.turnOn(this)
-        }
         // Opened from the floating button over another app: quick jobs return you to that app
         if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume)) moveTaskToBack(true)
         returnAfter = false
+    }
+
+    /** Commands that are finished on screen by the background helper (not just opened). */
+    private fun needsHelper(cmd: Command): Boolean = when (cmd) {
+        is Command.WhatsAppMessage, is Command.WhatsApp, is Command.Toggle, is Command.Global,
+        is Command.TapOn, is Command.TypeText, is Command.Scroll, is Command.AppSearch -> true
+        is Command.SearchIn -> cmd.app in setOf(SearchApp.CHATGPT, SearchApp.CLAUDE, SearchApp.GEMINI)
+        is Command.Email -> cmd.body.isNotBlank()
+        else -> false
     }
 
     private fun showReply(reply: String) {

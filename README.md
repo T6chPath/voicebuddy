@@ -7,13 +7,14 @@
 | Say | What happens |
 |---|---|
 | "Torch on karo" / "Turn on light" / "Torch band karo" | Flashlight on / off |
-| "Wi-Fi on karo" / "Wi-Fi band karo" | Opens the Wi-Fi switch and Auto-Tap flips it |
+| "Wi-Fi on karo" / "Wi-Fi band karo" | Flips the Wi-Fi switch by itself |
 | "Mobile data on karo" / "Internet band karo" | Same for mobile data |
 | "Bluetooth on karo" · "Hotspot on karo" · "Location on karo" · "Flight mode on karo" | Same for each |
 | "Volume badhao / kam karo / full karo / mute karo" | Media volume |
-| "Screenshot lo" · "Phone lock karo" · "Notifications kholo" | Needs Auto-Tap |
+| "Screenshot lo" · "Phone lock karo" · "Notifications kholo" | Done by itself |
 | "YouTube me dilbar dilbar song chalao" / "dilbar dilbar sunao" | Finds the top video and starts playing it straight away (no tap needed) |
 | "Suraj ko message bhejo ki kal milte hain" | WhatsApp message, sent automatically |
+| "Papa ko message karo" | Asks "kya message bhejna hai?", listens, and sends your answer |
 | "Send message to Atharav saying happy birthday" | Same, in English |
 | "YouTube pe Kesariya chalao" / "Play Kesariya" | Opens YouTube and plays the first video |
 | "ChatGPT se pucho Bharat ki rajdhani kya hai" | Asks ChatGPT |
@@ -38,7 +39,7 @@ Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp,
 
 ## WhatsApp by voice
 
-Needs **Auto-Tap** on (it does the tapping inside WhatsApp, only right after your command). WhatsApp must be in English.
+Everything happens by itself — the message is sent, not just typed. WhatsApp must be in English.
 
 | Say | What happens |
 |---|---|
@@ -69,7 +70,7 @@ Needs **Auto-Tap** on (it does the tapping inside WhatsApp, only right after you
 Groups work too: say "group" in the name ("family group ko …") and WhatsApp's own search finds the chat.
 
 ## Talk from inside any app
-After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or a button in the navigation bar). If it doesn't appear: Settings → Accessibility → zenvqo.voice Auto-Tap → turn on **zenvqo.voice Auto-Tap shortcut**. Tap it inside Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". zenvqo.voice steps aside and does it in that app.
+Open zenvqo.voice from the Quick Settings tile, the **Bolo** icon or the phone's assistant gesture while you're in Instagram, YouTube, anything, and say "Like dabao", "Type nice photo", "Send pe tap karo", "Scroll down". zenvqo.voice steps aside and does it in that app.
 
 ## Start talking fast
 - **Tap the app icon** → home page opens. **Tap once more right away** (within 1.5 s) → it starts listening.
@@ -81,25 +82,20 @@ After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or
 
 ## First-time setup
 1. Open zenvqo.voice → allow **Microphone, Contacts, Phone** (Phone is needed to pick SIM 1 / SIM 2).
-2. Tap **On karo** on the home screen (or just say **"auto tap on karo"**). It opens zenvqo.voice's own switch — turn it on, tap Allow, and the app comes back by itself.
-   Auto-Tap presses Send, plays the YouTube video, flips the Wi-Fi/Bluetooth/data switches, does the WhatsApp steps and takes screenshots. It only acts right after your own voice command.
-   - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) Tap "Switch nahi chal raha": App info → ⋮ → **Allow restricted settings**, then turn it on.
-   - **Always on (never turn it on again):** do this once from a Windows PC —
-     enable USB debugging on the phone, plug it in, and double-click
-     [`tools/AutoTap-Hamesha-ON.bat`](tools/AutoTap-Hamesha-ON.bat) (it downloads Google's adb and gives the permission).
-     After that, Auto-Tap switches itself back on after a restart, after every update, if Android
-     turns it off, and checks every 15 minutes. Settings → **Hamesha ON rakho** shows the steps
-     and sends the link to your PC; you can also say "auto tap hamesha on rakho".
-     (Or by hand from any computer: `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.)
+2. That's it. The first time you ask for something that has to be finished on screen (send a message, flip Wi-Fi…), Android asks **once** for zenvqo.voice's accessibility permission: tap **Permission do**, turn **zenvqo.voice** on, tap Allow. The app comes back by itself and finishes what you asked. You never see it again.
+   - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) Tap "Switch band hai": App info → ⋮ → **Allow restricted settings**, then turn it on.
+   - **Skip even that one step:** from a Windows PC, enable USB debugging on the phone, plug it in and double-click
+     [`tools/AutoTap-Hamesha-ON.bat`](tools/AutoTap-Hamesha-ON.bat). The permission then switches itself on silently — and back on after restarts, updates or battery clean-ups.
+     (Or by hand: `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.)
 
 ## Good to know
-- Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so zenvqo.voice opens the switch and Auto-Tap flips it. On some phone brands the switch screen looks different and you may need to tap it yourself.
+- Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so zenvqo.voice opens the switch and flips it for you. On some phone brands the switch screen looks different and you may need to tap it yourself.
 - ChatGPT / Claude / Gemini: the question is sent into the app (and copied, so you can paste it if the app needs one tap).
 - Speech uses Google's recognizer in Indian English, so Hinglish comes out in Roman letters, which the app understands. Needs internet (or an offline speech pack).
 
 ## For developers
 - Commands: `app/src/main/java/com/voicebuddy/app/CommandParser.kt` (unit tests in `app/src/test`).
-- Actions: `ActionExecutor.kt`. Auto-Tap logic: `AutoTapService.kt`.
+- Actions: `ActionExecutor.kt`. On-screen helper: `AutoTapService.kt`.
 - Every push builds and tests the APK on GitHub Actions and publishes it to the `latest` release.
 
 ## Contact

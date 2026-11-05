@@ -126,14 +126,6 @@ class WhatsAppParserTest {
         check("dark wallpaper lagao", wa(WALLPAPER, extra = "dark"))
     }
 
-    @Test fun autoTapSetup() {
-        check("auto tap on karo", Command.AutoTapSetup)
-        check("Auto-Tap chalu karo", Command.AutoTapSetup)
-        check("turn on auto tap", Command.AutoTapSetup)
-        check("auto tap hamesha on rakho", Command.AutoTapAlways)
-        check("keep auto tap always on", Command.AutoTapAlways)
-    }
-
     // ---------- Old commands still work ----------
     @Test fun noRegressions() {
         check("papa ko message bhejo ki location bhej do", Command.WhatsAppMessage("papa", "location bhej do"))

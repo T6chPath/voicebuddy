@@ -48,15 +48,6 @@ class ActionExecutor(private val activity: Activity) {
             is Command.AppSearch -> appSearch(cmd.appName, cmd.query, cmd.fullQuery)
             is Command.Email -> sendEmail(cmd.name, cmd.subject, cmd.body)
             is Command.WhatsApp -> whatsApp.run(cmd)
-            is Command.AutoTapAlways -> {
-                AutoTapHelper.alwaysOnSetup(activity)
-                if (AutoTapKeeper.canKeepOn(context)) "Auto-Tap hamesha ON hai" else "Auto-Tap hamesha ON rakhne ka tareeka khol diya"
-            }
-            is Command.AutoTapSetup -> {
-                val wasOn = SettingsActivity.isAutoTapOn(context)
-                AutoTapHelper.turnOn(activity)
-                if (wasOn) "Auto-Tap pehle se ON hai" else "Auto-Tap on karne ka button khol diya"
-            }
             is Command.TapOn -> inApp("\"${cmd.target}\" dabaya", "\"${cmd.target}\" screen pe nahi mila") { it.tapOnText(cmd.target) }
             is Command.TypeText -> inApp("Likh raha hoon: ${cmd.text}", "Likhne ki jagah nahi mili. Pehle text box pe tap karwaiye.") { it.typeText(cmd.text) }
             is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
@@ -74,7 +65,7 @@ class ActionExecutor(private val activity: Activity) {
     /**
      * Plays the song straight away: finds the top YouTube video for [query] and opens that video
      * (it starts by itself, no tap needed). Without internet / if not found within 4 s, it opens the
-     * search results and Auto-Tap starts the first video.
+     * search results and the helper starts the first video.
      */
     private fun playOnYouTube(query: String): String {
         val yt = "com.google.android.youtube"
@@ -93,7 +84,7 @@ class ActionExecutor(private val activity: Activity) {
                     PendingAction.set(PendingAction.Task.YouTubePlayFirst, 20_000)
                     launch(search)
                     if (!AutoTapService.isRunning()) android.widget.Toast.makeText(context,
-                        "Video pe tap kijiye. Auto-Tap on ho to ye apne aap chalega.", android.widget.Toast.LENGTH_LONG).show()
+                        "Pehli video pe tap kijiye.", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
@@ -106,7 +97,9 @@ class ActionExecutor(private val activity: Activity) {
         val (contact, message) = if (text.isNotBlank()) {
             (contacts.find(name) ?: return "$name contacts mein nahi mila.") to text
         } else {
-            contacts.splitNameAndText(name) ?: return "Kisko message bhejna hai? Naam ke saath boliye."
+            contacts.splitNameAndText(name)
+                ?: contacts.find(name)?.let { it to "" }          // just a name: ask what to send
+                ?: return "Kisko message bhejna hai? Naam ke saath boliye."
         }
         if (message.isBlank()) return "Kya message bhejna hai ${contact.name} ko?"
         val phone = contact.phone ?: return "${contact.name} ka number nahi mila."
@@ -273,7 +266,7 @@ class ActionExecutor(private val activity: Activity) {
         }
         if (!launchFirst(spec.intents)) launch(Intent(Settings.ACTION_SETTINGS))
         return if (auto) "${setting.spoken} $word kar raha hoon"
-        else "${setting.spoken} ki setting khol di, switch aap dabaiye. Auto-Tap on karne se ye apne aap hoga."
+        else "${setting.spoken} ki setting khol di, switch dabaiye."
     }
 
     // ---------- Volume ----------
@@ -303,7 +296,7 @@ class ActionExecutor(private val activity: Activity) {
 
     // ---------- Screenshot / lock / home / back / notifications ----------
     private fun global(action: GlobalAct): String {
-        val svc = AutoTapService.instance ?: return "Iske liye pehle Auto-Tap on kijiye."
+        val svc = AutoTapService.instance ?: return "Bas ek baar permission dijiye, phir dobara boliye."
         val p = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
         return when (action) {
             GlobalAct.SCREENSHOT -> {
@@ -363,7 +356,7 @@ class ActionExecutor(private val activity: Activity) {
         return "${app.spoken} pe pooch raha hoon: $q"
     }
 
-    /** Sends the question into the AI app (Auto-Tap presses Send); falls back to its website. */
+    /** Sends the question into the AI app (the helper presses Send); falls back to its website. */
     private fun shareOrWeb(pkg: String, q: String, url: String) {
         copyToClipboard(q)
         if (isInstalled(pkg)) {
@@ -434,14 +427,14 @@ class ActionExecutor(private val activity: Activity) {
         }?.setPackage(pkg)
         if (deepLink != null && launchFirst(listOf(deepLink))) return "$label pe $q dhundh raha hoon"
 
-        // Everything else: open the app and let Auto-Tap use its search box
+        // Everything else: open the app and let the helper use its search box
         val open = pm.getLaunchIntentForPackage(pkg) ?: return "$label khul nahi raha."
         copyToClipboard(q)
         val auto = AutoTapService.isRunning()
         if (auto) PendingAction.set(PendingAction.Task.InAppSearch(pkg, q), 20_000)
         launch(open)
         return if (auto) "$label mein $q dhundh raha hoon"
-        else "$label khol diya. \"$q\" copy kar diya hai, search mein paste kijiye. Auto-Tap on karne se ye apne aap hoga."
+        else "$label khol diya. \"$q\" copy kar diya hai, search mein paste kijiye."
     }
 
     // ---------- Gmail ----------
@@ -481,9 +474,9 @@ class ActionExecutor(private val activity: Activity) {
     }
 
     // ---------- Inside the app on screen ----------
-    /** Steps out of zenvqo.voice so the app underneath is on screen, then Auto-Tap does the work. */
+    /** Steps out of zenvqo.voice so the app underneath is on screen, then the helper does the work. */
     private fun inApp(okReply: String, failReply: String, work: (AutoTapService) -> Boolean): String {
-        val svc = AutoTapService.instance ?: return "Iske liye pehle Auto-Tap on kijiye."
+        val svc = AutoTapService.instance ?: return "Bas ek baar permission dijiye, phir dobara boliye."
         activity.moveTaskToBack(true)
         handler.postDelayed({
             if (!work(svc)) android.widget.Toast.makeText(context, failReply, android.widget.Toast.LENGTH_LONG).show()

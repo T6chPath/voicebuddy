@@ -65,7 +65,7 @@ class WhatsAppActions(
     fun run(c: Command.WhatsApp): String {
         val pkg = whatsAppPackage() ?: return "WhatsApp install nahi hai."
 
-        // These two don't need Auto-Tap
+        // These don't need the background helper
         when (c.action) {
             WaAction.NOTIFICATIONS -> return notifications(pkg, c.extra)
             WaAction.LINK -> return link(c)
@@ -73,7 +73,7 @@ class WhatsAppActions(
             else -> Unit
         }
         if (!AutoTapService.isRunning()) {
-            return "Iske liye pehle Auto-Tap on kijiye (Settings → zenvqo.voice → Auto-Tap)."
+            return "Bas ek baar permission dijiye, phir dobara boliye."
         }
 
         return when (c.action) {

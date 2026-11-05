@@ -108,7 +108,7 @@
                     android:src="@drawable/ic_settings"
                     android:tint="@color/text" />
 
-                <!-- shows when Auto-Tap is off -->
+                <!-- unused dot (kept for layout) -->
                 <View
                     android:id="@+id/settingsBadge"
                     android:layout_width="12dp"
@@ -120,68 +120,6 @@
                     android:elevation="3dp"
                     android:visibility="gone" />
             </FrameLayout>
-        </LinearLayout>
-
-        <!-- Big, one-tap "turn Auto-Tap on" card; hidden once it's on -->
-        <LinearLayout
-            android:id="@+id/autoTapBanner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="16dp"
-            android:background="@drawable/card_surface"
-            android:foreground="?android:attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:padding="14dp"
-            android:visibility="gone">
-
-            <ImageView
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_bolt"
-                android:tint="@color/marigold" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="Auto-Tap OFF hai"
-                    android:textColor="@color/marigold"
-                    android:textSize="15sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="WhatsApp aur baaki kaam apne aap hone ke liye"
-                    android:textColor="@color/muted"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/autoTapBannerButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:background="@drawable/button_accent"
-                android:fontFamily="sans-serif-medium"
-                android:paddingStart="16dp"
-                android:paddingTop="8dp"
-                android:paddingEnd="16dp"
-                android:paddingBottom="8dp"
-                android:text="On karo"
-                android:textColor="@color/gold_dark"
-                android:textSize="14sp" />
         </LinearLayout>
 
         <!-- The mic, centred on the screen -->

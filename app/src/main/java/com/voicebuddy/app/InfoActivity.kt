@@ -85,7 +85,7 @@ class InfoActivity : AppCompatActivity() {
         audio aur video call, YouTube par gaana, Gmail, ChatGPT / Claude / Gemini / Google par sawaal,
         torch, Wi-Fi, Bluetooth, volume, screenshot, aur kisi bhi app ke andar tap, type aur scroll.<br><br>
         Galat spelling ho to bhi samajh jaata hai — “chart gpt”, “watsapp”, “pradhaman”.<br><br>
-        <b>WhatsApp mein bolke</b> (Auto-Tap on hona chahiye)<br>
+        <b>WhatsApp mein bolke</b> (sab apne aap hota hai)<br>
         • “Papa ko voice message bhejo” / “20 second ka voice message”<br>
         • “Papa ke message ka reply karo ki haan” · “heart react karo”<br>
         • “Papa ka last message edit karo ki …” · “sabke liye delete karo”<br>
@@ -100,7 +100,7 @@ class InfoActivity : AppCompatActivity() {
         • Orange “Bolo” icon: seedha sunna shuru<br>
         • Quick Settings mein zenvqo.voice tile<br>
         • App kholte hi ek aur tap, ya kahin bhi double-tap<br>
-        • Auto-Tap ka floating button: kisi bhi app ke andar se bolo<br><br>
+        • Phone ka assistant gesture (Home / Power button daba ke rakho)<br><br>
         Contact: $CONTACT_EMAIL
     """.trimIndent()
 
@@ -116,8 +116,8 @@ class InfoActivity : AppCompatActivity() {
         Naam se call, message ya email karne ke liye app phone ke andar hi contacts padhta hai. Contacts phone se bahar nahi jaate.<br><br>
         <b>4. Phone</b><br>
         Call karne aur SIM 1 / SIM 2 chunne ke liye Phone permission use hoti hai. App aapki call history nahi padhta.<br><br>
-        <b>5. Auto-Tap (Accessibility)</b><br>
-        Auto-Tap sirf aapke bole hue command ke turant baad kaam karta hai — jaise Send dabana, video chalana ya switch badalna.
+        <b>5. Apne aap kaam karna (Accessibility permission)</b><br>
+        zenvqo.voice ye permission sirf aapke bole hue command ke turant baad use karta hai — jaise Send dabana, video chalana ya switch badalna.
         Ye screen ka content save ya kahin nahi bhejta, aur apne aap kuch nahi karta.<br><br>
         <b>6. Phone par save hone wali cheezein</b><br>
         Pichle commands aur aapki bhasha ki setting sirf aapke phone par save hoti hain. Sidebar mein “Clear” se commands mita sakte hain;
