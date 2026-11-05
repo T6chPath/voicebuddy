@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 
 /**
  * The background helper that finishes jobs by itself (presses Send, starts the video, flips
@@ -27,6 +26,22 @@ object AutoTapHelper {
     private const val KEY_WAITING = "waiting_since"
         private const val KEY_PENDING = "pending_command"
     private const val KEY_WANTED = "wanted"
+    private const val KEY_UNLOCKING = "unlocking_since"
+
+    /**
+     * Android 13+ blocks the switch of apps installed from an APK file ("Restricted setting")
+     * until "Allow restricted settings" is tapped in App info. Apps from the Play Store aren't blocked.
+     */
+    fun isRestricted(c: Context): Boolean {
+        if (Build.VERSION.SDK_INT < 33) return false
+        return try {
+            val ops = c.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            ops.unsafeCheckOpNoThrow("android:access_restricted_settings", android.os.Process.myUid(), c.packageName) !=
+                android.app.AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /** The user's choice on the home-screen switch (default ON). */
     fun wanted(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_WANTED, true)
@@ -42,7 +57,7 @@ object AutoTapHelper {
         if (isOn(a) || tryEnableSilently(a)) return true
         if (pendingCommand != null) a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_PENDING, pendingCommand).apply()
-        openSwitch(a)
+        if (isRestricted(a)) unlockFirst(a) else openSwitch(a)
         return false
     }
 
@@ -70,10 +85,26 @@ object AutoTapHelper {
      */
     fun checkReturned(a: Activity) {
         val p = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Back from App info: if unlocked now, go straight on to the switch
+        val unlocking = p.getLong(KEY_UNLOCKING, 0)
+        if (unlocking != 0L) {
+            p.edit().remove(KEY_UNLOCKING).apply()
+            if (!isOn(a) && !isRestricted(a) && System.currentTimeMillis() - unlocking < 10 * 60_000) {
+                openSwitch(a)
+                return
+            }
+        }
         val since = p.getLong(KEY_WAITING, 0)
         if (since == 0L || isOn(a)) return
         p.edit().remove(KEY_WAITING).remove(KEY_PENDING).apply()
-        if (System.currentTimeMillis() - since < 10 * 60_000 && Build.VERSION.SDK_INT >= 33) openRestrictedHelp(a)
+    }
+
+    /** Step 1 of 2 on blocked phones: App info → ⋮ → Allow restricted settings. */
+    private fun unlockFirst(a: Activity) {
+        a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_UNLOCKING, System.currentTimeMillis()).apply()
+        a.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${a.packageName}")))
+        Toast.makeText(a, "Upar right ⋮ dabao → “Allow restricted settings” → wapas aao", Toast.LENGTH_LONG).show()
     }
 
     fun component(c: Context) = ComponentName(c, AutoTapService::class.java)
@@ -137,25 +168,6 @@ object AutoTapHelper {
             }
         }
         a.startActivity(Intent(Settings.ACTION_SETTINGS))
-    }
-
-    /** Android 13+: App info → ⋮ → "Allow restricted settings", then the switch works. */
-    private fun openRestrictedHelp(a: Activity) {
-        markWaiting(a)
-        AlertDialog.Builder(a)
-            .setTitle("Switch band hai?")
-            .setMessage(
-                "Android ne bahar se install kiye app ke liye ye switch rok rakha hai:\n\n" +
-                    "1. “App info kholo” dabao\n" +
-                    "2. Upar right ⋮ (teen dots) dabao\n" +
-                    "3. “Allow restricted settings” → phone ka lock daalo\n" +
-                    "4. Wapas aake ⚡ switch ON karo — ab chalega"
-            )
-            .setPositiveButton("App info kholo") { _, _ ->
-                a.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${a.packageName}")))
-            }
-            .setNegativeButton("Theek hai", null)
-            .show()
     }
 
     private fun markWaiting(c: Context) =
