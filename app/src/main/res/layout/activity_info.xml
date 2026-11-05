@@ -61,7 +61,8 @@
                 android:background="@drawable/mic_orb"
                 android:importantForAccessibility="no"
                 android:padding="11dp"
-                android:src="@drawable/ic_mail" />
+                android:src="@drawable/ic_mail"
+                android:tint="#FF1257E0" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -99,7 +100,7 @@
                     android:paddingTop="12dp"
                     android:paddingBottom="12dp"
                     android:text="Email bhejo"
-                    android:textColor="#FF1A0C03"
+                    android:textColor="@color/gold_dark"
                     android:textSize="15sp" />
 
                 <TextView

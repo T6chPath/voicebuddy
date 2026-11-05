@@ -180,7 +180,7 @@
                 android:paddingEnd="16dp"
                 android:paddingBottom="8dp"
                 android:text="On karo"
-                android:textColor="#FF1A0C03"
+                android:textColor="@color/gold_dark"
                 android:textSize="14sp" />
         </LinearLayout>
 
@@ -195,52 +195,51 @@
             android:paddingEnd="12dp">
 
             <FrameLayout
-                android:layout_width="250dp"
-                android:layout_height="250dp">
+                android:layout_width="300dp"
+                android:layout_height="290dp">
 
                 <View
                     android:id="@+id/glow"
-                    android:layout_width="230dp"
-                    android:layout_height="230dp"
+                    android:layout_width="290dp"
+                    android:layout_height="290dp"
                     android:layout_gravity="center"
                     android:background="@drawable/glow" />
 
                 <View
                     android:id="@+id/ring1"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
+                    android:layout_width="200dp"
+                    android:layout_height="200dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <View
                     android:id="@+id/ring2"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
+                    android:layout_width="200dp"
+                    android:layout_height="200dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <View
                     android:id="@+id/ring3"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
+                    android:layout_width="200dp"
+                    android:layout_height="200dp"
                     android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/ring" />
 
                 <ImageButton
                     android:id="@+id/micButton"
-                    android:layout_width="136dp"
-                    android:layout_height="136dp"
+                    android:layout_width="270dp"
+                    android:layout_height="226dp"
                     android:layout_gravity="center"
-                    android:background="@drawable/mic_orb"
-                    android:contentDescription="Bolne ke liye dabaiye"
-                    android:elevation="10dp"
+                    android:background="@null"
+                    android:contentDescription="Bolne ke liye chidiya pe tap kijiye"
                     android:foreground="?android:attr/selectableItemBackgroundBorderless"
-                    android:padding="38dp"
+                    android:padding="0dp"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/ic_mic_white" />
+                    android:src="@drawable/home_bird" />
             </FrameLayout>
 
             <TextView
@@ -251,7 +250,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:letterSpacing="0.02"
-                android:text="Mic dabao ya kahin bhi double-tap karo"
+                android:text="Chidiya pe tap karo ya kahin bhi double-tap karo"
                 android:textColor="@color/muted"
                 android:textSize="14sp" />
 
@@ -277,12 +276,10 @@
                 android:visibility="gone">
 
                 <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:background="@drawable/mic_orb"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
                     android:importantForAccessibility="no"
-                    android:padding="6dp"
-                    android:src="@drawable/ic_sparkle" />
+                    android:src="@drawable/bird_avatar" />
 
                 <TextView
                     android:id="@+id/replyText"
@@ -321,12 +318,10 @@
             android:paddingEnd="20dp">
 
             <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/mic_orb"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:importantForAccessibility="no"
-                android:padding="10dp"
-                android:src="@drawable/ic_mic_white" />
+                android:src="@drawable/bird_avatar" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -342,7 +337,7 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginTop="20dp"
-            android:background="#FF22373A" />
+            android:background="@color/line" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -412,7 +407,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#FF22373A" />
+            android:background="@color/line" />
 
         <LinearLayout
             android:id="@+id/drawerSettings"

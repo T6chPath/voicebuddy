@@ -1,19 +1,20 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Bright sky blue at the top, deeper royal blue at the bottom, like the app icon -->
     <item>
         <shape android:shape="rectangle">
-            <gradient android:angle="270" android:startColor="#FF10201F" android:endColor="#FF060B0C" />
+            <gradient android:angle="270" android:startColor="#FF1868F0" android:centerColor="#FF1150D2" android:endColor="#FF0A2E8A" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <gradient android:type="radial" android:centerX="0.92" android:centerY="0.02"
-                android:gradientRadius="360dp" android:startColor="#38FF8A3D" android:endColor="#00FF8A3D" />
+            <gradient android:type="radial" android:centerX="0.1" android:centerY="0.0"
+                android:gradientRadius="380dp" android:startColor="#5566CCFF" android:endColor="#0066CCFF" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <gradient android:type="radial" android:centerX="0.0" android:centerY="0.75"
-                android:gradientRadius="320dp" android:startColor="#1F3DDC97" android:endColor="#003DDC97" />
+            <gradient android:type="radial" android:centerX="0.95" android:centerY="0.9"
+                android:gradientRadius="300dp" android:startColor="#22FFC233" android:endColor="#00FFC233" />
         </shape>
     </item>
 </layer-list>

@@ -1,11 +1,11 @@
 <resources>
-    <!-- Night teal with a saffron accent: warm, calm, easy to read at a glance -->
+    <!-- Royal sky: the app icon's bright blue, the mic's white and the crown's gold -->
     <style name="Theme.VoiceBuddy" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/accent</item>
         <item name="colorAccent">@color/accent</item>
         <item name="android:windowBackground">@drawable/bg_app</item>
-        <item name="android:statusBarColor">#FF10201F</item>
-        <item name="android:navigationBarColor">#FF060B0C</item>
+        <item name="android:statusBarColor">#FF1257E0</item>
+        <item name="android:navigationBarColor">#FF0A2E8A</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
     <style name="SectionLabel">
@@ -18,12 +18,14 @@
         <item name="android:textColor">@color/muted</item>
         <item name="android:textSize">12sp</item>
     </style>
-    <color name="bg">#FF0B1516</color>
-    <color name="card">#FF142224</color>
-    <color name="card2">#FF1A2C2F</color>
-    <color name="accent">#FFFF8A3D</color>
-    <color name="marigold">#FFFFB547</color>
+    <color name="bg">#FF0B3AA8</color>
+    <color name="card">#FF1A55D6</color>
+    <color name="card2">#FF2563E6</color>
+    <color name="accent">#FFFFC233</color>
+    <color name="marigold">#FFFFD24D</color>
     <color name="mint">#FF3DDC97</color>
-    <color name="text">#FFF2F7F6</color>
-    <color name="muted">#FF8EA5A2</color>
+    <color name="text">#FFFFFFFF</color>
+    <color name="gold_dark">#FF3A2500</color>
+    <color name="line">#33FFFFFF</color>
+    <color name="muted">#FFC4DCFF</color>
 </resources>

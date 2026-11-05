@@ -32,6 +32,8 @@
 
 **Hindi, Hinglish and English all work.** Choose the speech language in ⚙ Settings (Hinglish · हिंदी · English); Hindi letters are understood too ("सूरज सिंह को सिम 1 से कॉल करो"), and contacts saved in Hindi letters are found.
 
+The look matches the app icon: royal-blue background, white and gold, and the crowned bird on its mic is the big talk button on the home screen.
+
 Spelling mistakes are forgiven: "chart gpt" → ChatGPT, "watsapp" → WhatsApp, "blutooth" → Bluetooth, "insta" → Instagram, "pradhaman" → a contact saved as "Pradhuman", "atharav" → "Atharv", and "papa" finds "Dad" / "Father".
 
 ## WhatsApp by voice

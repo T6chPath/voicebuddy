@@ -76,9 +76,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val ringAnimators = mutableListOf<Animator>()
     private var idleAnimator: Animator? = null
 
-    private val accent = Color.parseColor("#FF8A3D")
+    private val accent = Color.parseColor("#FFC233")
     private val mint = Color.parseColor("#3DDC97")
-    private val marigold = Color.parseColor("#FFB547")
+    private val marigold = Color.parseColor("#FFD24D")
 
     private val permissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         return "Namaste · $part"
     }
 
-    /** "zenvqo" in white, ".voice" in saffron. */
+    /** "zenvqo" in white, ".voice" in crown gold. */
     private fun styleTitle() {
         val name = "zenvqo.voice"
         val dot = name.indexOf('.')
@@ -362,7 +362,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (options.isEmpty()) { status.text = "Kuch sunai nahi diya"; return }
             // Use the first alternative the parser understands
             val text = options.firstOrNull { CommandParser.parse(it) !is Command.Unknown } ?: options[0]
-            status.text = "Mic dabao ya kahin bhi double-tap karo"
+            status.text = "Chidiya pe tap karo ya kahin bhi double-tap karo"
             runText(text, fromVoice = true)
         }
         override fun onError(error: Int) {
@@ -400,7 +400,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             interpolator = AccelerateDecelerateInterpolator()
             start()
         }
+        // The bird floats gently, like it's hovering on its mic
+        if (birdFloat == null) birdFloat = ObjectAnimator.ofFloat(mic, View.TRANSLATION_Y, 0f, -dp(7).toFloat()).apply {
+            duration = 1800
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
     }
+
+    private var birdFloat: ObjectAnimator? = null
 
     private fun startRings() {
         stopRings()

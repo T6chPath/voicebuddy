@@ -40,9 +40,9 @@ object SpeechLanguage {
 
 class SettingsActivity : AppCompatActivity() {
 
-    private val accent = Color.parseColor("#FF8A3D")
+    private val accent = Color.parseColor("#FFC233")
     private val mint = Color.parseColor("#3DDC97")
-    private val marigold = Color.parseColor("#FFB547")
+    private val marigold = Color.parseColor("#FFD24D")
 
     private lateinit var langOptions: LinearLayout
 
@@ -172,7 +172,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun addRow(box: LinearLayout, icon: Int, title: String, sub: String, onClick: () -> Unit) {
         if (box.childCount > 0) {
-            box.addView(View(this).apply { setBackgroundColor(Color.parseColor("#FF22373A")) },
+            box.addView(View(this).apply { setBackgroundColor(Color.parseColor("#33FFFFFF")) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { marginStart = dp(56) })
         }
         val row = LinearLayout(this).apply {

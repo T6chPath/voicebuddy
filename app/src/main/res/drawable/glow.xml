@@ -1,4 +1,4 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <gradient android:type="radial" android:gradientRadius="90dp"
-        android:startColor="#66FF8A3D" android:endColor="#00FF8A3D" />
+    <gradient android:type="radial" android:gradientRadius="135dp"
+        android:startColor="#66BFE4FF" android:centerColor="#2266CCFF" android:endColor="#0066CCFF" />
 </shape>
