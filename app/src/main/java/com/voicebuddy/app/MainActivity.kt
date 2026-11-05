@@ -208,7 +208,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         AutoTapHelper.tryEnableSilently(this)   // only works if WRITE_SECURE_SETTINGS was granted once
         AutoTapKeeper.ensure(this)
         settingsBadge.visibility = View.GONE
-        autoToggle.setOn(AutoTapHelper.isOn(this), animate = false)
+        autoToggle.setOn(AutoTapHelper.isActive(this), animate = false)
         AutoTapHelper.checkReturned(this)
         findViewById<TextView>(R.id.greetingText).text = greeting()
     }

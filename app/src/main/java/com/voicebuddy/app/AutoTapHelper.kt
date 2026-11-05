@@ -45,8 +45,13 @@ object AutoTapHelper {
 
     /** The user's choice on the home-screen switch (default ON). */
     fun wanted(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_WANTED, true)
-    private fun setWanted(c: Context, on: Boolean) =
+    private fun setWanted(c: Context, on: Boolean) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WANTED, on).apply()
+        AutoTapService.paused = !on
+    }
+
+    /** What the ⚡ switch shows: permission granted AND switched on. */
+    fun isActive(c: Context) = isOn(c) && wanted(c)
 
     /**
      * Switch flipped ON. Instant if the one-time PC permission exists; otherwise goes straight to
@@ -61,22 +66,13 @@ object AutoTapHelper {
         return false
     }
 
-    /** Switch flipped OFF: always instant (an app may turn its own helper off). */
+    /**
+     * Switch flipped OFF: instant. Only pauses — Android's permission stays granted, so flipping
+     * it ON again is instant too, with no pages and nothing to ask.
+     */
     fun switchOff(c: Context) {
         setWanted(c, false)
         PendingAction.clear()
-        val svc = AutoTapService.instance
-        if (svc != null) svc.disableSelf()
-        else if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
-            try {
-                val me = component(c).flattenToString()
-                val cr = c.contentResolver
-                val list = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-                    .split(':').filter { it.isNotBlank() && !it.equals(me, true) }
-                Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, list.joinToString(":"))
-            } catch (e: Exception) {
-            }
-        }
     }
 
     /**

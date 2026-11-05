@@ -28,7 +28,10 @@ class AutoTapService : AccessibilityService() {
     companion object {
         @Volatile var instance: AutoTapService? = null
             private set
-        fun isRunning() = instance != null
+        /** ⚡ switch OFF = paused: the permission stays granted, so ON is instant again later. */
+        @Volatile var paused = false
+        /** Ready to finish jobs by itself (permission granted and the ⚡ switch ON). */
+        fun isRunning() = instance != null && !paused
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -39,6 +42,7 @@ class AutoTapService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        paused = !AutoTapHelper.wanted(this)
         AutoTapHelper.onServiceStarted(this)
         // Floating accessibility button / nav-bar button -> talk to zenvqo.voice from any app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -72,6 +76,7 @@ class AutoTapService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (paused) return
         val task = PendingAction.current() ?: return
         if (task is PendingAction.Task.Flow) { if (!flowRunning) kickFlow(); return }
         val pkg = event?.packageName?.toString() ?: return
