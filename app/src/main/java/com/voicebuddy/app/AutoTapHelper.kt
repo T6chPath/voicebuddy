@@ -34,12 +34,13 @@ object AutoTapHelper {
 
     /** Switches Auto-Tap on without any screen, if the app was given WRITE_SECURE_SETTINGS once. */
     fun tryEnableSilently(c: Context): Boolean {
-        if (isOn(c)) return true
-        if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return false
+        if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return isOn(c)
         return try {
             val me = component(c).flattenToString()
             val cr = c.contentResolver
             val current = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+            val listed = current.split(':').any { it.equals(me, true) }
+            if (listed && Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1) return true
             val list = current.split(':').filter { it.isNotBlank() && it != me } + me
             Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, list.joinToString(":"))
             Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
@@ -106,6 +107,59 @@ object AutoTapHelper {
             }
         }
         a.startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
+
+    const val SETUP_FILE_URL = "https://github.com/T6chPath/voicebuddy/raw/main/tools/AutoTap-Hamesha-ON.bat"
+
+    /**
+     * "Always on": Android lets an app switch its own accessibility service on only after a
+     * one-time permission from a computer. The .bat file does that in one double-click.
+     */
+    fun alwaysOnSetup(a: Activity) {
+        if (AutoTapKeeper.canKeepOn(a)) {
+            AutoTapKeeper.ensure(a)
+            val b = AlertDialog.Builder(a)
+                .setTitle("✓ Auto-Tap hamesha ON hai")
+                .setMessage(
+                    "Phone restart, app update ya battery clean-up ke baad bhi Auto-Tap apne aap ON ho jayega. " +
+                        "Kuch karne ki zaroorat nahi." +
+                        if (!AutoTapKeeper.isBatteryFree(a)) "\n\nBehtar rakhne ke liye battery saver se bhi bacha lijiye." else ""
+                )
+                .setPositiveButton("Theek hai", null)
+            if (!AutoTapKeeper.isBatteryFree(a)) b.setNeutralButton("Battery se bachao") { _, _ -> openBattery(a) }
+            b.show()
+            return
+        }
+        AlertDialog.Builder(a)
+            .setTitle("Auto-Tap hamesha ON")
+            .setMessage(
+                "Android kisi bhi app ko khud se Auto-Tap on karne nahi deta — iske liye ek baar computer se permission deni padti hai. " +
+                    "Uske baad ye kabhi band nahi hoga, update ke baad bhi nahi.\n\n" +
+                    "1. Phone: Settings → About phone → Build number pe 7 baar tap\n" +
+                    "2. Developer options → USB debugging ON\n" +
+                    "3. Windows PC pe “AutoTap-Hamesha-ON.bat” chalao (link neeche se bhejo)\n" +
+                    "4. Phone USB se jodo → Allow. Bas!"
+            )
+            .setPositiveButton("PC ko link bhejo") { _, _ -> shareSetupLink(a) }
+            .setNeutralButton("Developer options") { _, _ ->
+                try { a.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+                catch (e: Exception) { a.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) }
+            }
+            .setNegativeButton("Baad mein", null)
+            .show()
+    }
+
+    private fun shareSetupLink(a: Activity) {
+        val text = "zenvqo.voice Auto-Tap hamesha ON — PC pe ye file download karke double-click karo:\n$SETUP_FILE_URL"
+        a.startActivity(Intent.createChooser(
+            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Link bhejo"
+        ))
+    }
+
+    @android.annotation.SuppressLint("BatteryLife")
+    private fun openBattery(a: Activity) {
+        try { a.startActivity(AutoTapKeeper.batteryIntent(a)) }
+        catch (e: Exception) { a.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
     }
 
     /** Android 13+: App info → ⋮ → "Allow restricted settings", then try the switch again. */

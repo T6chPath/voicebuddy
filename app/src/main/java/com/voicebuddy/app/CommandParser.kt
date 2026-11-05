@@ -41,6 +41,8 @@ sealed class Command {
     ) : Command()
     /** "auto tap on karo" -> the one-tap Auto-Tap setup. */
     object AutoTapSetup : Command()
+    /** "auto tap hamesha on rakho" -> one-time setup so it never needs turning on again. */
+    object AutoTapAlways : Command()
     data class Unknown(val heard: String) : Command()
 }
 
@@ -207,7 +209,10 @@ object CommandParser {
         val s = normalize(raw)
         if (s.isBlank()) return Command.Unknown(raw)
 
-        if (s.contains(" autotap ")) return Command.AutoTapSetup
+        if (s.contains(" autotap ")) {
+            return if (Regex(" (hamesha|always|permanent|permanently|forever|humesha|hamesa|sada) ").containsMatchIn(s))
+                Command.AutoTapAlways else Command.AutoTapSetup
+        }
         parseTap(s)?.let { return it }
         parseScroll(s)?.let { return it }
         parseType(s, raw)?.let { return it }

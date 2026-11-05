@@ -81,9 +81,13 @@ After turning on Auto-Tap, Android offers a **floating zenvqo.voice button** (or
 2. Tap **On karo** on the home screen (or just say **"auto tap on karo"**). It opens zenvqo.voice's own switch — turn it on, tap Allow, and the app comes back by itself.
    Auto-Tap presses Send, plays the YouTube video, flips the Wi-Fi/Bluetooth/data switches, does the WhatsApp steps and takes screenshots. It only acts right after your own voice command.
    - **Switch greyed out?** (Android 13+, because the APK isn't from the Play Store) Tap "Switch nahi chal raha": App info → ⋮ → **Allow restricted settings**, then turn it on.
-   - **Never do it again (optional):** connect the phone to a computer once and run
-     `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.
-     After that Auto-Tap turns itself on automatically, even after every update.
+   - **Always on (never turn it on again):** do this once from a Windows PC —
+     enable USB debugging on the phone, plug it in, and double-click
+     [`tools/AutoTap-Hamesha-ON.bat`](tools/AutoTap-Hamesha-ON.bat) (it downloads Google's adb and gives the permission).
+     After that, Auto-Tap switches itself back on after a restart, after every update, if Android
+     turns it off, and checks every 15 minutes. Settings → **Hamesha ON rakho** shows the steps
+     and sends the link to your PC; you can also say "auto tap hamesha on rakho".
+     (Or by hand from any computer: `adb shell pm grant com.voicebuddy.app android.permission.WRITE_SECURE_SETTINGS`.)
 
 ## Good to know
 - Android doesn't let any app switch Wi-Fi, mobile data or Bluetooth directly, so zenvqo.voice opens the switch and Auto-Tap flips it. On some phone brands the switch screen looks different and you may need to tap it yourself.

@@ -166,7 +166,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun handleLaunch(i: Intent?) {
         if (i?.getBooleanExtra(EXTRA_AUTOTAP_DONE, false) == true) {
             i.removeExtra(EXTRA_AUTOTAP_DONE)
-            val msg = "Auto-Tap ON ho gaya. Ab sab kaam apne aap honge."
+            val msg = if (AutoTapKeeper.canKeepOn(this)) "Auto-Tap ON ho gaya. Ab sab kaam apne aap honge."
+                else "Auto-Tap ON ho gaya. Ise hamesha ON rakhne ke liye Settings mein \"Hamesha ON rakho\" dabaiye."
             showReply(msg)
             tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "autotap")
             return
@@ -290,7 +291,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "reply")
         if (fromVoice) rememberCommand(text)
         // A job needed Auto-Tap and it's off: offer the one-tap way to turn it on
-        if (!autoTapPrompted && cmd !is Command.AutoTapSetup && reply.contains("Auto-Tap") &&
+        if (!autoTapPrompted && cmd !is Command.AutoTapSetup && cmd !is Command.AutoTapAlways && reply.contains("Auto-Tap") &&
             !SettingsActivity.isAutoTapOn(this)) {
             autoTapPrompted = true
             AutoTapHelper.turnOn(this)

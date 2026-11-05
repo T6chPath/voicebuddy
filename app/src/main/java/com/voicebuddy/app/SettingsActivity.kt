@@ -54,6 +54,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.autoTapButton).setOnClickListener {
             if (isAutoTapOn(this)) AutoTapHelper.openSwitch(this) else AutoTapHelper.turnOn(this)
         }
+        findViewById<View>(R.id.autoTapAlwaysButton).setOnClickListener { AutoTapHelper.alwaysOnSetup(this) }
         renderLanguages()
         buildMore()
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "" }
@@ -116,7 +117,9 @@ class SettingsActivity : AppCompatActivity() {
 
     // ---------- Auto-Tap ----------
     private fun renderAutoTap() {
+        AutoTapKeeper.ensure(this)
         val on = isAutoTapOn(this)
+        val always = AutoTapKeeper.canKeepOn(this)
         val color = if (on) mint else marigold
         findViewById<ImageView>(R.id.autoTapIcon).apply {
             backgroundTintList = ColorStateList.valueOf(withAlpha(color, 0.18f))
@@ -126,8 +129,16 @@ class SettingsActivity : AppCompatActivity() {
             text = if (on) "Auto-Tap ON" else "Auto-Tap OFF"
             setTextColor(color)
         }
-        findViewById<TextView>(R.id.autoTapText).text =
-            if (on) "Sab kaam apne aap ho raha hai" else "Abhi kuch kaam aapko khud tap karne padenge"
+        findViewById<TextView>(R.id.autoTapText).text = when {
+            on && always -> "Hamesha ON — restart ya update ke baad bhi apne aap on ho jata hai"
+            on -> "Sab kaam apne aap ho raha hai"
+            else -> "Abhi kuch kaam aapko khud tap karne padenge"
+        }
+        findViewById<TextView>(R.id.autoTapAlwaysButton).apply {
+            text = if (always) "✓ Hamesha ON hai" else "Hamesha ON rakho (ek baar setup)"
+            setTextColor(if (always) mint else marigold)
+        }
+        findViewById<View>(R.id.autoTapButton).visibility = if (on && always) View.GONE else View.VISIBLE
         findViewById<TextView>(R.id.autoTapButton).text =
             if (on) "Auto-Tap settings kholo" else "Auto-Tap on karo"
     }

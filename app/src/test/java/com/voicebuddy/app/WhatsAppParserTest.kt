@@ -130,6 +130,8 @@ class WhatsAppParserTest {
         check("auto tap on karo", Command.AutoTapSetup)
         check("Auto-Tap chalu karo", Command.AutoTapSetup)
         check("turn on auto tap", Command.AutoTapSetup)
+        check("auto tap hamesha on rakho", Command.AutoTapAlways)
+        check("keep auto tap always on", Command.AutoTapAlways)
     }
 
     // ---------- Old commands still work ----------

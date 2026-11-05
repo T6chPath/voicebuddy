@@ -144,6 +144,22 @@
                 android:text="Auto-Tap on karo"
                 android:textColor="#FF1A0C03"
                 android:textSize="15sp" />
+
+            <!-- "Always on": one-time PC setup, then Auto-Tap never needs turning on again -->
+            <TextView
+                android:id="@+id/autoTapAlwaysButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/card_surface"
+                android:foreground="?android:attr/selectableItemBackground"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:text="Hamesha ON rakho"
+                android:textColor="@color/marigold"
+                android:textSize="15sp" />
         </LinearLayout>
 
         <!-- More -->

@@ -48,6 +48,10 @@ class ActionExecutor(private val activity: Activity) {
             is Command.AppSearch -> appSearch(cmd.appName, cmd.query, cmd.fullQuery)
             is Command.Email -> sendEmail(cmd.name, cmd.subject, cmd.body)
             is Command.WhatsApp -> whatsApp.run(cmd)
+            is Command.AutoTapAlways -> {
+                AutoTapHelper.alwaysOnSetup(activity)
+                if (AutoTapKeeper.canKeepOn(context)) "Auto-Tap hamesha ON hai" else "Auto-Tap hamesha ON rakhne ka tareeka khol diya"
+            }
             is Command.AutoTapSetup -> {
                 val wasOn = SettingsActivity.isAutoTapOn(context)
                 AutoTapHelper.turnOn(activity)
