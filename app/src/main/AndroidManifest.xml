@@ -58,7 +58,8 @@
     <application
         android:name=".VoiceBuddyApp"
         android:allowBackup="true"
-        android:icon="@drawable/ic_mic"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.VoiceBuddy">
 
@@ -96,7 +97,8 @@
         <activity-alias
             android:name=".ListenNow"
             android:exported="true"
-            android:icon="@drawable/ic_mic_listen"
+            android:icon="@mipmap/ic_launcher_bolo"
+            android:roundIcon="@mipmap/ic_launcher_bolo"
             android:label="@string/listen_label"
             android:targetActivity=".MainActivity">
             <intent-filter>
