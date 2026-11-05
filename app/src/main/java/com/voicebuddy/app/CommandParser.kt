@@ -43,6 +43,8 @@ sealed class Command {
     data class Scroll(val down: Boolean) : Command()
     /** Phone controls that aren't the Toggle set (DND, battery saver, silent, auto brightness…). */
     data class System(val action: SysAct, val on: Boolean) : Command()
+    /** Jump straight to a settings screen ("display settings kholo", "storage dikhao"). */
+    data class OpenSetting(val key: String, val label: String) : Command()
     /** Any other WhatsApp job (voice note, reply, status, channels, settings…), see [WhatsAppParser]. */
     data class WhatsApp(
         val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
@@ -227,6 +229,7 @@ object CommandParser {
         parseMessage(s)?.let { return it }
         parseSearch(s)?.let { return it }
         parseSystem(s)?.let { return it }
+        parseOpenSetting(s)?.let { return it }
         parseCall(s)?.let { return it }
         if (!MEDIA_WORDS.containsMatchIn(s)) {
             parseTorch(s)?.let { return it }
@@ -479,6 +482,61 @@ object CommandParser {
         if (!Regex(" (play|chalao|chala do|bajao|baja do|lagao|laga do|youtube) ").containsMatchIn(s)) return null
         val query = strip(s, PLAY_FILLERS)
         return if (query.isBlank()) Command.OpenApp("youtube") else Command.PlayYouTube(query)
+    }
+
+    // ---------- Jump to a settings screen ----------
+    /** key -> words that mean it. First match wins, so put the more specific ones first. */
+    private val SETTING_WORDS: List<Triple<String, String, Regex>> = listOf(
+        Triple("DATA_USAGE", "Data usage", Regex(" (data usage|data use|net usage|internet usage|data kharch) ")),
+        Triple("SIM", "SIM cards", Regex(" (sim card|sim cards|sim settings?|manage sim|dual sim) ")),
+        Triple("VPN", "VPN", Regex(" vpn ")),
+        Triple("PRIVATE_DNS", "Private DNS", Regex(" (private dns|dns) ")),
+        Triple("NFC", "NFC", Regex(" nfc ")),
+        Triple("CAST", "Cast", Regex(" (cast|screen cast|screencast|miracast) ")),
+        Triple("DEFAULT_APPS", "Default apps", Regex(" (default app|default apps|default application) ")),
+        Triple("APP_PERMISSIONS", "App permissions", Regex(" (app permission|app permissions|permission manager|permissions manager) ")),
+        Triple("APPS", "Apps", Regex(" (all apps|installed apps|manage apps|app list|app manager|apps settings?|application settings?|application manager) ")),
+        Triple("NOTIFICATION", "Notifications", Regex(" (notification settings?|notification settings|app notification|manage notification|notifications settings?) ")),
+        Triple("SOUND", "Sound & Vibration", Regex(" (sound settings?|sound and vibration|ringtone|ring tone|alarm sound|call volume|media volume|vibration settings?|haptics|touch sound) ")),
+        Triple("ZEN", "Modes", Regex(" (sleep mode|driving mode|focus mode|bedtime mode|zen mode|modes settings?) ")),
+        Triple("DARK_MODE", "Dark mode", Regex(" (dark mode|dark theme|night theme|light mode) ")),
+        Triple("FONT", "Font size", Regex(" (font size|text size|font settings?|display size) ")),
+        Triple("REFRESH", "Refresh rate", Regex(" (refresh rate|screen refresh|120 hz|90 hz|60 hz|hertz) ")),
+        Triple("SCREEN_TIMEOUT", "Screen timeout", Regex(" (screen timeout|sleep time|display timeout|screen off time) ")),
+        Triple("RESOLUTION", "Screen resolution", Regex(" (screen resolution|display resolution|resolution settings?) ")),
+        Triple("BRIGHTNESS", "Brightness", Regex(" (brightness|brightness settings?) ")),
+        Triple("DISPLAY", "Display", Regex(" (display settings?|display settings|screen settings?|screen settings) ")),
+        Triple("WALLPAPER", "Wallpaper", Regex(" (wallpaper|background photo|home screen photo) ")),
+        Triple("AOD", "Always-on display", Regex(" (always on display|always-on display|aod|lock screen settings?|home screen settings?) ")),
+        Triple("THEME", "Themes", Regex(" (theme|themes|icon pack|icons settings?) ")),
+        Triple("BATTERY", "Battery", Regex(" (battery usage|battery settings?|battery health|adaptive battery|charging settings?|battery dikhao|power usage) ")),
+        Triple("STORAGE", "Storage", Regex(" (storage|internal storage|free up space|clear space|memory settings?) ")),
+        Triple("SECURITY", "Security", Regex(" (security settings?|screen lock|lock screen password|pin settings?|password settings?|find my device|app security) ")),
+        Triple("FINGERPRINT", "Fingerprint", Regex(" (fingerprint|finger print|face unlock|face lock|biometric) ")),
+        Triple("PRIVACY", "Privacy", Regex(" (privacy settings?|privacy dashboard|camera access|microphone access|mic access|clipboard access|ads privacy) ")),
+        Triple("ACCOUNTS", "Accounts", Regex(" (account settings?|accounts settings?|google account|add account|sync settings?|passwords|passkey|autofill) ")),
+        Triple("BACKUP", "Backup & Restore", Regex(" (backup|back up|restore data|transfer data|contacts backup|photos backup) ")),
+        Triple("ACCESSIBILITY", "Accessibility", Regex(" (accessibility settings?|accessibility settings|talkback|magnification|captions|hearing aid|color correction|colour correction) ")),
+        Triple("LANGUAGE", "Language", Regex(" (language settings?|change language|system language|languages) ")),
+        Triple("KEYBOARD", "Keyboard", Regex(" (keyboard settings?|keyboard|input method|typing settings?) ")),
+        Triple("GESTURES", "Gestures", Regex(" (gesture settings?|gestures|navigation settings?|navigation bar|button settings?) ")),
+        Triple("DATETIME", "Date & time", Regex(" (date and time|date time|time settings?|clock settings?|time zone) ")),
+        Triple("RESET", "Reset options", Regex(" (reset option|reset settings?|factory reset|reset phone|erase phone) ")),
+        Triple("UPDATE", "System update", Regex(" (system update|software update|phone update|update phone|ota) ")),
+        Triple("PARENTAL", "Family & Parental Controls", Regex(" (parental control|family control|screen time|app limit|digital wellbeing|family management) ")),
+        Triple("EMERGENCY", "Safety & Emergency", Regex(" (emergency sos|sos|medical information|emergency contact|earthquake alert|safety settings?) ")),
+        Triple("DEVELOPER", "Developer options", Regex(" (developer option|developer options|developer settings?|usb debugging|animation scale|animation settings?) ")),
+        Triple("ABOUT", "About phone", Regex(" (about phone|phone info|device info|android version|imei|serial number|build number|software information) ")),
+        Triple("CONNECTED", "Connected Devices", Regex(" (connected device|pair new device|android auto|quick share|usb settings?) "))
+    )
+
+    private fun parseOpenSetting(s: String): Command? {
+        // needs to look like a settings request, not an app open of the same word
+        val settingish = Regex(" (setting|settings|kholo|khol|open|dikhao|dikha|jao|chalu|dekhna|dekho) ").containsMatchIn(s) ||
+            Regex(" (about phone|developer option|data usage|screen timeout|refresh rate|font size|screen resolution|fingerprint|private dns|system update|factory reset) ").containsMatchIn(s)
+        if (!settingish) return null
+        val hit = SETTING_WORDS.firstOrNull { it.third.containsMatchIn(s) } ?: return null
+        return Command.OpenSetting(hit.first, hit.second)
     }
 
     // ---------- Open any app ----------

@@ -123,7 +123,7 @@ class WhatsAppParserTest {
         check("whatsapp dark mode on karo", wa(DARK_MODE))
         check("whatsapp light mode karo", wa(LIGHT_MODE))
         check("whatsapp wallpaper change karo", wa(WALLPAPER, extra = "bright"))
-        check("dark wallpaper lagao", wa(WALLPAPER, extra = "dark"))
+        check("whatsapp pe dark wallpaper lagao", wa(WALLPAPER, extra = "dark"))
     }
 
     // ---------- Old commands still work ----------

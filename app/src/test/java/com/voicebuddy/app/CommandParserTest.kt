@@ -44,6 +44,19 @@ class CommandParserTest {
         check("screen recording stop karo", Command.System(SysAct.SCREEN_RECORD, false))
     }
 
+    @Test fun openSettings() {
+        check("display settings kholo", Command.OpenSetting("DISPLAY", "Display"))
+        check("storage kholo", Command.OpenSetting("STORAGE", "Storage"))
+        check("about phone", Command.OpenSetting("ABOUT", "About phone"))
+        check("developer options kholo", Command.OpenSetting("DEVELOPER", "Developer options"))
+        check("data usage dikhao", Command.OpenSetting("DATA_USAGE", "Data usage"))
+        check("fingerprint setting kholo", Command.OpenSetting("FINGERPRINT", "Fingerprint"))
+        check("screen timeout kholo", Command.OpenSetting("SCREEN_TIMEOUT", "Screen timeout"))
+        check("font size kholo", Command.OpenSetting("FONT", "Font size"))
+        check("vpn setting kholo", Command.OpenSetting("VPN", "VPN"))
+        check("security settings kholo", Command.OpenSetting("SECURITY", "Security"))
+    }
+
     @Test fun messages() {
         check("suraj ko message bhejo ki kal milte hain", Command.WhatsAppMessage("suraj", "kal milte hain"))
         check("send message to atharav saying happy birthday", Command.WhatsAppMessage("atharav", "happy birthday"))

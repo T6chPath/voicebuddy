@@ -53,6 +53,7 @@ class ActionExecutor(private val activity: Activity) {
             is Command.TypeText -> inApp("Likh raha hoon: ${cmd.text}", "Likhne ki jagah nahi mili. Pehle text box pe tap karwaiye.") { it.typeText(cmd.text) }
             is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
             is Command.System -> system(cmd.action, cmd.on)
+            is Command.OpenSetting -> openSetting(cmd.key, cmd.label)
             is Command.Unknown -> searchIn(SearchApp.GOOGLE, cmd.heard).let { "Samajh nahi aaya, Google pe dhundh raha hoon" }
         }
     } catch (e: ActivityNotFoundException) {
@@ -373,6 +374,52 @@ class ActionExecutor(private val activity: Activity) {
         if (auto) AutoTapService.instance?.kickToggle()
         return if (auto) "Battery saver ${if (on) "on" else "off"} kar raha hoon"
         else "Battery saver ki setting khol di, switch dabaiye."
+    }
+
+    /** Opens a specific settings screen by name; tries known intents, else the nearest parent, else Settings. */
+    private fun openSetting(key: String, label: String): String {
+        fun a(action: String) = Intent(action)
+        fun cls(pkg: String, c: String) = Intent().setClassName(pkg, c)
+        val tries: List<Intent> = when (key) {
+            "DATA_USAGE" -> listOf(a(Settings.ACTION_DATA_USAGE_SETTINGS), a(Settings.ACTION_WIRELESS_SETTINGS))
+            "SIM" -> listOf(a("android.settings.MOBILE_NETWORK_SETTINGS"), a(Settings.ACTION_NETWORK_OPERATOR_SETTINGS), a(Settings.ACTION_WIRELESS_SETTINGS))
+            "VPN" -> listOf(a(Settings.ACTION_VPN_SETTINGS), a("android.net.vpn.SETTINGS"), a(Settings.ACTION_WIRELESS_SETTINGS))
+            "PRIVATE_DNS" -> listOf(a("android.settings.PRIVATE_DNS_SETTINGS"), a(Settings.ACTION_WIRELESS_SETTINGS))
+            "NFC" -> listOf(a(Settings.ACTION_NFC_SETTINGS), a("android.settings.NFC_SETTINGS"))
+            "CAST" -> listOf(a(Settings.ACTION_CAST_SETTINGS), a("android.settings.CAST_SETTINGS"))
+            "CONNECTED" -> listOf(a("android.settings.BLUETOOTH_SETTINGS"))
+            "DEFAULT_APPS" -> listOf(a(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+            "APP_PERMISSIONS" -> listOf(a("android.settings.MANAGE_APP_PERMISSIONS"), a(Settings.ACTION_PRIVACY_SETTINGS), a(Settings.ACTION_APPLICATION_SETTINGS))
+            "APPS" -> listOf(a(Settings.ACTION_APPLICATION_SETTINGS), a(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+            "NOTIFICATION" -> listOf(a("android.settings.NOTIFICATION_SETTINGS"), a(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+            "SOUND" -> listOf(a(Settings.ACTION_SOUND_SETTINGS))
+            "ZEN" -> listOf(a("android.settings.ZEN_MODE_SETTINGS"), a(Settings.ACTION_SOUND_SETTINGS))
+            "DARK_MODE", "DISPLAY", "BRIGHTNESS", "FONT", "REFRESH", "SCREEN_TIMEOUT", "RESOLUTION", "AOD" ->
+                listOf(a(Settings.ACTION_DISPLAY_SETTINGS))
+            "WALLPAPER" -> listOf(Intent(Intent.ACTION_SET_WALLPAPER), a(Settings.ACTION_DISPLAY_SETTINGS))
+            "THEME" -> listOf(a(Settings.ACTION_DISPLAY_SETTINGS), a(Settings.ACTION_SETTINGS))
+            "BATTERY" -> listOf(a(Intent.ACTION_POWER_USAGE_SUMMARY), a(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+            "STORAGE" -> listOf(a(Settings.ACTION_INTERNAL_STORAGE_SETTINGS), a("android.settings.MEMORY_CARD_SETTINGS"))
+            "SECURITY" -> listOf(a(Settings.ACTION_SECURITY_SETTINGS))
+            "FINGERPRINT" -> listOf(a("android.settings.FINGERPRINT_ENROLL"), a("android.settings.BIOMETRIC_ENROLL"), a(Settings.ACTION_SECURITY_SETTINGS))
+            "PRIVACY" -> listOf(a(Settings.ACTION_PRIVACY_SETTINGS))
+            "ACCOUNTS" -> listOf(a(Settings.ACTION_SYNC_SETTINGS), a("android.settings.ACCOUNT_SYNC_SETTINGS"), a(Settings.ACTION_ADD_ACCOUNT))
+            "BACKUP" -> listOf(a("android.settings.BACKUP_AND_RESET_SETTINGS"), a("android.settings.privatespace.SET_NEW_PASSWORD"), a(Settings.ACTION_SETTINGS))
+            "ACCESSIBILITY" -> listOf(a(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            "LANGUAGE" -> listOf(a(Settings.ACTION_LOCALE_SETTINGS))
+            "KEYBOARD" -> listOf(a(Settings.ACTION_INPUT_METHOD_SETTINGS))
+            "GESTURES" -> listOf(a("android.settings.GESTURE_NAVIGATION_SETTINGS"), a(Settings.ACTION_SETTINGS))
+            "DATETIME" -> listOf(a(Settings.ACTION_DATE_SETTINGS))
+            "RESET" -> listOf(a("android.settings.privacy.FACTORY_RESET"), a("com.android.settings.action.FACTORY_RESET"), a(Settings.ACTION_SETTINGS))
+            "UPDATE" -> listOf(a("android.settings.SYSTEM_UPDATE_SETTINGS"), a(Settings.ACTION_DEVICE_INFO_SETTINGS))
+            "PARENTAL" -> listOf(cls("com.google.android.apps.wellbeing", "com.google.android.apps.wellbeing.settings.TopLevelSettingsActivity"), a(Settings.ACTION_SETTINGS))
+            "EMERGENCY" -> listOf(a("android.settings.EMERGENCY_SETTINGS"), a(Settings.ACTION_SETTINGS))
+            "DEVELOPER" -> listOf(a(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+            "ABOUT" -> listOf(a(Settings.ACTION_DEVICE_INFO_SETTINGS))
+            else -> listOf(a(Settings.ACTION_SETTINGS))
+        }
+        if (!launchFirst(tries + Intent(Settings.ACTION_SETTINGS))) return "Ye setting is phone par nahi mili."
+        return "$label khol diya"
     }
 
     /** Opens the Quick Settings panel and taps a tile by name (reading mode, screen record…). */

@@ -152,9 +152,9 @@ object WhatsAppParser {
         if (has(" (number|phone number|mobile number) ") && has(" (change|badlo|badal|update) ") && (wa || has(" (account|apna|mera|my) "))) {
             return Command.WhatsApp(WaAction.CHANGE_NUMBER)
         }
-        if (has(" dark (mode|theme) | dark karo | dark kar do ")) return Command.WhatsApp(WaAction.DARK_MODE)
-        if (has(" (light|white) (mode|theme) ")) return Command.WhatsApp(WaAction.LIGHT_MODE)
-        if (has(" (wallpaper|background) ")) {
+        if (wa && has(" dark (mode|theme) | dark karo | dark kar do ")) return Command.WhatsApp(WaAction.DARK_MODE)
+        if (wa && has(" (light|white) (mode|theme) ")) return Command.WhatsApp(WaAction.LIGHT_MODE)
+        if (wa && has(" (wallpaper|background) ")) {
             val kind = when {
                 has(" (dark|kala|black) ") -> "dark"
                 has(" (solid|plain|colour|color|rang) ") -> "solid"

@@ -18,6 +18,8 @@
 | "Auto brightness on karo" | Needs "Modify system settings" once |
 | "Eye comfort / reading mode on karo" | Taps the Quick Settings tile |
 | "Screen record karo" / "recording stop karo" | Opens Quick Settings and starts/stops |
+
+**Jump to any settings screen by voice** (opens the exact page — for things you pick a value on, like font size or refresh rate): "display settings kholo", "storage kholo", "about phone", "developer options kholo", "data usage dikhao", "fingerprint settings", "sound settings", "accessibility settings", "language settings", "date and time", "vpn", "nfc", "wallpaper", "battery usage", "security settings", and many more.
 | "YouTube me dilbar dilbar song chalao" / "dilbar dilbar sunao" | Finds the top video and starts playing it straight away (no tap needed) |
 | "Suraj ko message bhejo ki kal milte hain" | WhatsApp message, sent automatically |
 | "Papa ko message karo" | Asks "kya message bhejna hai?", listens, and sends your answer |
