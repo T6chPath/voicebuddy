@@ -42,6 +42,12 @@ class CommandParserTest {
         check("play tum hi ho", Command.PlayYouTube("tum hi ho"))
         check("arijit singh ke gaane bajao", Command.PlayYouTube("arijit singh"))
         check("youtube pe search karo funny videos", Command.SearchIn(SearchApp.YOUTUBE, "funny videos"))
+        check("youtube me dilbar-dilbar song chlao", Command.PlayYouTube("dilbar dilbar"))
+        check("youtube pe dilbar dilbar gaana sunao", Command.PlayYouTube("dilbar dilbar"))
+        check("youtube pe dilbar dilbar chalaiye", Command.PlayYouTube("dilbar dilbar"))
+        check("dilbar dilbar suna do", Command.PlayYouTube("dilbar dilbar"))
+        check("dilbar dilbar song play karo", Command.PlayYouTube("dilbar dilbar"))
+        check("youtube me dilbar dilbar laga do", Command.PlayYouTube("dilbar dilbar"))
     }
 
     @Test fun searchInApps() {

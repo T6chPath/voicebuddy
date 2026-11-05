@@ -12,6 +12,7 @@
 | "Bluetooth on karo" · "Hotspot on karo" · "Location on karo" · "Flight mode on karo" | Same for each |
 | "Volume badhao / kam karo / full karo / mute karo" | Media volume |
 | "Screenshot lo" · "Phone lock karo" · "Notifications kholo" | Needs Auto-Tap |
+| "YouTube me dilbar dilbar song chalao" / "dilbar dilbar sunao" | Finds the top video and starts playing it straight away (no tap needed) |
 | "Suraj ko message bhejo ki kal milte hain" | WhatsApp message, sent automatically |
 | "Send message to Atharav saying happy birthday" | Same, in English |
 | "YouTube pe Kesariya chalao" / "Play Kesariya" | Opens YouTube and plays the first video |

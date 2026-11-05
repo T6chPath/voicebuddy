@@ -124,7 +124,7 @@ object CommandParser {
         "blue tooth" to "bluetooth", "hot spot" to "hotspot", "flash light" to "flashlight",
         "torch light" to "torch", "screen shot" to "screenshot", "aero plane" to "aeroplane",
         "air plane" to "airplane", "g p s" to "gps", "turn of" to "turn off", "switch of" to "switch off",
-        "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram", "auto tap" to "autotap", "otto tap" to "autotap", "auto tab" to "autotap",
+        "sim card" to "sim", "g mail" to "gmail", "e mail" to "email", "insta gram" to "instagram", "suna do" to "bajao", "play karo" to "play", "play kar do" to "play", "auto tap" to "autotap", "otto tap" to "autotap", "auto tab" to "autotap",
         "face book" to "facebook", "play store" to "playstore", "google maps" to "maps",
         "vai phai" to "wifi", "vai fai" to "wifi", "mobail deta" to "mobile data"
     )
@@ -145,7 +145,12 @@ object CommandParser {
         "volyum" to "volume", "phon" to "phone", "fon" to "phone", "chaitajipiti" to "chatgpt",
         "chaitjipiti" to "chatgpt", "krom" to "chrome", "jiyo" to "jio", "eyaratel" to "airtel",
         "hotaspot" to "hotspot", "lokeshan" to "location", "lok" to "lock", "oph" to "off",
-        "ple" to "play", "taip" to "type", "klik" to "click", "skrol" to "scroll", "instagrama" to "instagram"
+        "ple" to "play", "plae" to "play", "pley" to "play",
+        "chlao" to "chalao", "chalaao" to "chalao", "chalaiye" to "chalao", "chalaaiye" to "chalao", "chalado" to "chalao",
+        "chalaye" to "chalao", "chalaa" to "chalao", "chalav" to "chalao", "chalau" to "chalao",
+        "bajaiye" to "bajao", "bajaao" to "bajao", "bajado" to "bajao", "bjao" to "bajao",
+        "sunao" to "bajao", "sunaiye" to "bajao", "sunaao" to "bajao", "sunado" to "bajao",
+        "lagaiye" to "lagao", "lgao" to "lagao", "gaanaa" to "gaana", "gana" to "gaana", "geet" to "gaana", "taip" to "type", "klik" to "click", "skrol" to "scroll", "instagrama" to "instagram"
     )
 
     /**

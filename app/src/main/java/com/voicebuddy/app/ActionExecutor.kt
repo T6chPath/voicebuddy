@@ -71,17 +71,33 @@ class ActionExecutor(private val activity: Activity) {
     }
 
     // ---------- YouTube ----------
+    /**
+     * Plays the song straight away: finds the top YouTube video for [query] and opens that video
+     * (it starts by itself, no tap needed). Without internet / if not found within 4 s, it opens the
+     * search results and Auto-Tap starts the first video.
+     */
     private fun playOnYouTube(query: String): String {
         val yt = "com.google.android.youtube"
-        val intent = if (isInstalled(yt)) {
-            Intent(Intent.ACTION_SEARCH).setPackage(yt).putExtra("query", query)
-        } else {
-            view("https://www.youtube.com/results?search_query=" + enc(query))
-        }
-        PendingAction.set(PendingAction.Task.YouTubePlayFirst)
-        launch(intent)
-        return if (AutoTapService.isRunning()) "YouTube pe $query chala raha hoon"
-        else "YouTube pe $query khol diya. Auto-Tap on karein to video apne aap chalega."
+        val hasApp = isInstalled(yt)
+        Thread {
+            val id = YouTubeLookup.firstVideoId(query)
+            handler.post {
+                if (id != null) {
+                    PendingAction.clear()
+                    val watch = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$id"))
+                    if (hasApp) watch.setPackage(yt)
+                    try { launch(watch) } catch (e: ActivityNotFoundException) { launch(view("https://www.youtube.com/watch?v=$id")) }
+                } else {
+                    val search = if (hasApp) Intent(Intent.ACTION_SEARCH).setPackage(yt).putExtra("query", query)
+                    else view("https://www.youtube.com/results?search_query=" + enc(query))
+                    PendingAction.set(PendingAction.Task.YouTubePlayFirst, 20_000)
+                    launch(search)
+                    if (!AutoTapService.isRunning()) android.widget.Toast.makeText(context,
+                        "Video pe tap kijiye. Auto-Tap on ho to ye apne aap chalega.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+        return "YouTube pe $query chala raha hoon"
     }
 
     // ---------- WhatsApp message ----------
