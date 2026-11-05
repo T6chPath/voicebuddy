@@ -345,6 +345,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         is Command.TapOn, is Command.TypeText, is Command.Scroll, is Command.AppSearch -> true
         is Command.SearchIn -> cmd.app in setOf(SearchApp.CHATGPT, SearchApp.CLAUDE, SearchApp.GEMINI)
         is Command.Email -> cmd.body.isNotBlank()
+        is Command.System -> cmd.action in setOf(SysAct.BATTERY_SAVER, SysAct.READING_MODE, SysAct.SCREEN_RECORD)
         else -> false
     }
 

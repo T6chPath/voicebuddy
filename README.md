@@ -12,6 +12,12 @@
 | "Bluetooth on karo" · "Hotspot on karo" · "Location on karo" · "Flight mode on karo" | Same for each |
 | "Volume badhao / kam karo / full karo / mute karo" | Media volume |
 | "Screenshot lo" · "Phone lock karo" · "Notifications kholo" | Done by itself |
+| "Phone silent karo" · "Vibrate mode on" · "Sound on karo" | Ringer mode |
+| "Do Not Disturb on karo" / "DND off" | Needs DND access once |
+| "Battery saver on karo" | Flips it by itself |
+| "Auto brightness on karo" | Needs "Modify system settings" once |
+| "Eye comfort / reading mode on karo" | Taps the Quick Settings tile |
+| "Screen record karo" / "recording stop karo" | Opens Quick Settings and starts/stops |
 | "YouTube me dilbar dilbar song chalao" / "dilbar dilbar sunao" | Finds the top video and starts playing it straight away (no tap needed) |
 | "Suraj ko message bhejo ki kal milte hain" | WhatsApp message, sent automatically |
 | "Papa ko message karo" | Asks "kya message bhejna hai?", listens, and sends your answer |

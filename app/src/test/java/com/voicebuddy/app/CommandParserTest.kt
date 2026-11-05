@@ -28,6 +28,22 @@ class CommandParserTest {
         check("flight mode on karo", Command.Toggle(Setting.AIRPLANE, true))
     }
 
+    @Test fun systemControls() {
+        check("phone silent karo", Command.System(SysAct.SILENT, true))
+        check("silent mode on karo", Command.System(SysAct.SILENT, true))
+        check("vibrate mode on karo", Command.System(SysAct.VIBRATE, true))
+        check("ring mode on karo", Command.System(SysAct.RING, true))
+        check("do not disturb on karo", Command.System(SysAct.DND, true))
+        check("dnd band karo", Command.System(SysAct.DND, false))
+        check("battery saver on karo", Command.System(SysAct.BATTERY_SAVER, true))
+        check("power saving off karo", Command.System(SysAct.BATTERY_SAVER, false))
+        check("auto brightness on karo", Command.System(SysAct.AUTO_BRIGHTNESS, true))
+        check("eye comfort on karo", Command.System(SysAct.READING_MODE, true))
+        check("reading mode band karo", Command.System(SysAct.READING_MODE, false))
+        check("screen record karo", Command.System(SysAct.SCREEN_RECORD, true))
+        check("screen recording stop karo", Command.System(SysAct.SCREEN_RECORD, false))
+    }
+
     @Test fun messages() {
         check("suraj ko message bhejo ki kal milte hain", Command.WhatsAppMessage("suraj", "kal milte hain"))
         check("send message to atharav saying happy birthday", Command.WhatsAppMessage("atharav", "happy birthday"))

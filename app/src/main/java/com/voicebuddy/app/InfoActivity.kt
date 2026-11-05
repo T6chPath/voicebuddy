@@ -83,7 +83,8 @@ class InfoActivity : AppCompatActivity() {
         <b>zenvqo.voice</b> — version ${versionName()}<br><br>
         Hinglish, Hindi aur English mein bolo, aur phone kaam kar dega: call (SIM 1 / SIM 2), WhatsApp message,
         audio aur video call, YouTube par gaana, Gmail, ChatGPT / Claude / Gemini / Google par sawaal,
-        torch, Wi-Fi, Bluetooth, volume, screenshot, aur kisi bhi app ke andar tap, type aur scroll.<br><br>
+        torch, Wi-Fi, Bluetooth, volume, screenshot, silent/DND, battery saver, auto brightness, reading mode, screen record,
+        aur kisi bhi app ke andar tap, type aur scroll.<br><br>
         Galat spelling ho to bhi samajh jaata hai — “chart gpt”, “watsapp”, “pradhaman”.<br><br>
         <b>WhatsApp mein bolke</b> (sab apne aap hota hai)<br>
         • “Papa ko voice message bhejo” / “20 second ka voice message”<br>

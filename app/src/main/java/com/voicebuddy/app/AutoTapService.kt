@@ -130,6 +130,15 @@ class AutoTapService : AccessibilityService() {
         handler.postDelayed(flowTick, 900)
     }
 
+    /** Opens the Quick Settings panel and taps the tile matching [labels] (then an optional confirm). */
+    fun quickSettingsTile(labels: List<String>, then: List<String>) {
+        performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+        val steps = mutableListOf(PendingAction.Step.tap(*labels.toTypedArray(), anyApp = true, timeoutMs = 6_000))
+        if (then.isNotEmpty()) steps += PendingAction.Step.tap(*then.toTypedArray(), anyApp = true, optional = true, timeoutMs = 4_000)
+        PendingAction.set(PendingAction.Task.Flow("com.android.systemui", steps), 15_000)
+        handler.postDelayed({ kickFlow() }, 600)
+    }
+
     private fun tickFlow() {
         val task = PendingAction.current() as? PendingAction.Task.Flow
         if (task == null) { flowRunning = false; flow = null; return }
@@ -162,7 +171,7 @@ class AutoTapService : AccessibilityService() {
                 flowIdx++; stepStart = System.currentTimeMillis(); stepTries = 0
             } else {
                 val what = step.labels.firstOrNull() ?: "next step"
-                endFlow("WhatsApp mein \"$what\" nahi mila. Ye step aap khud kar lijiye.")
+                endFlow("\"$what\" nahi mila. Ye step aap khud kar lijiye.")
                 return
             }
         }

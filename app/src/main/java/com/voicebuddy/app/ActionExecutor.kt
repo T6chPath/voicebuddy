@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.app.NotificationManager
 import android.media.AudioManager
 import android.net.Uri
 import android.net.wifi.WifiManager
@@ -51,6 +52,7 @@ class ActionExecutor(private val activity: Activity) {
             is Command.TapOn -> inApp("\"${cmd.target}\" dabaya", "\"${cmd.target}\" screen pe nahi mila") { it.tapOnText(cmd.target) }
             is Command.TypeText -> inApp("Likh raha hoon: ${cmd.text}", "Likhne ki jagah nahi mili. Pehle text box pe tap karwaiye.") { it.typeText(cmd.text) }
             is Command.Scroll -> inApp(if (cmd.down) "Neeche scroll" else "Upar scroll", "Scroll nahi ho paya") { it.scroll(cmd.down) }
+            is Command.System -> system(cmd.action, cmd.on)
             is Command.Unknown -> searchIn(SearchApp.GOOGLE, cmd.heard).let { "Samajh nahi aaya, Google pe dhundh raha hoon" }
         }
     } catch (e: ActivityNotFoundException) {
@@ -294,6 +296,90 @@ class ActionExecutor(private val activity: Activity) {
                 "Volume mute kar diya"
             }
         }
+    }
+
+    // ---------- Silent / DND / battery saver / auto brightness / reading mode / screen record ----------
+    private fun system(action: SysAct, on: Boolean): String = when (action) {
+        SysAct.SILENT -> ringer(AudioManager.RINGER_MODE_SILENT, "Phone silent kar diya", needsPolicy = true)
+        SysAct.VIBRATE -> ringer(AudioManager.RINGER_MODE_VIBRATE, "Vibrate mode on kar diya", needsPolicy = false)
+        SysAct.RING -> ringer(AudioManager.RINGER_MODE_NORMAL, "Sound on kar diya", needsPolicy = false)
+        SysAct.DND -> dnd(on)
+        SysAct.AUTO_BRIGHTNESS -> autoBrightness(on)
+        SysAct.BATTERY_SAVER -> batterySaver(on)
+        SysAct.READING_MODE -> quickTile(
+            listOf("eye comfort", "reading mode", "eye care", "eye protection", "night light", "comfort"),
+            "Reading mode ${if (on) "on" else "off"} kar raha hoon"
+        )
+        SysAct.SCREEN_RECORD -> if (on) quickTile(
+            listOf("screen record", "screen recorder", "record screen", "screenrecord", "record"),
+            "Screen recording shuru kar raha hoon", then = listOf("start", "start now", "shuru")
+        ) else quickTile(listOf("stop", "screen record", "recording"), "Screen recording band kar raha hoon")
+    }
+
+    private fun ringer(mode: Int, ok: String, needsPolicy: Boolean): String {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (needsPolicy && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!nm.isNotificationPolicyAccessGranted) {
+                launch(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                return "Ek baar “zenvqo.voice” ko allow karo, phir dobara boliye."
+            }
+        }
+        return try { am.ringerMode = mode; ok } catch (e: SecurityException) {
+            launch(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+            "Ek baar “zenvqo.voice” ko allow karo, phir dobara boliye."
+        }
+    }
+
+    private fun dnd(on: Boolean): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return "Is phone par DND set nahi ho pa raha."
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!nm.isNotificationPolicyAccessGranted) {
+            launch(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+            return "Ek baar “zenvqo.voice” ko allow karo, phir dobara boliye."
+        }
+        nm.setInterruptionFilter(
+            if (on) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL
+        )
+        return if (on) "Do Not Disturb on kar diya" else "Do Not Disturb off kar diya"
+    }
+
+    private fun autoBrightness(on: Boolean): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(context)) {
+            launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + context.packageName)))
+            return "Ek baar “Modify system settings” allow karo, phir dobara boliye."
+        }
+        return try {
+            Settings.System.putInt(
+                context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                if (on) Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC else Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+            )
+            if (on) "Auto brightness on kar diya" else "Auto brightness off kar diya"
+        } catch (e: Exception) {
+            "Auto brightness set nahi ho paya."
+        }
+    }
+
+    private fun batterySaver(on: Boolean): String {
+        val auto = AutoTapService.isRunning()
+        if (auto) PendingAction.set(
+            PendingAction.Task.ToggleSwitch(
+                on, listOf("battery saver", "power saving", "power saver", "save power", "super power", "battery"),
+                emptyList(), true
+            ), 12_000
+        )
+        if (!launchFirst(listOf(Intent("android.settings.BATTERY_SAVER_SETTINGS"), Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))))
+            launch(Intent(Settings.ACTION_SETTINGS))
+        if (auto) AutoTapService.instance?.kickToggle()
+        return if (auto) "Battery saver ${if (on) "on" else "off"} kar raha hoon"
+        else "Battery saver ki setting khol di, switch dabaiye."
+    }
+
+    /** Opens the Quick Settings panel and taps a tile by name (reading mode, screen record…). */
+    private fun quickTile(labels: List<String>, reply: String, then: List<String> = emptyList()): String {
+        val svc = AutoTapService.instance ?: return "Bas ek baar permission dijiye, phir dobara boliye."
+        svc.quickSettingsTile(labels, then)
+        return reply
     }
 
     // ---------- Screenshot / lock / home / back / notifications ----------

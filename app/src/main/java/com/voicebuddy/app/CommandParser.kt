@@ -9,6 +9,13 @@ enum class VolumeDir { UP, DOWN, MUTE, MAX }
 
 enum class GlobalAct { SCREENSHOT, LOCK, HOME, BACK, NOTIFICATIONS }
 
+/** Other phone controls: silent/vibrate/ring, DND, battery saver, auto brightness, reading mode, screen record. */
+enum class SysAct(val spoken: String) {
+    SILENT("Silent mode"), VIBRATE("Vibrate mode"), RING("Ring mode"),
+    DND("Do Not Disturb"), BATTERY_SAVER("Battery saver"), AUTO_BRIGHTNESS("Auto brightness"),
+    READING_MODE("Reading mode"), SCREEN_RECORD("Screen recording")
+}
+
 enum class SearchApp(val spoken: String) {
     GOOGLE("Google"), CHROME("Chrome"), CHATGPT("ChatGPT"),
     CLAUDE("Claude"), GEMINI("Gemini"), YOUTUBE("YouTube")
@@ -34,6 +41,8 @@ sealed class Command {
     data class TapOn(val target: String) : Command()
     data class TypeText(val text: String) : Command()
     data class Scroll(val down: Boolean) : Command()
+    /** Phone controls that aren't the Toggle set (DND, battery saver, silent, auto brightness…). */
+    data class System(val action: SysAct, val on: Boolean) : Command()
     /** Any other WhatsApp job (voice note, reply, status, channels, settings…), see [WhatsAppParser]. */
     data class WhatsApp(
         val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
@@ -217,6 +226,7 @@ object CommandParser {
         parseEmail(s)?.let { return it }
         parseMessage(s)?.let { return it }
         parseSearch(s)?.let { return it }
+        parseSystem(s)?.let { return it }
         parseCall(s)?.let { return it }
         if (!MEDIA_WORDS.containsMatchIn(s)) {
             parseTorch(s)?.let { return it }
@@ -394,6 +404,30 @@ object CommandParser {
             isVideo || hasWhatsApp || s.contains(" voice call") || s.contains(" audio call") ->
                 Command.WhatsAppCall(name, video = isVideo)
             else -> Command.PhoneCall(name, sim, carrier)
+        }
+    }
+
+    // ---------- Other phone controls ----------
+    private fun parseSystem(s: String): Command? {
+        val off = OFF_WORDS.containsMatchIn(s)
+        return when {
+            Regex(" (screen record|screen recording|record screen|screen recorder|screenrecord|recording start|start recording) ").containsMatchIn(s) ->
+                Command.System(SysAct.SCREEN_RECORD, on = !Regex(" (stop|band|bandh|rukao|roko|end) ").containsMatchIn(s))
+            Regex(" (dnd|do not disturb|not disturb|disturb mode|silent hours) ").containsMatchIn(s) ->
+                Command.System(SysAct.DND, on = !off)
+            Regex(" (battery saver|battery saving|power saving|power saver|save power|saver mode|super power saving) ").containsMatchIn(s) ->
+                Command.System(SysAct.BATTERY_SAVER, on = !off)
+            Regex(" (auto brightness|automatic brightness|adaptive brightness|brightness auto|auto bright) ").containsMatchIn(s) ->
+                Command.System(SysAct.AUTO_BRIGHTNESS, on = !off)
+            Regex(" (reading mode|eye comfort|eye care|eye protection|night light|blue light|eye protect) ").containsMatchIn(s) ->
+                Command.System(SysAct.READING_MODE, on = !off)
+            Regex(" (vibrate|vibration|vibrate mode|vibrate only|vibrate on) ").containsMatchIn(s) ->
+                Command.System(SysAct.VIBRATE, on = true)
+            Regex(" (silent mode|silent|phone silent|phone mute|mute phone|chup mode|chupchap|do silent) ").containsMatchIn(s) ->
+                Command.System(SysAct.SILENT, on = true)
+            Regex(" (ring mode|ringer mode|general mode|normal mode|sound mode|ringer on|sound on karo) ").containsMatchIn(s) ->
+                Command.System(SysAct.RING, on = true)
+            else -> null
         }
     }
 
