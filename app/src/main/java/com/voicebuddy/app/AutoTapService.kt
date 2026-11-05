@@ -79,6 +79,7 @@ class AutoTapService : AccessibilityService() {
         if (paused) return
         val task = PendingAction.current() ?: return
         if (task is PendingAction.Task.Flow) { if (!flowRunning) kickFlow(); return }
+        if (task is PendingAction.Task.ToggleSwitch) { if (!toggleRunning) kickToggle(); return }
         val pkg = event?.packageName?.toString() ?: return
         if (pkg == packageName || scheduled) return
         scheduled = true
@@ -105,8 +106,7 @@ class AutoTapService : AccessibilityService() {
                 if (rootPkg.startsWith("com.whatsapp")) whatsAppSend(root, rootPkg)
             PendingAction.Task.YouTubePlayFirst ->
                 if (rootPkg == "com.google.android.youtube") youTubeFirst(root)
-            is PendingAction.Task.ToggleSwitch ->
-                if (rootPkg.contains("settings") || rootPkg.contains("systemui")) toggle(root, task)
+            is PendingAction.Task.ToggleSwitch -> Unit
             is PendingAction.Task.AppSend ->
                 if (rootPkg == task.pkg) appSend(root)
             is PendingAction.Task.InAppSearch ->
@@ -511,13 +511,54 @@ class AutoTapService : AccessibilityService() {
     private fun isSwitch(n: AccessibilityNodeInfo): Boolean {
         val cls = n.className?.toString() ?: ""
         if (cls.contains("CheckBox") || cls.contains("RadioButton")) return false
-        return cls.contains("Switch") || cls.contains("ToggleButton") || (n.isCheckable && cls.contains("Compound"))
+        if (cls.contains("Switch") || cls.contains("ToggleButton")) return true
+        // ColorOS (Realme/Oppo), MIUI and other skins use custom switches that report as a
+        // plain checkable view — accept any checkable node that isn't a checkbox/radio.
+        return n.isCheckable
     }
 
-    private fun toggle(root: AccessibilityNodeInfo, task: PendingAction.Task.ToggleSwitch) {
+    // ---------- Settings switches: keep trying for a few seconds (panels open slowly) ----------
+    private var toggleTask: PendingAction.Task.ToggleSwitch? = null
+    private var toggleStart = 0L
+    private var toggleTries = 0
+    @Volatile private var toggleRunning = false
+    private val toggleTick = Runnable { tickToggle() }
+
+    fun kickToggle() {
+        handler.removeCallbacks(toggleTick)
+        toggleRunning = true
+        toggleStart = System.currentTimeMillis()
+        toggleTries = 0
+        handler.postDelayed(toggleTick, 650)
+    }
+
+    private fun tickToggle() {
+        val task = PendingAction.current() as? PendingAction.Task.ToggleSwitch
+        if (task == null) { toggleRunning = false; return }
+        if (toggleTask !== task) { toggleTask = task; toggleStart = System.currentTimeMillis(); toggleTries = 0 }
+        if (System.currentTimeMillis() - toggleStart > 9000) { toggleRunning = false; PendingAction.clear(); return }
+
+        val root = rootInActiveWindow
+        val pkg = root?.packageName?.toString() ?: ""
+        if (root != null && (pkg.contains("settings") || pkg.contains("systemui") || pkg.contains("sysui"))) {
+            if (tryToggle(root, task)) {
+                toggleRunning = false
+                PendingAction.clear()
+                handler.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 800)
+                return
+            }
+            // Not found yet: on full settings pages the switch may be lower down
+            if (toggleTries % 2 == 1) scrollBiggest(root, true)
+        }
+        toggleTries++
+        handler.postDelayed(toggleTick, 600)
+    }
+
+    /** Sets the switch to the wanted state. Returns true when it is already/now in that state. */
+    private fun tryToggle(root: AccessibilityNodeInfo, task: PendingAction.Task.ToggleSwitch): Boolean {
         val switches = mutableListOf<AccessibilityNodeInfo>()
-        collect(root, switches) { isSwitch(it) }
-        if (switches.isEmpty()) return
+        collect(root, switches) { isSwitch(it) && it.isVisibleToUser }
+        if (switches.isEmpty()) return false
 
         var target: AccessibilityNodeInfo? = null
         for (sw in switches) {
@@ -525,12 +566,12 @@ class AutoTapService : AccessibilityService() {
             if (task.excludes.any { ctx.contains(it) }) continue
             if (task.keywords.any { ctx.contains(it) }) { target = sw; break }
         }
-        if (target == null && task.firstSwitchOk) target = switches.first()
-        val sw = target ?: return
-
-        if (sw.isChecked != task.on) clickUp(sw)
-        PendingAction.clear()
-        handler.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 900)
+        if (target == null && task.firstSwitchOk) {
+            target = switches.firstOrNull { task.excludes.none { e -> contextText(it).contains(e) } } ?: switches.first()
+        }
+        val sw = target ?: return false
+        if (sw.isChecked == task.on) return true          // already where we want it
+        return clickUp(sw)
     }
 
     /** Text of the row around a switch (its label), stopping before the row would include another switch. */

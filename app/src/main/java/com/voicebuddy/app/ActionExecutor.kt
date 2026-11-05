@@ -266,6 +266,7 @@ class ActionExecutor(private val activity: Activity) {
             )
         }
         if (!launchFirst(spec.intents)) launch(Intent(Settings.ACTION_SETTINGS))
+        if (auto) AutoTapService.instance?.kickToggle()
         return if (auto) "${setting.spoken} $word kar raha hoon"
         else "${setting.spoken} ki setting khol di, switch dabaiye."
     }
