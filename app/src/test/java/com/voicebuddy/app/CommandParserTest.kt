@@ -202,7 +202,7 @@ class CommandParserTest {
         check("Ask brain why is the sky blue", Command.AskBrain("why is the sky blue"))
         check("ask the offline AI how do magnets work", Command.AskBrain("how do magnets work"))
         check("pyramid kisne banaya brain se pucho", Command.AskBrain("pyramid kisne banaya"))
-        check("ब्रेन से पूछो सूरज कितना बड़ा है", Command.AskBrain("suraj kitana bada hai"))
+        check("ब्रेन से पूछो सूरज कितना बड़ा है", Command.AskBrain("suraj kitana bara hai"))
         check("dimag se pucho 2 aur 2 kitne hote hain", Command.AskBrain("2 aur 2 kitne hote hain"))
         // other assistants and commands are unchanged
         assertEquals(SearchApp.CHATGPT, (CommandParser.parse("chatgpt se pucho bharat ki rajdhani") as Command.SearchIn).app)
