@@ -46,3 +46,15 @@ jobs:
           body: Tap app-debug.apk below to download and install zenvqo.voice.
           make_latest: true
           files: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish Offline AI test APK as a direct download
+        if: github.ref == 'refs/heads/offline-ai'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: offline-ai
+          target_commitish: ${{ github.sha }}
+          name: zenvqo.voice + Offline AI (test)
+          body: Test build with the offline AI (MiniBrain). Tap app-debug.apk below to download and install.
+          prerelease: true
+          make_latest: "false"
+          files: app/build/outputs/apk/debug/app-debug.apk
