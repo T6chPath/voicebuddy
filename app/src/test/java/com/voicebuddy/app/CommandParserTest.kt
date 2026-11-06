@@ -192,4 +192,22 @@ class CommandParserTest {
         check("टॉर्च ऑन करो", Command.Torch(true))
         check("वाईफाई बंद करो", Command.Toggle(Setting.WIFI, false))
     }
+
+    @Test fun offlineBrain() {
+        check("brain se pucho gravity kya hai", Command.AskBrain("gravity kya hai"))
+        check("Brain se pucho ki photosynthesis kya hai?", Command.AskBrain("photosynthesis kya hai"))
+        check("zenvqo se pucho what is an atom", Command.AskBrain("what is an atom"))
+        check("offline ai batao a joke", Command.AskBrain("a joke"))
+        check("mini brain, what is a neural network", Command.AskBrain("what is a neural network"))
+        check("Ask brain why is the sky blue", Command.AskBrain("why is the sky blue"))
+        check("ask the offline AI how do magnets work", Command.AskBrain("how do magnets work"))
+        check("pyramid kisne banaya brain se pucho", Command.AskBrain("pyramid kisne banaya"))
+        check("ब्रेन से पूछो सूरज कितना बड़ा है", Command.AskBrain("suraj kitana bada hai"))
+        check("dimag se pucho 2 aur 2 kitne hote hain", Command.AskBrain("2 aur 2 kitne hote hain"))
+        // other assistants and commands are unchanged
+        assertEquals(SearchApp.CHATGPT, (CommandParser.parse("chatgpt se pucho bharat ki rajdhani") as Command.SearchIn).app)
+        check("torch on karo", Command.Torch(true))
+        check("aaj mausam kaisa hai", Command.Unknown("aaj mausam kaisa hai"))
+    }
 }
+

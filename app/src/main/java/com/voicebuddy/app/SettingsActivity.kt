@@ -46,6 +46,21 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var langOptions: LinearLayout
 
+    /** File picker for the offline AI model (model.bin). */
+    private val pickBrain = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val toast = android.widget.Toast.makeText(this, "Model copy ho raha hai…", android.widget.Toast.LENGTH_LONG)
+        toast.show()
+        Brain.importModel(this, uri, progress = { msg -> brainStatus?.text = msg }) { err ->
+            if (isFinishing || isDestroyed) return@importModel
+            android.widget.Toast.makeText(this,
+                if (err == null) "🧠 Offline AI ready! Ab kuch bhi pucho." else "Model load nahi hua: $err",
+                android.widget.Toast.LENGTH_LONG).show()
+            recreate()
+        }
+    }
+    private var brainStatus: TextView? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -60,6 +75,9 @@ class SettingsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         AutoTapKeeper.ensure(this)
+        if (Brain.hasModel(this) && !Brain.isReady()) Brain.warmUp(this) { err ->
+            if (err == null && !isFinishing && !isDestroyed) brainStatus?.text = "Ready · ${Brain.info()} · tap: badlo / hatao"
+        }
     }
 
     // ---------- Language ----------
@@ -114,6 +132,7 @@ class SettingsActivity : AppCompatActivity() {
     // ---------- More ----------
     private fun buildMore() {
         val box = findViewById<LinearLayout>(R.id.moreOptions)
+        addBrainRows(box)
         val birdOn = BirdBubble.isEnabled(this)
         addRow(box, R.drawable.ic_sparkle, if (birdOn) "Floating chidiya: ON" else "Floating chidiya: OFF",
             "Har app mein chidiya dikhe — tap karke bolo") {
@@ -149,6 +168,39 @@ class SettingsActivity : AppCompatActivity() {
         }
         addRow(support, R.drawable.ic_info, "About", "zenvqo.voice ke baare mein") {
             InfoActivity.open(this, InfoActivity.ABOUT)
+        }
+    }
+
+    // ---------- Offline AI ----------
+    private fun addBrainRows(box: LinearLayout) {
+        val has = Brain.hasModel(this)
+        val sub = when {
+            !has -> "model.bin chuniye — phone pe hi chalega, internet nahi chahiye"
+            Brain.info() != null -> "Ready · ${Brain.info()} · tap: badlo / hatao"
+            else -> "Model mila · tap: badlo / hatao"
+        }
+        addRow(box, R.drawable.ic_chat, if (has) "Offline AI (MiniBrain): ON" else "Offline AI (MiniBrain) jodo", sub) {
+            if (!has) {
+                pickBrain.launch(arrayOf("*/*"))
+            } else {
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Offline AI (MiniBrain)")
+                    .setItems(arrayOf("Naya model chuno", "Model hatao")) { _, which ->
+                        if (which == 0) pickBrain.launch(arrayOf("*/*"))
+                        else { Brain.remove(this); recreate() }
+                    }
+                    .show()
+            }
+        }
+        brainStatus = (box.getChildAt(box.childCount - 1) as? LinearLayout)
+            ?.getChildAt(1)?.let { (it as? LinearLayout)?.getChildAt(1) as? TextView }
+        if (has) {
+            val on = Brain.answersUnknown(this)
+            addRow(box, R.drawable.ic_quote, if (on) "Har sawal ka jawab AI de: ON" else "Har sawal ka jawab AI de: OFF",
+                if (on) "Jo command samajh na aaye, AI jawab dega" else "Abhi sirf \"brain se pucho …\" — baaki Google pe") {
+                Brain.setAnswersUnknown(this, !on)
+                recreate()
+            }
         }
     }
 

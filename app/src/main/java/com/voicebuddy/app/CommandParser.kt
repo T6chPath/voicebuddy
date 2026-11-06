@@ -52,6 +52,8 @@ sealed class Command {
         val action: WaAction, val name: String = "", val text: String = "", val extra: String = "",
         val split: Boolean = false
     ) : Command()
+    /** Ask the offline AI model ("brain se pucho …", "ask brain …"); see [Brain]. */
+    data class AskBrain(val question: String) : Command()
     data class Unknown(val heard: String) : Command()
 }
 
@@ -220,6 +222,7 @@ object CommandParser {
     }
 
     fun parse(raw: String): Command {
+        parseBrain(raw)?.let { return it }
         val s = normalize(raw)
         if (s.isBlank()) return Command.Unknown(raw)
 
@@ -243,6 +246,31 @@ object CommandParser {
         parseOpen(s)?.let { return it }
         parseDoInApp(s)?.let { return it }
         return Command.Unknown(raw)
+    }
+
+    // ---------- Offline AI ("brain se pucho …") ----------
+    private const val BRAIN = "(?:mini ?brain|brain|bren|brane|brein|dimag|dimaag)"
+    private const val BRAIN_OR_APP = "(?:mini ?brain|brain|bren|brane|brein|dimag|dimaag|zenvqo|zenvo|zenvko|offline ai|offline)"
+    private const val TO = "(?:se|ko|pe|par|mein|me|from)"
+    private const val ASK = "(?:pucho|poocho|puchho|poochho|puchiye|poochiye|ask|batao|bataiye|bata|bolo)"
+    private val BRAIN_PATTERNS = listOf(
+        // "brain se pucho X", "zenvqo se pucho X", "offline ai batao X", "brain, what is gravity"
+        Regex("^(?:hey |ok |hi )?$BRAIN_OR_APP(?: $TO)? $ASK[ ,:]+(.+)$"),
+        Regex("^(?:hey |ok |hi )?$BRAIN[ ,:]+(.+)$"),
+        // "ask brain X", "ask the offline ai X", "tell brain X"
+        Regex("^(?:ask|tell) (?:the )?$BRAIN_OR_APP[ ,:]+(.+)$"),
+        // "X brain se pucho", "X zenvqo se puchiye"
+        Regex("^(.+?) $BRAIN_OR_APP $TO $ASK$")
+    )
+
+    private fun parseBrain(raw: String): Command? {
+        val s = Translit.toRoman(raw).lowercase().replace(Regex("[?!.]+"), " ").replace(Regex("\\s+"), " ").trim()
+        for (r in BRAIN_PATTERNS) {
+            val m = r.find(s) ?: continue
+            val q = m.groupValues[1].trim().removePrefix("ki ").removePrefix("that ").trim()
+            if (q.isNotBlank()) return Command.AskBrain(q)
+        }
+        return null
     }
 
     // ---------- WhatsApp message ----------

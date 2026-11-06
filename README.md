@@ -37,7 +37,8 @@
 | "Instagram pe search karo Virat Kohli" · "Amazon pe iPhone 15 dhundo" | Searches inside that app (Maps, Play Store, Spotify, Amazon, Flipkart open straight on results) |
 | Inside any app: "Like dabao" · "Follow pe tap karo" · "Type hello" · "Scroll down" | Presses that button / types / scrolls in the app on screen |
 | "Instagram kholo" | Opens any installed app |
-| Anything else | Searches it on Google |
+| "Brain se pucho gravity kya hai" · "Ask brain why is the sky blue" · "ब्रेन से पूछो …" | Answers with the **offline AI** on your phone (no internet) |
+| Anything else | Answered by the offline AI if a model is added, otherwise searched on Google |
 
 **Hindi, Hinglish and English all work.** Choose the speech language in ⚙ Settings (Hinglish · हिंदी · English); Hindi letters are understood too ("सूरज सिंह को सिम 1 से कॉल करो"), and contacts saved in Hindi letters are found.
 
@@ -114,3 +115,18 @@ Open zenvqo.voice from the Quick Settings tile, the **Bolo** icon or the phone's
 
 ## Contact
 zenvqo.voice@gmail.com
+
+
+## Offline AI (MiniBrain)
+
+zenvqo.voice can answer questions with its own small AI model that runs **on the phone** — no internet,
+nothing sent anywhere. The engine is plain Java (`app/src/main/java/com/minibrain/engine`), int8 weights,
+KV cache, up to 4 CPU threads.
+
+1. Train a model with the MiniBrain project and export it: `python export_android.py --ckpt out/chat.pt --out model.bin`
+   (the Colab notebook's last cell does this).
+2. Copy `model.bin` to the phone → zenvqo.voice → ⚙ Settings → **Offline AI (MiniBrain) jodo** → pick the file.
+3. Say **"brain se pucho …"** / **"ask brain …"**, or just ask anything the assistant doesn't recognise as a
+   phone command. Turn that off in Settings ("Har sawal ka jawab AI de") to send unknown things to Google again.
+
+Follow-up questions within 3 minutes continue the same conversation. Tap the mic to interrupt an answer.

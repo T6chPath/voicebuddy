@@ -57,6 +57,8 @@ class ActionExecutor(private val activity: Activity) {
             is Command.DoInApp -> inApp("\"${cmd.target}\" kar diya", "\"${cmd.target}\" screen pe nahi mila") {
                 it.tapAnyText(ActionWords.expand(cmd.target))
             }
+            // normally answered by MainActivity through Brain; here only if no model is loaded
+            is Command.AskBrain -> "Offline AI model load nahi hai. Settings → Offline AI mein model.bin chuniye."
             is Command.Unknown -> searchIn(SearchApp.GOOGLE, cmd.heard).let { "Samajh nahi aaya, Google pe dhundh raha hoon" }
         }
     } catch (e: ActivityNotFoundException) {

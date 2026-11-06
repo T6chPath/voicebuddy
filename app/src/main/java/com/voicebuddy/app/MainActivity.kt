@@ -156,6 +156,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1)
 
+        Brain.warmUp(this)   // load the offline AI in the background, if a model was added
         handleLaunch(intent)
     }
 
@@ -338,6 +339,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         val cmd = if (askedFor != null) Command.WhatsAppMessage(askedFor, text.trim()) else CommandParser.parse(text)
         heard.text = "“$text”"
+        // Offline AI: "brain se pucho …", or anything not understood once a model is loaded
+        if (cmd is Command.AskBrain || (cmd is Command.Unknown && Brain.hasModel(this) && Brain.answersUnknown(this))) {
+            if (Brain.hasModel(this)) {
+                askBrain(if (cmd is Command.AskBrain) cmd.question else text, googleIfEmpty = cmd is Command.Unknown)
+                if (fromVoice) rememberCommand(text)
+                returnAfter = false
+                return
+            }
+        }
         // Jobs that finish themselves (send, play, switch…) need Android's one-time permission.
         // If it's missing, ask once; the command then runs by itself as soon as it's given.
         if (needsHelper(cmd) && AutoTapHelper.wanted(this) && !AutoTapHelper.ensureReady(this, text)) {
@@ -359,6 +369,39 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (returnAfter && (cmd is Command.Torch || cmd is Command.Volume || cmd is Command.System)) moveTaskToBack(true)
         returnAfter = false
     }
+
+    /** Answers with the on-phone AI model, writing the reply as it comes and then speaking it. */
+    private fun askBrain(question: String, googleIfEmpty: Boolean) {
+        thinking = true
+        showReply("🧠 Soch raha hoon…")
+        val sb = StringBuilder()
+        Brain.ask(this, question, onPiece = { piece ->
+            if (!thinking) return@ask
+            sb.append(piece)
+            replyText.text = sb.toString().trimStart()
+        }, onDone = { answer ->
+            val wasThinking = thinking
+            thinking = false
+            if (!wasThinking) return@ask       // cancelled by a new command
+            if (answer.isBlank()) {
+                if (googleIfEmpty) {
+                    val msg = executor.execute(Command.Unknown(question))
+                    showReply(msg)
+                    tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "reply")
+                } else {
+                    showReply("Offline AI jawab nahi de paya. Phir se try kijiye.")
+                }
+                return@ask
+            }
+            showReply(answer)
+            tts?.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "reply")
+            brainSpoke = true
+        })
+    }
+
+    /** True while the offline AI is writing an answer. */
+    private var thinking = false
+    private var brainSpoke = false
 
     /** Commands that are finished on screen by the background helper (not just opened). */
     private fun needsHelper(cmd: Command): Boolean = when (cmd) {
@@ -383,6 +426,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ---------- Listening ----------
     private fun startListening() {
         if (listening) return
+        if (thinking) { thinking = false; Brain.cancel() }
+        if (brainSpoke) { tts?.stop(); brainSpoke = false }   // don't let the mic hear a long AI answer
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
