@@ -1,0 +1,8 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+httpx>=0.27
+pypdf>=4
+# dev / tests
+pytest>=8
+reportlab>=4          # only used to build a PDF fixture in tests

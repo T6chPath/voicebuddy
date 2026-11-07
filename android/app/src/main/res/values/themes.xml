@@ -1,0 +1,11 @@
+<resources>
+    <!-- isLightTheme drives the page's prefers-color-scheme inside the WebView (targetSdk 33+) -->
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <color name="bg">#FFFFFF</color>
+    <color name="brand">#4F46E5</color>
+</resources>

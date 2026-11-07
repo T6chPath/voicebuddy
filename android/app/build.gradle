@@ -1,0 +1,47 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "app.zenvqo.chat"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "app.zenvqo.chat"
+        minSdk 24                 // Android 7.0+
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Release signing comes from environment variables (set by CI from repository secrets) — never commit a keystore.
+    def ks = System.getenv("ZC_KEYSTORE_PATH")
+    signingConfigs {
+        if (ks) {
+            release {
+                storeFile file(ks)
+                storePassword System.getenv("ZC_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ZC_KEY_ALIAS")
+                keyPassword System.getenv("ZC_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"   // can be installed next to the release build
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            if (ks) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// no third-party dependencies: the app is a WebView around assets/index.html

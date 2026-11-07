@@ -1,0 +1,4 @@
+.server-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 12px 4px; margin: 0 0 12px; background: var(--bg); }
+.server-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.test-result { font-size: .85em; color: var(--text-soft); flex-basis: 100%; }
+.settings code { font: .85em var(--mono); background: var(--panel); padding: 1px 4px; border-radius: 4px; }

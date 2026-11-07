@@ -1,0 +1,9 @@
+node_modules/
+frontend/dist/*.map
+frontend/dist/assets/*.map
+__pycache__/
+.pytest_cache/
+backend/data/
+data/
+.env
+e2e/screenshots/

@@ -1,0 +1,57 @@
+# Builds the zenvqo chat Android APK on GitHub (same toolchain as zenvqo.voice: JDK 17, Gradle 8.7, AGP 8.5.2).
+# Every push publishes the APK as a direct download on the "zenvqo-chat-latest" pre-release.
+# The page inside the app (android/app/src/main/assets/index.html) is committed pre-built; after changing the
+# frontend run `cd frontend && npm run build:standalone` and commit the updated asset.
+name: Build zenvqo chat APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          set -o pipefail
+          if ! gradle assembleDebug --console=plain 2>&1 | tee build.log; then
+            msg=$(grep -E "^e: |error:|ERROR|FAILED|What went wrong|Could not|AAPT" -A4 build.log | head -80 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Build failed::$msg"
+            exit 1
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk ../zenvqo-chat.apk
+          ls -la ../zenvqo-chat.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zenvqo-chat-apk
+          path: zenvqo-chat.apk
+
+      - name: Publish APK as a direct download
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-chat-latest
+          name: zenvqo chat (latest)
+          body: Tap zenvqo-chat.apk below to download and install the zenvqo chat app (Android 7.0+).
+          prerelease: true
+          make_latest: false
+          files: zenvqo-chat.apk
