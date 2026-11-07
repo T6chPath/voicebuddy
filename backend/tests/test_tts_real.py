@@ -74,7 +74,12 @@ def speak(c, name, text, **kw):
 
 
 def hear(asr, path, lang=None):
-    segs, info = asr.transcribe(str(path), language=lang, beam_size=5, vad_filter=False)
+    with wave.open(str(path)) as w:                 # decode ourselves (no PyAV): 16-bit mono WAV → 16 kHz float
+        sr, n = w.getframerate(), w.getnframes()
+        x = np.frombuffer(w.readframes(n), dtype="<i2").astype(np.float32) / 32768
+    t = np.arange(int(len(x) * 16000 / sr)) * sr / 16000
+    audio = np.interp(t, np.arange(len(x)), x).astype(np.float32)
+    segs, info = asr.transcribe(audio, language=lang, beam_size=5, vad_filter=False)
     return " ".join(s.text.strip() for s in segs), info.language
 
 
