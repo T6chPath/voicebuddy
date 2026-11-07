@@ -105,11 +105,17 @@ def test_masked_object_removal_keeps_the_rest(c):
     _, pics, _ = run(c, cid, "Generate an image of a single orange ball on green grass, top view, photo", "09-ball")
     src = pics[0].convert("RGB")
     mask = Image.new("L", src.size, 0)
+    import cv2
     rgb = np.asarray(src, dtype=np.int16)
     orange = (rgb[..., 0] > 150) & (rgb[..., 1] < 150) & (rgb[..., 2] < 90)
-    ys, xs = np.nonzero(orange)
-    assert len(xs) > 2000, "no orange ball to remove"
-    box = (xs.min() - 6, ys.min() - 6, xs.max() + 6, ys.max() + 6)             # paint over the ball, like a person would
+    blob = cv2.morphologyEx(orange.astype(np.uint8), cv2.MORPH_OPEN, np.ones((9, 9), np.uint8))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(blob)
+    assert n > 1, "no orange ball to remove"
+    k = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))                      # the ball = biggest orange blob
+    x, y, w, h = stats[k, :4]
+    assert stats[k, cv2.CC_STAT_AREA] > 3000 and w < 0.8 * src.width, stats[k]
+    orange = labels == k
+    box = (x - 6, y - 6, x + w + 6, y + h + 6)                                 # paint over the ball, like a person would
     ImageDraw.Draw(mask).ellipse(box, fill=255)
     REPORT["09-ball-mask"] = {"box": [int(v) for v in box]}
     b = io.BytesIO()

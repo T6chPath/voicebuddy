@@ -304,6 +304,9 @@ class LocalProvider:
         rgb = np.array(src)
         m = np.array(mask)
         filled = cv2.inpaint(rgb, (m > 127).astype(np.uint8) * 255, 7, cv2.INPAINT_TELEA)   # neutral fill first
+        rng = np.random.default_rng(req.seed)
+        noise = rng.normal(0, 28, filled.shape)                       # texture for the model to work from, not a flat smear
+        filled = np.where((m > 127)[..., None], np.clip(filled + noise, 0, 255), filled).astype(np.uint8)
         pre = Image.fromarray(filled)
         w, h = self._work_size(src, min(req.resolution, 768))
         feather = mask.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
