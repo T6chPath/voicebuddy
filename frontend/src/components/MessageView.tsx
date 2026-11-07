@@ -4,6 +4,7 @@ import { fileSize, timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
 import { ImageGallery, ToolProgress, type ImageAction } from "./ImageViews";
 import { copyText, Markdown } from "./Markdown";
+import { NowSpeaking, SpeakControls } from "./SpeechViews";
 
 interface Props {
   m: Message;
@@ -54,6 +55,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
           : streaming && !m.tool ? <span className="typing" role="img" aria-label="Assistant is typing"><i /><i /><i /></span> : null}
         {streaming && m.content && <span className="cursor" aria-hidden="true" />}
       </div>
+      {m.role === "assistant" && <NowSpeaking id={m.id} />}
       {m.tool && m.tool.status === "running" && <ToolProgress t={m.tool} />}
       {m.role === "assistant" && m.attachments.some((a) => a.kind === "image" && fileHref(a)) && (
         <ImageGallery images={m.attachments.filter((a) => a.kind === "image" && fileHref(a))} href={fileHref} numberOf={numberOf}
@@ -72,6 +74,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
                   onClick={() => copyText(m.content).then((ok) => { setCopied(ok); window.setTimeout(() => setCopied(false), 1500); })}>
             <Icon name={copied ? "check" : "copy"} size={16} />
           </button>
+          <SpeakControls id={m.id} text={m.content} />
           {isLast && !busy && (
             <button type="button" className="icon-btn" aria-label="Regenerate reply" title="Regenerate" onClick={onRegenerate}>
               <Icon name="refresh" size={16} />

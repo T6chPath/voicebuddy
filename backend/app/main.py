@@ -14,7 +14,9 @@ from starlette.datastructures import Headers
 from .config import Settings
 from .db import Database
 from .images.service import ImageService, build_providers
-from .routes import auth, chat, conversations, images, misc
+from .routes import auth, chat, conversations, images, misc, tts
+from .tts.engines import build_engines
+from .tts.service import TTSService
 from .security import SECURITY_HEADERS, RateLimiter, csrf_ok
 
 
@@ -52,13 +54,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = Database(s.data_dir / "zenvqo.sqlite")
     app.state.limiter = RateLimiter(limit=10, window_s=600)
     app.state.images = ImageService(app.state.db, s.data_dir, build_providers(s.image_providers))
+    app.state.tts = TTSService(s.data_dir, build_engines(s.tts_engines))
 
     app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
-                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-Requested-With"])
+                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-Requested-With"],
+                       expose_headers=["X-TTS-Engine", "X-TTS-Voice", "X-TTS-Lang", "X-TTS-Cache", "X-TTS-Ms"])
 
     app.add_middleware(GuardMiddleware, allowed_origins=s.allowed_origins)
 
-    for r in (auth.router, conversations.router, chat.router, images.router, misc.router):
+    for r in (auth.router, conversations.router, chat.router, images.router, tts.router, misc.router):
         app.include_router(r)
 
     if s.static_dir and Path(s.static_dir).is_dir():

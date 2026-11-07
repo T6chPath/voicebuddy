@@ -1,5 +1,5 @@
 import { readSSE } from "./sse";
-import type { Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
+import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 /** false = talks to the FastAPI backend; the standalone build swaps in api/local.ts where this is true. */
 export const LOCAL_MODE = false;
@@ -79,7 +79,22 @@ export const api = {
   deleteConversation: (id: string) => request<void>("DELETE", `/api/conversations/${encodeURIComponent(id)}`),
   deleteFile: (id: string) => request<void>("DELETE", `/api/files/${encodeURIComponent(id)}`),
   imageCaps: () => request<ImageCaps>("GET", "/api/images/capabilities"),
+  ttsVoices: () => request<TTSCatalog>("GET", "/api/tts/voices"),
 };
+
+/** One sentence → audio (WAV) from the server's voice engine. */
+export async function ttsSpeak(body: Record<string, unknown>, signal: AbortSignal): Promise<Blob> {
+  let r: Response;
+  try {
+    r = await fetch("/api/tts", { method: "POST", signal, credentials: "same-origin",
+      headers: { ...HEADERS, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ApiError(0, "Can't reach the server for speech.");
+  }
+  if (!r.ok) return fail(r);
+  return r.blob();
+}
 
 export const fileUrl = (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=1" : ""}`;
 

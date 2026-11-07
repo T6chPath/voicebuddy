@@ -26,6 +26,11 @@ const P: Record<string, string> = {
   expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   sliders: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
   eraser: "M8 20h12M5 15l9-9 5 5-9 9H8z",
+  speaker: "M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11",
+  speakerOff: "M4 9v6h4l5 4V5L8 9zM17 10l4 4M21 10l-4 4",
+  play: "M7 5l12 7-12 7z",
+  replay: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5M10.5 9.5l4 2.5-4 2.5z",
+  pause: "M8 5v14M16 5v14",
   alert: "M12 8v5M12 16.5v.5M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
 };
 

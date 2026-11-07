@@ -1,0 +1,94 @@
+name: zenvqo speech (real voices)
+
+# Speaks English, Hindi, mixed Hindi-English and Hinglish with the real Kokoro voices, has Whisper transcribe every clip
+# to check it is intelligible, drives the browser UI against the real voice, and publishes the audio for a person to hear.
+on:
+  push:
+    branches: [zenvqo-chat-apk]
+    paths: ["backend/app/tts/**", "backend/app/routes/tts.py", "backend/tests/test_tts*.py", "frontend/src/**", "e2e/**",
+            ".github/workflows/zenvqo-speech-real.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  real-speech:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZC_REAL_OUT: ${{ github.workspace }}/real-out
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zenvqo
+            ~/.cache/huggingface
+          key: zenvqo-speech-models-v1
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-tts.txt faster-whisper playwright
+          python -m playwright install --with-deps chromium
+      - name: Frontend type check, unit tests, build
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit --pretty false > tsc.log || { sed 's/^/::error ::/' tsc.log; exit 1; }
+          node --import tsx --test src/api/*.test.ts src/lib/*.test.ts src/speech/*.test.ts
+          node scripts/build-offline.mjs
+      - name: Download Kokoro
+        working-directory: backend
+        run: python -m app.tts.download
+      - name: Backend tests
+        working-directory: backend
+        run: python -m pytest tests -q -rf > mocked.log 2>&1 || { tail -60 mocked.log | sed 's/^/::error ::/'; exit 1; }
+      - name: Real voices + Whisper check
+        working-directory: backend
+        env:
+          ZC_REAL_TTS_TESTS: "1"
+        run: |
+          mkdir -p "$ZC_REAL_OUT"
+          python -m pytest tests/test_tts_real.py -v -s 2>&1 | tee "$ZC_REAL_OUT/tts-tests.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/tts-tests.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: Browser UI with the real voice
+        env:
+          ZC_E2E_TTS: real
+          ZC_TTS_ENGINES: kokoro
+        run: |
+          python -m pytest e2e/test_speech_ui.py -v -s 2>&1 | tee "$ZC_REAL_OUT/speech-ui.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/speech-ui.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: All browser tests
+        run: |
+          python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/e2e-all.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: Package
+        if: always()
+        run: |
+          mkdir -p real-out
+          cp e2e/screenshots/speech-*.png real-out/ 2>/dev/null || true
+          echo "run ${{ github.run_id }} at $(date -u)" > real-out/run.txt
+          (cd real-out && zip -qr ../zenvqo-speech-real.zip .)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zenvqo-speech-real
+          path: zenvqo-speech-real.zip
+      - name: Publish
+        if: always() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-speech-test
+          name: zenvqo speech tests (real voices)
+          body: Audio clips, transcripts and logs from the latest real-voice run (Kokoro-82M on a CPU runner, checked with Whisper).
+          prerelease: true
+          make_latest: false
+          files: zenvqo-speech-real.zip

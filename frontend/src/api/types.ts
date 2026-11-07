@@ -71,3 +71,12 @@ export interface UserSettings {
 }
 
 export interface UploadedFile extends Attachment { chars: number; truncated: boolean }
+
+export interface TTSCatalog {
+  available: boolean; reason: string | null;
+  engines: { name: string; model: string; ready: boolean; reason: string | null; speed: boolean; pitch: boolean; style: boolean; langs: string[]; notes: string[] }[];
+  voices: { id: string; label: string; gender: "female" | "male" | "unspecified"; langs: string[]; engine: string }[];
+  languages: { code: string; name: string }[];
+  defaults: Record<string, Record<"female" | "male", string | null>>;
+  max_chars: number;
+}

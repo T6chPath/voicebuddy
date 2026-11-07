@@ -4,6 +4,13 @@
     <!-- talks to your model server (llama-server on the laptop, Ollama, or an API) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Android 11+: let the app find the installed text-to-speech engine -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

@@ -41,6 +41,7 @@ class Settings:
     static_dir: Path | None = Path(os.environ["ZC_STATIC_DIR"]) if os.environ.get("ZC_STATIC_DIR") else None
     image_router: str = os.environ.get("ZC_IMAGE_ROUTER", "auto")   # auto | rules | llm
     image_providers: str | None = None                              # None = from ZC_IMAGE_PROVIDERS
+    tts_engines: str | None = None                                  # None = from ZC_TTS_ENGINES
     echo_delay_s: float = float(os.environ.get("ZC_ECHO_DELAY", "0.02"))
     models: list[ModelConfig] = field(default_factory=lambda: [ModelConfig(**m) for m in json.loads(
         os.environ.get("ZC_MODELS") or json.dumps(DEFAULT_MODELS))])

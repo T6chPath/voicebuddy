@@ -44,8 +44,32 @@ class DrawingProvider:
         return out
 
 
+class ToneVoice:
+    """Stands in for a neural voice in UI tests: a tone as long as the sentence would take to read."""
+    name, model, unavailable_reason = "kokoro", "e2e-tone", None
+
+    def __init__(self):
+        from app.tts.engines import Caps
+        self.caps = Caps(speed=True, langs=("en", "hi", "hinglish"))
+
+    def voices(self):
+        from app.tts.engines import VoiceInfo
+        return [VoiceInfo("kokoro:af_heart", "Heart — US English", "female", ("en", "hinglish"), "kokoro"),
+                VoiceInfo("kokoro:am_michael", "Michael — US English", "male", ("en", "hinglish"), "kokoro"),
+                VoiceInfo("kokoro:hf_alpha", "Alpha — Hindi", "female", ("hi",), "kokoro"),
+                VoiceInfo("kokoro:hm_omega", "Omega — Hindi", "male", ("hi",), "kokoro")]
+
+    def synth(self, text, voice, lang, speed, style):
+        import numpy as np
+        sr = 16000
+        t = np.arange(int(sr * min(4.0, max(0.8, len(text) / 30 / speed)))) / sr
+        return (0.1 * np.sin(2 * np.pi * (220 if lang == "en" else 330) * t)).astype(np.float32), sr
+
+
 def create():
     app = create_app()
     if os.environ.get("ZC_E2E_IMAGES", "fake") == "fake":
         app.state.images.providers = [DrawingProvider()]
+    if os.environ.get("ZC_E2E_TTS", "fake") == "fake":
+        app.state.tts.engines = [ToneVoice()]
     return app

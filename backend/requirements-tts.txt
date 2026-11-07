@@ -1,0 +1,6 @@
+# Local neural voices (Kokoro-82M, Apache-2.0 weights) — CPU only, ~340 MB of model files:
+#   pip install -r requirements.txt -r requirements-tts.txt
+#   python -m app.tts.download
+# kokoro-onnx pulls onnxruntime and a phonemizer that bundles espeak-ng (GPL-3, used as a separate library).
+kokoro-onnx>=0.4
+soundfile>=0.12

@@ -7,6 +7,9 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
 import { changedOpts, DEFAULT_IMAGE_OPTS, type ImageAction, ImageSettings, Lightbox, MaskEditor } from "./ImageViews";
 import { MessageView } from "./MessageView";
+import { AutoSpeakToggle } from "./SpeechViews";
+import { speech } from "../speech/player";
+import { loadServerVoices } from "../speech/setup";
 
 interface Props {
   conversationId: string | null;
@@ -42,6 +45,24 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const [masking, setMasking] = useState<Attachment | null>(null);
   const imagesOn = !!caps?.available;
+  const liveReplies = useRef(new Set<string>());          // replies streamed in this session (auto-speak only these)
+
+  // auto-speak: read each new reply sentence by sentence while it streams
+  useEffect(() => {
+    const m = messages[messages.length - 1];
+    if (!m || m.role !== "assistant" || !speech.settings.autoSpeak || !liveReplies.current.has(m.id)) return;
+    if (m.status === "error" || m.status === "stopped") return;
+    speech.feed(m.id, m.content, m.status !== "streaming");
+  }, [messages]);
+  useEffect(() => () => speech.stop(), [conversationId]);
+  useEffect(() => { void loadServerVoices(); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented && speech.state.status !== "idle" && !document.querySelector("dialog[open]")) speech.stop();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -111,6 +132,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     return {
       onMeta: (d) => {
         if (d.user_message) onMetaUser?.(d.user_message);
+        liveReplies.current.add(d.assistant_message.id);
         patchLast((m) => ({ ...m, id: d.assistant_message.id, model: d.assistant_message.model }));
       },
       onDelta: (t) => {                                 // batch tokens per animation frame: smooth even on slow phones
@@ -171,6 +193,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   async function send(text: string, files: UploadedFile[], override?: ImageOptions): Promise<boolean> {
     if (busy) return false;
+    speech.stop();                                         // a new question interrupts the current answer
+    if (speech.settings.autoSpeak) speech.unlock();        // inside the tap: lets phones play the reply
     const image: ImageOptions | undefined = imagesOn
       ? { ...changedOpts(imageOpts), ...(target ? { source_id: target.id } : {}), ...(override || {}) } : undefined;
     let cid = conversationId;
@@ -211,6 +235,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   async function regenerate() {
     if (!conversationId || busy) return;
+    speech.stop();
+    if (speech.settings.autoSpeak) speech.unlock();
     setMessages((ms) => {
       const out = [...ms];
       while (out.length && out[out.length - 1].role === "assistant") out.pop();
@@ -266,6 +292,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           <Icon name="menu" />
         </button>
         <h1 className="chat-title" title={title}>{title}</h1>
+        <AutoSpeakToggle />
         <label className="model-picker">
           <span className="sr-only">Model</span>
           <select value={model} onChange={(e) => changeModel(e.target.value)} disabled={busy || models.length === 0}

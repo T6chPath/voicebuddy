@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private NativeNet net;
+    private NativeTTS speech;
     private ValueCallback<Uri[]> pendingFiles;
 
     @Override
@@ -56,6 +57,8 @@ public class MainActivity extends Activity {
 
         net = new NativeNet(web);
         web.addJavascriptInterface(net, "ZenvqoNative");     // AI requests without CORS limits; only the bundled page runs here
+        speech = new NativeTTS(this, web);
+        web.addJavascriptInterface(speech, "ZenvqoTTS");      // read replies aloud with the phone's TTS engine
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -171,6 +174,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (pendingFiles != null) pendingFiles.onReceiveValue(null);
         if (net != null) net.shutdown();
+        if (speech != null) speech.shutdown();
         web.destroy();
         super.onDestroy();
     }

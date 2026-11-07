@@ -9,7 +9,7 @@
  *    PDFs need the server app (no PDF parser in the single file, to keep it small)
  */
 import { createSSEParser } from "./sse";
-import type { Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
+import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 export const LOCAL_MODE = true;
 
@@ -246,6 +246,7 @@ export const api = {
   deleteFile: async (id: string) => { await del("files", id); },
   imageCaps: async (): Promise<ImageCaps> => ({ available: false, ops: [], styles: [], aspect_ratios: [], formats: [], max_n: 1, max_resolution: 512, providers: [],
     reason: "Image generation runs on the zenvqo server app (it needs an image model and keeps API keys off your device). Open the server app in your browser to make images." }),
+  ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
 };
 
 export async function clearAllLocalData() {
@@ -295,6 +296,7 @@ export function uploadFile(file: File, onProgress: (frac: number) => void): { pr
 
 // ---------------- chat ----------------
 export const fileUrl = (_id: string, _download = false) => "";
+export async function ttsSpeak(_body: Record<string, unknown>, _signal: AbortSignal): Promise<Blob> { throw new ApiError(400, "No server voices in the standalone app."); }
 
 export interface StreamHandlers {
   onTool?: (t: { name: string; op?: ImageOp; status: "running" | "done" | "failed"; code?: string }) => void;

@@ -316,3 +316,14 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .edit-target { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px; font-size: .9em; color: var(--text-soft); }
 .edit-target img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
 .edit-target span { flex: 1; min-width: 0; }
+
+/* ---------------- speech ---------------- */
+.speak-ctl { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; border-radius: 999px; background: var(--accent-soft); }
+.speak-error { color: var(--danger); font-size: .85em; margin-left: 4px; }
+.now-speaking { margin: 6px 0 2px; padding: 8px 12px; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; background: var(--bg-soft);
+  color: var(--text-soft); font-size: .95em; line-height: 1.5; }
+.now-speaking mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
+.now-speaking mark.whole { background: none; color: var(--text); }
+.now-speaking.paused { opacity: .7; }
+.voice-row select { flex: 1; min-width: 0; }
+.chat-head .icon-btn.on { color: var(--accent); background: var(--accent-soft); }
