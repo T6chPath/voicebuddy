@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
     private static final int FILE_REQUEST = 1001;
 
     private WebView web;
+    private NativeNet net;
     private ValueCallback<Uri[]> pendingFiles;
 
     @Override
@@ -52,6 +53,9 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         s.setSupportMultipleWindows(false);                 // target=_blank links reach shouldOverrideUrlLoading
         s.setMediaPlaybackRequiresUserGesture(true);
+
+        net = new NativeNet(web);
+        web.addJavascriptInterface(net, "ZenvqoNative");     // AI requests without CORS limits; only the bundled page runs here
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -166,6 +170,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (pendingFiles != null) pendingFiles.onReceiveValue(null);
+        if (net != null) net.shutdown();
         web.destroy();
         super.onDestroy();
     }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { api, ApiError, regenerate as apiRegenerate, sendMessage, type StreamHandlers } from "../api/client";
+import { api, ApiError, LOCAL_MODE, regenerate as apiRegenerate, sendMessage, type StreamHandlers } from "../api/client";
 import type { Conversation, Message, UploadedFile } from "../api/types";
 import { useSession } from "../state/session";
 import { useToasts } from "../state/toasts";
@@ -237,6 +237,13 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           {loadState === "idle" && messages.length === 0 && (
             <div className="empty">
               <h2>How can I help?</h2>
+              {LOCAL_MODE && (settings.default_model === "echo" || !settings.server_url) && (
+                <div className="setup-card" role="note">
+                  <strong>Connect a real AI to get answers</strong>
+                  <p>Right now only the offline demo is on, so it can't answer questions. Google Gemini is free: get a key in AI Studio and paste it in Settings → Connection.</p>
+                  <button type="button" className="btn primary" onClick={() => window.dispatchEvent(new Event("zc:open-settings"))}>Connect AI</button>
+                </div>
+              )}
               <ul className="suggestions">
                 {SUGGESTIONS.map((s) => (
                   <li key={s}><button type="button" className="suggestion" onClick={() => composer.current?.setText(s)}>{s}</button></li>

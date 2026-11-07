@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ApiError, clearAllLocalData, fetchServerModels, LOCAL_MODE } from "../api/client";
+import { ApiError, clearAllLocalData, fetchServerModels, LOCAL_MODE, PRESETS } from "../api/client";
 import type { ModelInfo, UserSettings } from "../api/types";
 import { isMac } from "../lib/format";
 import { useSession } from "../state/session";
@@ -132,6 +132,14 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
 }
 
 /** Standalone app: where the model lives. Talks straight to an OpenAI-compatible server (llama-server, Ollama…). */
+/** Prefer a fast, capable general chat model when the service lists many. */
+function pickModel(ms: ModelInfo[]): ModelInfo {
+  const prefs = [/gemini-2\.5-flash$/, /gemini-.*flash$/, /llama-3\.3-70b-versatile/, /gpt-oss-120b/, /llama/, /qwen/];
+  for (const re of prefs) { const m = ms.find((x) => re.test(x.id) && !/lite|preview|exp|thinking/.test(x.id)); if (m) return m; }
+  for (const re of prefs) { const m = ms.find((x) => re.test(x.id)); if (m) return m; }
+  return ms[0];
+}
+
 function ConnectionFields({ draft, set }: { draft: UserSettings; set: <K extends keyof UserSettings>(k: K, v: UserSettings[K]) => void }) {
   const [state, setState] = useState<{ kind: "idle" | "testing" | "ok" | "error"; text?: string; models?: ModelInfo[] }>({ kind: "idle" });
   async function test() {
@@ -139,23 +147,37 @@ function ConnectionFields({ draft, set }: { draft: UserSettings; set: <K extends
     try {
       const ms = await fetchServerModels(draft);
       if (!ms.length) { setState({ kind: "error", text: "Connected, but the server listed no models." }); return; }
-      setState({ kind: "ok", text: `Connected — ${ms.length} model(s): ${ms.map((m) => m.label).slice(0, 3).join(", ")}`, models: ms });
-      if (draft.default_model === "echo" || !draft.default_model) set("default_model", ms[0].id);
+      const pick = pickModel(ms);
+      if (draft.default_model === "echo" || !draft.default_model || !ms.some((m) => m.id === draft.default_model)) set("default_model", pick.id);
+      setState({ kind: "ok", text: `Connected — using ${pick.label}. Tap Save, then start chatting.`, models: ms });
     } catch (e) {
       setState({ kind: "error", text: e instanceof ApiError ? e.message : "Connection failed." });
     }
   }
+  const preset = PRESETS.find((p) => p.url && p.url === (draft.server_url ?? "").replace(/\/+$/, "")) ?? (draft.server_url ? PRESETS.find((p) => p.id === "custom")! : undefined);
   return (
     <fieldset>
       <legend>Connection</legend>
+      <div className="field">
+        <span id="preset-label">AI service</span>
+        <div className="preset-grid" role="group" aria-labelledby="preset-label">
+          {PRESETS.map((p) => (
+            <button key={p.id} type="button" className={"btn preset" + (preset?.id === p.id ? " on" : "")} aria-pressed={preset?.id === p.id}
+                    onClick={() => { set("server_url", p.url); setState({ kind: "idle" }); }}>{p.label}</button>
+          ))}
+        </div>
+        {preset?.keyUrl && (
+          <small className="hint">Get a free key at <a href={preset.keyUrl} target="_blank" rel="noreferrer">{preset.keyUrl.replace("https://", "")}</a> (sign in, “Create API key”, copy it), then paste it below.</small>
+        )}
+      </div>
       <label className="field">
-        <span>Model server address</span>
+        <span>Server address</span>
         <input type="text" inputMode="url" placeholder="http://192.168.1.20:8080" value={draft.server_url ?? ""} autoComplete="off" spellCheck={false}
                onChange={(e) => set("server_url", e.target.value)} />
         <small className="hint">Your laptop running llama-server (start it with <code>--host 0.0.0.0</code>), Ollama, or any OpenAI-compatible API. Leave empty to use only the demo model.</small>
       </label>
       <label className="field">
-        <span>API key (optional)</span>
+        <span>API key{preset?.needsKey ? "" : " (optional)"}</span>
         <input type="password" value={draft.api_key ?? ""} autoComplete="off" onChange={(e) => set("api_key", e.target.value)} />
         <small className="hint">Stored only on this device.</small>
       </label>

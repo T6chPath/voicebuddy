@@ -23,8 +23,81 @@ export class ApiError extends Error {
 
 export function setUnauthorizedHandler(_fn: () => void) { /* no sessions locally */ }
 export function errorMessage(status: number, body: unknown): string {
-  const d = (body as { detail?: unknown; error?: { message?: string } })?.detail ?? (body as { error?: { message?: string } })?.error?.message;
-  return typeof d === "string" ? d : `Request failed (${status}).`;
+  const b = (Array.isArray(body) ? body[0] : body) as { detail?: unknown; error?: { message?: string } | string; message?: string } | null;
+  const d = b?.detail ?? (typeof b?.error === "string" ? b.error : b?.error?.message) ?? b?.message;
+  if (typeof d === "string" && d) return d.length > 300 ? d.slice(0, 300) + "…" : d;
+  if (status === 401 || status === 403) return "The AI service rejected the API key. Check it in Settings → Connection.";
+  if (status === 429) return "The AI service's free limit was reached. Wait a minute and try again.";
+  return `Request failed (${status}).`;
+}
+
+// ---------------- network: Android native bridge (no CORS) or browser fetch ----------------
+interface NativeNet { request(id: string, url: string, method: string, headers: string, body: string): void; cancel(id: string): void }
+declare global { interface Window { ZenvqoNative?: NativeNet; __zn?: (id: string, kind: string, data: string) => void } }
+
+type Pending = { resolve: (r: Response) => void; reject: (e: unknown) => void; ctl?: ReadableStreamDefaultController<Uint8Array>; started: boolean };
+const pending = new Map<string, Pending>();
+let seq = 0;
+
+/** Inside the Android app, requests go through native code (HttpURLConnection), so AI services that don't send
+ * CORS headers still work. The native side streams back: head {status} → data chunks → end | error. */
+function nativeFetch(bridge: NativeNet, url: string, init: RequestInit): Promise<Response> {
+  const id = "r" + ++seq + "_" + Date.now();
+  if (!window.__zn) {
+    const enc = new TextEncoder();
+    window.__zn = (rid, kind, data) => {
+      const p = pending.get(rid);
+      if (!p) return;
+      if (kind === "head") {
+        const head = JSON.parse(data) as { status: number };
+        p.started = true;
+        const body = new ReadableStream<Uint8Array>({ start: (c) => { p.ctl = c; } });
+        p.resolve(new Response(body, { status: head.status >= 200 && head.status <= 599 ? head.status : 502 }));
+      } else if (kind === "data") p.ctl?.enqueue(enc.encode(data));
+      else if (kind === "end") { p.ctl?.close(); pending.delete(rid); }
+      else if (kind === "error") {
+        if (p.started) p.ctl?.error(new TypeError(data || "network error"));
+        else p.reject(new TypeError(data || "Failed to fetch"));
+        pending.delete(rid);
+      }
+    };
+  }
+  return new Promise<Response>((resolve, reject) => {
+    pending.set(id, { resolve, reject, started: false });
+    const signal = init.signal;
+    if (signal) {
+      if (signal.aborted) { pending.delete(id); reject(new DOMException("aborted", "AbortError")); return; }
+      signal.addEventListener("abort", () => {
+        bridge.cancel(id);
+        const p = pending.get(id);
+        pending.delete(id);
+        const err = new DOMException("aborted", "AbortError");
+        if (p?.started) { try { p.ctl?.error(err); } catch { /* closed */ } } else p?.reject(err);
+      }, { once: true });
+    }
+    bridge.request(id, url, (init.method || "GET").toUpperCase(), JSON.stringify(init.headers || {}), typeof init.body === "string" ? init.body : "");
+  });
+}
+
+function net(url: string, init: RequestInit = {}): Promise<Response> {
+  const bridge = typeof window !== "undefined" ? window.ZenvqoNative : undefined;
+  return bridge ? nativeFetch(bridge, url, init) : fetch(url, init);
+}
+
+/** Ready-made connections shown in Settings → Connection. */
+export const PRESETS = [
+  { id: "gemini", label: "Google Gemini — free key", url: "https://generativelanguage.googleapis.com/v1beta/openai", keyUrl: "https://aistudio.google.com/apikey", needsKey: true },
+  { id: "groq", label: "Groq — free key", url: "https://api.groq.com/openai/v1", keyUrl: "https://console.groq.com/keys", needsKey: true },
+  { id: "laptop", label: "My laptop (llama-server)", url: "http://192.168.1.20:8080", keyUrl: "", needsKey: false },
+  { id: "ollama", label: "Ollama", url: "http://192.168.1.20:11434", keyUrl: "", needsKey: false },
+  { id: "custom", label: "Other OpenAI-compatible server", url: "", keyUrl: "", needsKey: false },
+] as const;
+
+/** The model can't know today's date by itself — tell it, in the user's own time zone. */
+export function nowContext(d = new Date()): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
+  const when = d.toLocaleString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `Current date and time for the user: ${when} (${tz}). Use this for questions about today, dates, days or time.`;
 }
 
 // ---------------- IndexedDB ----------------
@@ -75,14 +148,21 @@ const DEFAULTS: UserSettings = { theme: "system", default_model: "echo", tempera
 function loadSettings(): UserSettings {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { return { ...DEFAULTS }; }
 }
-const ECHO: ModelInfo = { id: "echo", label: "Demo (echo)", vision: false, description: "Offline demo model — works without a server" };
+const ECHO: ModelInfo = { id: "echo", label: "Demo (not a real AI)", vision: false, description: "Offline demo — connect a real AI in Settings → Connection" };
 
 function base(s: UserSettings): string {
   let u = (s.server_url || "").trim().replace(/\/+$/, "");
   if (!u) return "";
   if (!/^https?:\/\//i.test(u)) u = "http://" + u;
-  return /\/v1$/.test(u) ? u : u + "/v1";
+  try {
+    const path = new URL(u).pathname.replace(/\/+$/, "");
+    return path ? u : u + "/v1";            // bare host (llama-server, Ollama) → /v1; full API paths kept as given
+  } catch {
+    return u;
+  }
 }
+
+const NOT_CHAT = /embed|imagen|veo|tts|audio|aqa|whisper|guard|lyria|image-generation|transcri|moderation|banana/i;
 function headers(s: UserSettings): Record<string, string> {
   return { "Content-Type": "application/json", ...(s.api_key ? { Authorization: `Bearer ${s.api_key}` } : {}) };
 }
@@ -92,16 +172,20 @@ export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): 
   if (!b) return [];
   let r: Response;
   try {
-    r = await fetch(b + "/models", { headers: headers(s), signal });
+    r = await net(b + "/models", { headers: headers(s), signal });
   } catch {
     throw new ApiError(0, `Can't reach ${b}. Check the address, that the server is running, and that it allows CORS.`);
   }
-  if (r.status === 401 || r.status === 403) throw new ApiError(401, "The server rejected the API key.");
+  if (r.status === 401 || r.status === 403 || r.status === 400) {
+    const body = await r.json().catch(() => null);
+    throw new ApiError(401, r.status === 400 ? errorMessage(400, body) : "The service rejected the API key. Copy it again and check for spaces.");
+  }
   if (!r.ok) throw new ApiError(r.status, `The server answered ${r.status} for /models.`);
   const j = await r.json().catch(() => ({}));
   const items = (j.data || j.models || []) as { id?: string; name?: string; model?: string }[];
-  return items.map((m) => m.id || m.name || m.model || "").filter(Boolean)
-    .map((id) => ({ id: "srv:" + id, label: id.split("/").pop()!.replace(/\.gguf$/i, ""), vision: true, description: `on ${b}` }));
+  const ids = items.map((m) => (m.id || m.name || m.model || "").replace(/^models\//, "")).filter((id) => id && !NOT_CHAT.test(id));
+  const host = (() => { try { return new URL(b).host; } catch { return b; } })();
+  return ids.map((id) => ({ id: "srv:" + id, label: id.split("/").pop()!.replace(/\.gguf$/i, ""), vision: true, description: `on ${host}` }));
 }
 
 let modelCache: ModelInfo[] | null = null;
@@ -234,25 +318,34 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
     used += text.length;
     out.push(images.length ? { role: r.role, content: [{ type: "text", text }, ...images.map((u) => ({ type: "image_url", image_url: { url: u } }))] } : { role: r.role, content: text });
   }
-  const system = BASE_SYSTEM + (s.system_prompt ? "\n\n" + s.system_prompt : "");
+  const system = BASE_SYSTEM + "\n" + nowContext() + (s.system_prompt ? "\n\n" + s.system_prompt : "");
   return [{ role: "system", content: system }, ...out.reverse()];
 }
+
+const DATE_Q = /\b(date|day|today|time|year|month|tarikh|tareekh|din|samay|kitne baje|aaj)\b|तारीख|दिन|समय|आज|कितने बजे/i;
 
 async function* echoStream(messages: ChatMsg[], temperature: number, signal: AbortSignal): AsyncGenerator<string> {
   const last = messages[messages.length - 1].content;
   const text = typeof last === "string" ? last : last.map((p) => p.text || "").join(" ");
   const q = text.split("\n\n<attached_file")[0].trim();
   const files = (text.match(/<attached_file/g) || []).length;
-  let reply = `You said: **${q.slice(0, 300)}**\n\n`;
+  let reply: string;
+  if (DATE_Q.test(q) && !/code|table/i.test(q)) {
+    const d = new Date();
+    reply = `Today is **${d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}**, and the time is **${d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}** (from your device's clock).\n\n`;
+  } else {
+    reply = `I'm the **offline demo**, not a real AI, so I can't answer “${q.slice(0, 120)}”.\n\n`;
+    reply += "**To get real answers:** open **Settings → Connection**, choose **Google Gemini — free key**, paste a free key from Google AI Studio, tap **Test connection**, then **Save**.\n\n";
+  }
   if (files) reply += `I can see ${files} attached file(s). First line: \`${(text.split("<attached_file")[1]?.split(">")[1] || "").trim().split("\n")[0].slice(0, 80).replace(/`/g, "'")}\`\n\n`;
-  if (/code/i.test(q)) reply += "Here's an example:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";
+  if (/code/i.test(q)) reply += "Here's how code looks:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";
   if (/table/i.test(q)) reply += "| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n";
-  reply += `(_demo model running in your browser — ${messages.length - 2} earlier message(s) in context, temperature ${temperature}. Add your server in Settings to chat with zenvqo._)`;
+  reply += `(_demo · ${messages.length - 2} earlier message(s) in context · temperature ${temperature}_)`;
   const toks = reply.match(/[^\s]*\s*/g)!.filter(Boolean);
   for (const [i, t] of toks.entries()) {
     if (signal.aborted) return;
     if (q.includes("[fail]") && i === 6) throw new ApiError(502, "The demo model failed on purpose ([fail] in your message).", undefined, "demo_failure");
-    await new Promise((r) => setTimeout(r, 25));
+    await new Promise((r) => setTimeout(r, 20));
     yield t;
   }
 }
@@ -262,13 +355,13 @@ async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings
   if (!b) throw new ApiError(400, "No model server set. Open Settings → Connection.", undefined, "config");
   let r: Response;
   try {
-    r = await fetch(b + "/chat/completions", { method: "POST", signal, headers: headers(s),
+    r = await net(b + "/chat/completions", { method: "POST", signal, headers: headers(s),
       body: JSON.stringify({ model, messages, stream: true, temperature: s.temperature }) });
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
     throw new ApiError(0, `Can't reach the model server at ${b}. Is it running and reachable from this device?`, undefined, "unreachable");
   }
-  if (r.status === 401 || r.status === 403) throw new ApiError(401, "The model server rejected the API key.", undefined, "auth");
+  if (r.status === 401 || r.status === 403) throw new ApiError(401, "The AI service rejected the API key. Check it in Settings → Connection.", undefined, "auth");
   if (!r.ok || !r.body) {
     const body = await r.json().catch(() => null);
     throw new ApiError(r.status, errorMessage(r.status, body) || `The model server returned ${r.status}.`);

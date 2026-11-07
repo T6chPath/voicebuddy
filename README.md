@@ -8,7 +8,7 @@
 | **Single HTML file** (`frontend/dist-standalone/zenvqo-chat.html`) | the same UI in one offline file; open it in any browser | no login, history saved in that browser |
 | **Android app** (`android/`) | that HTML file inside a native WebView app; the APK is built by GitHub Actions | no login, history saved on the phone |
 
-The HTML file and the APK talk **directly** to an OpenAI-compatible server such as llama-server on your laptop (set it in Settings → Connection), or use the built-in offline demo model. Rebuild the HTML with `cd frontend && npm run build:standalone`; this also copies it into the Android app. The APK steps are in [android/README.md](android/README.md).
+The HTML file and the APK talk **directly** to an AI service chosen in **Settings → Connection**: **Google Gemini** (free key from aistudio.google.com/apikey), **Groq** (free key from console.groq.com/keys), llama-server on your laptop, Ollama, or any OpenAI-compatible server. In the Android app, requests go through native code, so services that don't allow browser (CORS) requests still work. Every request includes the current date, time and time zone, so "what day is today" is answered correctly. Without a connection, an offline demo explains how to connect and only knows the date and time. Rebuild the HTML with `cd frontend && npm run build:standalone`; this also copies it into the Android app. The APK steps are in [android/README.md](android/README.md).
 
 A web chat app for your zenvqo model, built with a React + TypeScript frontend and a FastAPI backend. It has:
 

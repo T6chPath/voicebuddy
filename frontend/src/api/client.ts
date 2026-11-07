@@ -3,6 +3,7 @@ import type { Conversation, ConversationDetail, Message, ModelInfo, UploadedFile
 
 /** false = talks to the FastAPI backend; the standalone build swaps in api/local.ts where this is true. */
 export const LOCAL_MODE = false;
+export const PRESETS: readonly { id: string; label: string; url: string; keyUrl: string; needsKey: boolean }[] = [];
 
 /** standalone-only helpers (see api/local.ts); inert in the server build */
 export async function fetchServerModels(_s: UserSettings, _signal?: AbortSignal): Promise<ModelInfo[]> { return []; }

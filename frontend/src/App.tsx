@@ -45,6 +45,11 @@ function Workspace() {
   const [query, setQuery] = useState("");
   const [drawer, setDrawer] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setSettingsOpen(true);
+    window.addEventListener("zc:open-settings", open);
+    return () => window.removeEventListener("zc:open-settings", open);
+  }, []);
   const [toDelete, setToDelete] = useState<Conversation | null>(null);
   const reqId = useRef(0);
 
