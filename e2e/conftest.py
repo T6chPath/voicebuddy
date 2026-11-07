@@ -33,7 +33,7 @@ def start_server(tmp_path_factory, factory="app.main:create_app", extra_env=None
     base = f"http://127.0.0.1:{port}"
     env = dict(os.environ)
     env.update(ZC_DATA_DIR=str(tmp_path_factory.mktemp("data")), ZC_STATIC_DIR=str(dist), ZC_ECHO_DELAY="0.03",
-               ZC_ALLOWED_ORIGINS=base, ZC_IMAGE_PROVIDERS="none", ZC_TTS_ENGINES="none", ZC_MODELS=json.dumps(models or [
+               ZC_ALLOWED_ORIGINS=base, ZC_IMAGE_PROVIDERS="none", ZC_TTS_ENGINES="none", ZC_ASR_ENGINES="none", ZC_MODELS=json.dumps(models or [
                    {"id": "echo", "label": "Demo (echo)", "provider": "echo", "description": "Offline demo"},
                    {"id": "echo-vision", "label": "Demo vision", "provider": "echo", "vision": True},
                    {"id": "broken", "label": "Offline server", "provider": "openai", "base_url": "http://127.0.0.1:9/v1", "model": "x"}]))
@@ -67,12 +67,17 @@ def server(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def browser():
+def pw():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        b = p.chromium.launch()
-        yield b
-        b.close()
+        yield p
+
+
+@pytest.fixture(scope="session")
+def browser(pw):
+    b = pw.chromium.launch()
+    yield b
+    b.close()
 
 
 @pytest.fixture

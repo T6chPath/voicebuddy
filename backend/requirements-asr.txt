@@ -1,0 +1,4 @@
+# Local speech recognition: faster-whisper (CTranslate2) with OpenAI Whisper weights (MIT), CPU int8.
+#   pip install -r requirements.txt -r requirements-asr.txt
+#   python -m app.asr.download            # fetch the model once (small ≈ 480 MB, medium ≈ 1.5 GB)
+faster-whisper>=1.0

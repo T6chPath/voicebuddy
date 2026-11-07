@@ -247,6 +247,8 @@ export const api = {
   imageCaps: async (): Promise<ImageCaps> => ({ available: false, ops: [], styles: [], aspect_ratios: [], formats: [], max_n: 1, max_resolution: 512, providers: [],
     reason: "Image generation runs on the zenvqo server app (it needs an image model and keeps API keys off your device). Open the server app in your browser to make images." }),
   ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
+  voiceConfig: async () => ({ available: false, reason: "this app has no server", partials: false, max_seconds: 0 }),
+  transcribe: async (_wav: Blob, _lang: string): Promise<{ text: string; lang: string; confidence: string; engine: string; ms: number }> => { throw new ApiError(400, "No server speech recognition in the standalone app."); },
 };
 
 export async function clearAllLocalData() {

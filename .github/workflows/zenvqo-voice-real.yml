@@ -1,0 +1,94 @@
+name: zenvqo voice conversation (real models)
+
+# Real Whisper on real (Kokoro) speech over the real WebSocket, a full hands-free turn in Chromium with a fake-device
+# microphone playing that speech, latency measurements, and published logs/screenshots.
+on:
+  push:
+    branches: [zenvqo-chat-apk]
+    paths: ["backend/app/asr/**", "backend/app/routes/voice.py", "backend/tests/test_voice*.py", "frontend/src/**", "e2e/**",
+            ".github/workflows/zenvqo-voice-real.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  real-voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZC_REAL_OUT: ${{ github.workspace }}/real-out
+      ZC_ASR_MODEL: small
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zenvqo
+            ~/.cache/huggingface
+          key: zenvqo-voice-models-v1
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-tts.txt -r backend/requirements-asr.txt playwright
+          python -m playwright install --with-deps chromium
+      - name: Frontend type check, unit tests, build
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit --pretty false > tsc.log || { sed 's/^/::error ::/' tsc.log; exit 1; }
+          node --import tsx --test src/api/*.test.ts src/lib/*.test.ts src/speech/*.test.ts src/voice/*.test.ts
+          node scripts/build-offline.mjs
+      - name: Download models
+        working-directory: backend
+        run: python -m app.tts.download && python -m app.asr.download
+      - name: Backend tests
+        working-directory: backend
+        run: python -m pytest tests -q -rf > mocked.log 2>&1 || { tail -60 mocked.log | sed 's/^/::error ::/'; exit 1; }
+      - name: Real speech recognition
+        working-directory: backend
+        env:
+          ZC_REAL_VOICE_TESTS: "1"
+        run: |
+          mkdir -p "$ZC_REAL_OUT"
+          python -m pytest tests/test_voice_real.py -v -s 2>&1 | tee "$ZC_REAL_OUT/asr-tests.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/asr-tests.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: Hands-free voice turn in the browser (real models, WebSocket)
+        env:
+          ZC_E2E_ASR: real
+        run: |
+          python -m pytest e2e/test_voice_ui.py -v -s 2>&1 | tee "$ZC_REAL_OUT/voice-ui.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/voice-ui.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: All browser tests
+        run: |
+          python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/e2e-all.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
+      - name: Package
+        if: always()
+        run: |
+          mkdir -p real-out
+          cp e2e/screenshots/voice-*.png e2e/screenshots/voice-*.json real-out/ 2>/dev/null || true
+          echo "run ${{ github.run_id }} at $(date -u)" > real-out/run.txt
+          (cd real-out && zip -qr ../zenvqo-voice-real.zip .)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zenvqo-voice-real
+          path: zenvqo-voice-real.zip
+      - name: Publish
+        if: always() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-voice-test
+          name: zenvqo voice tests (real models)
+          body: Transcripts, latency, audio and screenshots from the latest real voice-conversation run (Whisper small + Kokoro on a CPU runner).
+          prerelease: true
+          make_latest: false
+          files: zenvqo-voice-real.zip

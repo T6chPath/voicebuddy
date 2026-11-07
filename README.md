@@ -119,6 +119,9 @@ All endpoints are under `/api`.
 | GET | `/models` · `/health` | model list exposes no server URLs |
 | GET | `/tts/voices` | voice engines, voices (with gender where the engine states it), languages, defaults — or why none |
 | POST | `/tts` `{text, voice?, lang?, speed?, style?, gender?}` | `audio/wav` for one sentence; `X-TTS-Engine/Voice/Lang/Cache/Ms` headers |
+| GET | `/voice/config` | speech-recognition engines, live captions, limits — or why none |
+| WS | `/voice/ws` | streaming recognition: `start` → PCM16 frames → `end`; server sends `partial`*, `final` (protocol in `routes/voice.py`) |
+| POST | `/voice/transcribe?lang=` (WAV body) | fallback when WebSockets can't be used |
 | GET | `/images/capabilities` | which image providers are ready, and the exact reason if none is |
 | POST | `/images` `{op, prompt, style?, aspect_ratio?, n?, seed?, source_id?, mask_id?, …}` | runs one image job outside chat; `{images, notes}` |
 | GET | `/files/{id}?download=1` | the same file as a download instead of inline |
@@ -168,6 +171,58 @@ python -m app.tts.download              # Kokoro model + voices, ~340 MB, into ~
 
 On the **Android app** nothing needs setting up: it uses the phone's voices. For Hindi, make sure Hindi voice data is
 installed (Android Settings → Text-to-speech → Google → Install voice data → Hindi).
+
+## Voice conversation (talk to it)
+
+Press the **mic** in the message box. The assistant listens, shows what it hears live, sends it as your message, speaks
+the answer, and listens again (hands-free). **Push-to-talk** (hold the mic button, or Space) is one tap away, as are
+**Mute** and **End voice**. While the mic is on you see a red **Mic on** in the header (and the browser/Android shows its
+own recording indicator). Typing still works at any time; voice turns appear in the chat like typed ones.
+
+### How a turn works
+```
+mic (echo cancellation, noise suppression) → 20 ms frames, 16 kHz → VAD in the page
+   speech start ─► WebSocket /api/voice/ws  (PCM16 frames as you speak; live captions back)
+   0.8 s silence ─► "end" ─► Whisper final transcript ─► chat (streamed reply) ─► spoken sentence by sentence
+while the assistant thinks or speaks the mic stays open: louder, longer speech (≥ 0.35 s) interrupts it — voice and reply stop,
+your new turn starts. Text matching what the assistant just said is dropped as its own voice.
+```
+- **Recognizers**: server Whisper (faster-whisper, CPU) with live captions; on the Android app the phone's own
+  `SpeechRecognizer` (Indian English / Hindi, live captions, nothing to install); in Chrome/Edge without a server, the
+  browser's speech recognition (sends audio to the browser maker). OpenAI or Gemini can be added on the server as
+  fallbacks (`ZC_ASR_ENGINES=whisper,openai`).
+- **Languages**: auto, English, Hindi (Devanagari), Hinglish (asks Whisper for Hindi words in Latin letters). Whisper
+  `small` is good at English and usable at Hindi; for better Hindi/Hinglish set `ZC_ASR_MODEL=medium` (slower) or add a
+  hosted engine.
+- **Interruptions on the phone**: Android's recognizer can't listen while the phone is speaking, so tap the mic to
+  interrupt there; on the server recognizer you can just talk.
+- **Fallbacks**: if the WebSocket can't connect (some proxies), each utterance is uploaded as a WAV instead (no live
+  captions); dropped sockets reconnect, and an utterance in flight is re-sent over HTTP.
+- **Measured per turn** and shown under the mic: time from when you stop talking to the transcript, Whisper's decode
+  time, time to the first reply text and to the first spoken audio.
+
+### Privacy
+The mic is only on in voice mode, with a visible indicator; Mute and End voice turn it off at once (End releases the
+device). Audio goes over the same connection as your chats (use HTTPS → `wss://`), is held in memory for one utterance,
+transcribed, and dropped — never written to disk or logged (logs keep length, timing and engine only). The WebSocket
+accepts only signed-in sessions from this site's own pages.
+
+### Setup
+```bash
+cd backend
+pip install -r requirements-asr.txt          # faster-whisper
+python -m app.asr.download                   # Whisper "small" ≈ 480 MB (ZC_ASR_MODEL=medium ≈ 1.5 GB)
+```
+**HTTPS is needed for the mic** on anything except `localhost`: browsers only allow the microphone on secure pages. On
+your phone, either use the Android app (no server needed) or put the server behind HTTPS (e.g. Caddy with a local
+certificate). `uvicorn[standard]` includes WebSocket support.
+
+| Variable | Default | |
+|---|---|---|
+| `ZC_ASR_ENGINES` | `auto` | `whisper`, `openai`, `gemini`, comma list, or `none` |
+| `ZC_ASR_MODEL` | `small` | any faster-whisper model name or path |
+| `ZC_ASR_PARTIALS` / `ZC_ASR_PARTIAL_S` | `1` / `1.2` | live captions on/off, how often to refresh them |
+| `ZC_ASR_RATE` / `ZC_ASR_MAX_S` | `1800/3600` / `30` | seconds of audio per user per hour, longest utterance |
 
 ## Images: generate, edit, understand
 

@@ -5,6 +5,7 @@ import { isMac } from "../lib/format";
 import { useSession } from "../state/session";
 import { Icon } from "./Icon";
 import { VoiceSettingsPanel } from "./SpeechViews";
+import { VoiceInputPanel } from "./VoiceViews";
 
 /** Native <dialog> + showModal(): built-in focus trapping, Esc to close, inert background, top layer. */
 export function Modal({ open, onClose, title, children, labelledBy }: { open: boolean; onClose: () => void; title: string; children: ReactNode; labelledBy: string }) {
@@ -112,6 +113,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           <label className="check"><input type="checkbox" checked={draft.send_on_enter} onChange={(e) => set("send_on_enter", e.target.checked)} /> Enter sends the message (otherwise {mod}+Enter)</label>
         </fieldset>
         <VoiceSettingsPanel />
+        <VoiceInputPanel />
         <details>
           <summary>Keyboard shortcuts</summary>
           <dl className="keys">

@@ -3,11 +3,16 @@
 
     <!-- talks to your model server (llama-server on the laptop, Ollama, or an API) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- voice mode: asked for at first use, only while voice mode listens -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android 11+: let the app find the installed text-to-speech engine -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

@@ -10,6 +10,8 @@ import { MessageView } from "./MessageView";
 import { AutoSpeakToggle } from "./SpeechViews";
 import { speech } from "../speech/player";
 import { loadServerVoices } from "../speech/setup";
+import { voice } from "../voice/session";
+import { MicIndicator, VoicePanel } from "./VoiceViews";
 
 interface Props {
   conversationId: string | null;
@@ -47,13 +49,20 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const imagesOn = !!caps?.available;
   const liveReplies = useRef(new Set<string>());          // replies streamed in this session (auto-speak only these)
 
-  // auto-speak: read each new reply sentence by sentence while it streams
+  // auto-speak / voice mode: read each new reply sentence by sentence while it streams
   useEffect(() => {
     const m = messages[messages.length - 1];
-    if (!m || m.role !== "assistant" || !speech.settings.autoSpeak || !liveReplies.current.has(m.id)) return;
-    if (m.status === "error" || m.status === "stopped") return;
+    if (!m || m.role !== "assistant" || !liveReplies.current.has(m.id)) return;
+    const voiceOn = voice.state.phase !== "off" && voice.state.phase !== "error";
+    if (!speech.settings.autoSpeak && !voiceOn) return;
+    if (m.status === "error" || m.status === "stopped") { if (voiceOn) voice.replyFinished(); return; }
+    if (m.content && voiceOn) voice.replyToken();
     speech.feed(m.id, m.content, m.status !== "streaming");
+    if (m.status !== "streaming" && voiceOn) voice.replyFinished();
   }, [messages]);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  useEffect(() => () => voice.end(), []);
   useEffect(() => () => speech.stop(), [conversationId]);
   useEffect(() => { void loadServerVoices(); }, []);
   useEffect(() => {
@@ -292,6 +301,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           <Icon name="menu" />
         </button>
         <h1 className="chat-title" title={title}>{title}</h1>
+        <MicIndicator />
         <AutoSpeakToggle />
         <label className="model-picker">
           <span className="sr-only">Model</span>
@@ -356,13 +366,19 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction} />}
       {masking && <MaskEditor a={masking} src={fileUrl(masking.id)} onCancel={() => setMasking(null)} onApply={(b, t) => applyMask(masking, b, t)} />}
       <div className="composer-wrap">
+        <VoicePanel />
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onSend={(t, f) => send(t, f)} onStop={stop}
                   placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…" : undefined}
-                  tools={imagesOn ? (
+                  tools={<>
+                    <button type="button" className="icon-btn" aria-label="Start voice conversation" title="Talk (voice mode)"
+                            onClick={() => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); }}>
+                      <Icon name="mic" />
+                    </button>
+                    {imagesOn && (
                     <button type="button" className={`icon-btn${showImageSettings || Object.keys(changedOpts(imageOpts)).length ? " on" : ""}`}
                             aria-label="Image settings" title="Image settings" aria-expanded={showImageSettings} onClick={() => setShowImageSettings((x) => !x)}>
                       <Icon name="sliders" />
-                    </button>) : undefined}
+                    </button>)}</>}
                   popover={showImageSettings && caps ? <ImageSettings caps={caps} opts={imageOpts} setOpts={setImageOpts} onClose={() => setShowImageSettings(false)} /> : undefined}
                   banner={target ? (
                     <div className="edit-target" role="status">

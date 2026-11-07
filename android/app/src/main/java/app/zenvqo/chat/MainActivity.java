@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private NativeNet net;
     private NativeTTS speech;
+    private NativeASR ears;
     private ValueCallback<Uri[]> pendingFiles;
 
     @Override
@@ -59,6 +60,8 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(net, "ZenvqoNative");     // AI requests without CORS limits; only the bundled page runs here
         speech = new NativeTTS(this, web);
         web.addJavascriptInterface(speech, "ZenvqoTTS");      // read replies aloud with the phone's TTS engine
+        ears = new NativeASR(this, web);
+        web.addJavascriptInterface(ears, "ZenvqoASR");        // voice input with the phone's speech recognizer
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -175,7 +178,16 @@ public class MainActivity extends Activity {
         if (pendingFiles != null) pendingFiles.onReceiveValue(null);
         if (net != null) net.shutdown();
         if (speech != null) speech.shutdown();
+        if (ears != null) ears.shutdown();
         web.destroy();
         super.onDestroy();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NativeASR.REQ_MIC && ears != null) {
+            ears.onPermission(grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
+        }
     }
 }

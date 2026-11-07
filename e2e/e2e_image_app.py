@@ -66,10 +66,25 @@ class ToneVoice:
         return (0.1 * np.sin(2 * np.pi * (220 if lang == "en" else 330) * t)).astype(np.float32), sr
 
 
+class ToneASR:
+    """Stands in for Whisper in UI tests: a ~300 Hz voice → the AI question, ~500 Hz → a follow-up."""
+    name, model, unavailable_reason, partials = "whisper", "e2e-tones", None, True
+
+    def transcribe(self, audio, lang, partial=False):
+        import numpy as np
+        if partial:
+            return "What is", lang
+        n = min(len(audio), 16000)
+        f = np.argmax(np.abs(np.fft.rfft(audio[-n:] if len(audio) > n else audio))) * 16000 / n
+        return ("What is Artificial Intelligence?" if f < 400 else "Tell me a joke about computers."), "en"
+
+
 def create():
     app = create_app()
     if os.environ.get("ZC_E2E_IMAGES", "fake") == "fake":
         app.state.images.providers = [DrawingProvider()]
     if os.environ.get("ZC_E2E_TTS", "fake") == "fake":
         app.state.tts.engines = [ToneVoice()]
+    if os.environ.get("ZC_E2E_ASR", "fake") == "fake":
+        app.state.asr.engines = [ToneASR()]
     return app

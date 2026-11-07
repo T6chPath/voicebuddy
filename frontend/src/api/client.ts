@@ -80,6 +80,17 @@ export const api = {
   deleteFile: (id: string) => request<void>("DELETE", `/api/files/${encodeURIComponent(id)}`),
   imageCaps: () => request<ImageCaps>("GET", "/api/images/capabilities"),
   ttsVoices: () => request<TTSCatalog>("GET", "/api/tts/voices"),
+  voiceConfig: () => request<{ available: boolean; reason: string | null; partials: boolean; max_seconds: number }>("GET", "/api/voice/config"),
+  /** fallback when the WebSocket can't be used: one utterance as WAV */
+  transcribe: async (wav: Blob, lang: string) => {
+    let r: Response;
+    try {
+      r = await fetch(`/api/voice/transcribe?lang=${encodeURIComponent(lang)}`, { method: "POST", credentials: "same-origin",
+        headers: { ...HEADERS, "Content-Type": "audio/wav" }, body: wav });
+    } catch { throw new ApiError(0, "Can't reach the server to transcribe."); }
+    if (!r.ok) return fail(r);
+    return (await r.json()) as { text: string; lang: string; confidence: string; engine: string; ms: number };
+  },
 };
 
 /** One sentence → audio (WAV) from the server's voice engine. */
