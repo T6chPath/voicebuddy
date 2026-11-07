@@ -74,8 +74,8 @@ def test_text_to_image_success_criterion(c):
 
 def test_seed_is_reproducible_and_styles(c):
     cid = new_conv(c)
-    _, p1, _ = run(c, cid, "a cozy wooden cabin in snowy mountains, seed 1234", "03-cabin-seed")
-    _, p2, _ = run(c, cid, "a cozy wooden cabin in snowy mountains, seed 1234", "03-cabin-seed-again")
+    _, p1, _ = run(c, cid, "Generate an image of a cozy wooden cabin in snowy mountains, seed 1234", "03-cabin-seed")
+    _, p2, _ = run(c, cid, "Generate an image of a cozy wooden cabin in snowy mountains, seed 1234", "03-cabin-seed-again")
     assert np.array_equal(np.asarray(p1[0]), np.asarray(p2[0]))
     _, p3, _ = run(c, cid, "draw a cat astronaut, anime, 16:9", "04-cat-anime-wide")
     assert p3[0].size == (512, 288)
@@ -85,7 +85,7 @@ def test_seed_is_reproducible_and_styles(c):
 
 def test_remove_and_replace_background_on_uploaded_photo(c):
     cid = new_conv(c)
-    _, pics, _ = run(c, cid, "a studio photo of a single red apple on a plain light grey background, centered", "06-apple")
+    _, pics, _ = run(c, cid, "Generate an image of a single red apple on a plain light grey background, studio photo, centered", "06-apple")
     b = io.BytesIO()
     pics[0].save(b, "PNG")
     fid = c.post("/api/files", files={"file": ("apple.png", b.getvalue(), "image/png")}).json()["id"]
@@ -101,7 +101,7 @@ def test_remove_and_replace_background_on_uploaded_photo(c):
 
 def test_masked_object_removal_keeps_the_rest(c):
     cid = new_conv(c)
-    _, pics, _ = run(c, cid, "a single orange ball on green grass, top view, photo", "09-ball")
+    _, pics, _ = run(c, cid, "Generate an image of a single orange ball on green grass, top view, photo", "09-ball")
     src = pics[0].convert("RGB")
     mask = Image.new("L", src.size, 0)
     ImageDraw.Draw(mask).ellipse((156, 156, 356, 356), fill=255)

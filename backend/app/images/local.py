@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import random
+import re
 import threading
 import time
 
@@ -268,11 +269,22 @@ class LocalProvider:
 
     @staticmethod
     def _with_context(req) -> str:
-        """SD isn't instruction-tuned: describe the whole wanted picture (old prompt + the change)."""
-        return ", ".join(x for x in (req.context_prompt, req.styled_prompt()) if x)
+        """SD isn't instruction-tuned: describe the whole wanted picture — the change first (it gets the most weight),
+        then the old scene minus words the change contradicts (e.g. "sunset" when asking for night)."""
+        scene = req.context_prompt
+        change = req.styled_prompt()
+        clashes = {"night": ("sunset", "sunrise", "daytime", "day", "sunny", "morning", "noon", "golden hour"),
+                   "day": ("night", "sunset", "midnight", "dark"), "winter": ("summer", "spring", "autumn"),
+                   "summer": ("winter", "snow", "snowy"), "rain": ("sunny", "clear sky"), "snow": ("summer", "sunny")}
+        for key, words in clashes.items():
+            if key in change.lower():
+                for w in words:
+                    scene = re.sub(rf"\b(at |in the |during )?{re.escape(w)}\b", "", scene, flags=re.I)
+        scene = re.sub(r"\s+,|,\s*,", ",", re.sub(r"\s{2,}", " ", scene)).strip(" ,")
+        return ", ".join(x for x in (change, scene) if x)
 
     def _op_edit(self, req, inp, prog, cancel):
-        out = self._i2i_many(req, inp.source, self._with_context(req), req.strength, prog, cancel, "Editing")
+        out = self._i2i_many(req, inp.source, self._with_context(req), max(req.strength, 0.7), prog, cancel, "Editing")
         out[0].notes.append("The local model edits by repainting the whole picture. For a precise change, "
                             "paint over the area with Edit → Mask.")
         return out
