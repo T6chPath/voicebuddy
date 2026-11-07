@@ -73,7 +73,7 @@ class Page:
 
 
 def ask(page, text):
-    page.js('document.querySelector("[aria-label=\\"Message\\"]").focus()')
+    page.js('document.querySelector("#composer-input").focus()')
     page.call("Input.insertText", text=text)
     for t in ("rawKeyDown", "char", "keyUp"):
         extra = {"text": "\r"} if t == "char" else {}
@@ -82,7 +82,11 @@ def ask(page, text):
 
 def main():
     page = Page(page_socket())
-    page.wait('!!document.querySelector("[aria-label=\\"Message\\"]")', 60, "the chat box")
+    try:
+        page.wait('!!document.querySelector("#composer-input")', 60, "the chat box")
+    except SystemExit:
+        print("page:", page.js("location.href"), "\n", page.js("document.body.innerText.slice(0, 1500)"))
+        raise
     adb("shell", "rm", "-rf", "/sdcard/Download/zenvqo", check=False)
     results = []
     for n, (prompt, expect) in enumerate([("generate pdf of 30 quiz questions", "What is the SI unit of force"),

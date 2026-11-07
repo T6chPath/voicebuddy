@@ -6,6 +6,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   phone:
     runs-on: ubuntu-latest
@@ -59,3 +62,14 @@ jobs:
         with:
           name: phone-pdf-api${{ matrix.api }}
           path: phone-out
+
+      - name: Publish the phone results (screenshots, PDFs, logcat)
+        if: always() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-android-pdf-api${{ matrix.api }}
+          name: zenvqo PDF on Android ${{ matrix.api }} (test results)
+          body: Screenshots, PDFs and logcat from the emulator PDF test.
+          prerelease: true
+          make_latest: false
+          files: phone-out/*
