@@ -56,6 +56,9 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
         self.conn().executescript(SCHEMA)
+        cols = {r["name"] for r in self.all("PRAGMA table_info(messages)")}
+        if "meta" not in cols:                                     # added for image tools; older DBs get it here
+            self.conn().execute("ALTER TABLE messages ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
 
     def conn(self) -> sqlite3.Connection:
         c = getattr(self._local, "c", None)

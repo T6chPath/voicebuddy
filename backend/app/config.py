@@ -17,6 +17,7 @@ class ModelConfig:
     api_key_env: str = ""             # name of the env var holding the key — keys never live in config files
     vision: bool = False
     context_chars: int = 24000
+    tools: bool = False               # server supports OpenAI-style function calling (llama-server --jinja, Gemini, OpenAI)
     description: str = ""
 
 
@@ -38,6 +39,8 @@ class Settings:
     max_upload_mb: int = int(os.environ.get("ZC_MAX_UPLOAD_MB", "10"))
     max_files_per_message: int = 5
     static_dir: Path | None = Path(os.environ["ZC_STATIC_DIR"]) if os.environ.get("ZC_STATIC_DIR") else None
+    image_router: str = os.environ.get("ZC_IMAGE_ROUTER", "auto")   # auto | rules | llm
+    image_providers: str | None = None                              # None = from ZC_IMAGE_PROVIDERS
     echo_delay_s: float = float(os.environ.get("ZC_ECHO_DELAY", "0.02"))
     models: list[ModelConfig] = field(default_factory=lambda: [ModelConfig(**m) for m in json.loads(
         os.environ.get("ZC_MODELS") or json.dumps(DEFAULT_MODELS))])

@@ -1,0 +1,11 @@
+# Local image generation & editing (CPU build of PyTorch). ~1 GB of packages; models download on first use
+# (or ahead of time with:  python -m app.images.local --download).
+#   pip install -r requirements.txt -r requirements-images.txt
+# With an NVIDIA GPU, install the CUDA build of torch from https://pytorch.org instead of the CPU index below.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+diffusers>=0.30
+transformers>=4.44
+accelerate>=0.33
+rembg[cpu]>=2.0.57
+opencv-python-headless>=4.9

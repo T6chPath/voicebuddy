@@ -1,5 +1,5 @@
 import { readSSE } from "./sse";
-import type { Conversation, ConversationDetail, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
+import type { Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 /** false = talks to the FastAPI backend; the standalone build swaps in api/local.ts where this is true. */
 export const LOCAL_MODE = false;
@@ -78,13 +78,19 @@ export const api = {
     request<Conversation>("PATCH", `/api/conversations/${encodeURIComponent(id)}`, patch),
   deleteConversation: (id: string) => request<void>("DELETE", `/api/conversations/${encodeURIComponent(id)}`),
   deleteFile: (id: string) => request<void>("DELETE", `/api/files/${encodeURIComponent(id)}`),
+  imageCaps: () => request<ImageCaps>("GET", "/api/images/capabilities"),
 };
+
+export const fileUrl = (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=1" : ""}`;
 
 export interface StreamHandlers {
   onMeta?: (m: { user_message: Message | null; assistant_message: { id: string; model: string } }) => void;
   onDelta: (text: string) => void;
   onDone?: (d: { status: string; title: string | null }) => void;
   onError?: (e: ApiError) => void;
+  onTool?: (t: { name: string; op?: ImageOp; status: "running" | "done" | "failed"; code?: string }) => void;
+  onProgress?: (p: { fraction: number; text: string }) => void;
+  onImage?: (a: Attachment) => void;
 }
 
 /** POST that answers with an SSE stream. Resolves when the stream ends; abort via `signal` (Stop button). */
@@ -109,6 +115,9 @@ export async function streamChat(path: string, body: unknown, h: StreamHandlers,
       else if (event === "delta") h.onDelta(d.text);
       else if (event === "done") { gotEnd = true; h.onDone?.(d); }
       else if (event === "error") { gotEnd = true; h.onError?.(new ApiError(502, d.message, undefined, d.code)); }
+      else if (event === "tool") h.onTool?.(d);
+      else if (event === "progress") h.onProgress?.(d);
+      else if (event === "image") h.onImage?.(d.attachment);
     });
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
@@ -117,7 +126,7 @@ export async function streamChat(path: string, body: unknown, h: StreamHandlers,
   if (!gotEnd && !signal.aborted) throw new ApiError(0, "The reply ended unexpectedly. Try regenerating.");
 }
 
-export const sendMessage = (cid: string, body: { content: string; model?: string; file_ids: string[] }, h: StreamHandlers, s: AbortSignal) =>
+export const sendMessage = (cid: string, body: { content: string; model?: string; file_ids: string[]; image?: ImageOptions }, h: StreamHandlers, s: AbortSignal) =>
   streamChat(`/api/conversations/${encodeURIComponent(cid)}/messages`, body, h, s);
 export const regenerate = (cid: string, h: StreamHandlers, s: AbortSignal) =>
   streamChat(`/api/conversations/${encodeURIComponent(cid)}/regenerate`, undefined, h, s);

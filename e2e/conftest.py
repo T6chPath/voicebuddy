@@ -26,27 +26,27 @@ def free_port() -> int:
     return p
 
 
-@pytest.fixture(scope="session")
-def server(tmp_path_factory):
+def start_server(tmp_path_factory, factory="app.main:create_app", extra_env=None, models=None):
     dist = ROOT / "frontend" / "dist"
     assert (dist / "index.html").exists(), "build the frontend first (cd frontend && npm run build)"
     port = free_port()
     base = f"http://127.0.0.1:{port}"
     env = dict(os.environ)
     env.update(ZC_DATA_DIR=str(tmp_path_factory.mktemp("data")), ZC_STATIC_DIR=str(dist), ZC_ECHO_DELAY="0.03",
-               ZC_ALLOWED_ORIGINS=base, ZC_MODELS=json.dumps([
+               ZC_ALLOWED_ORIGINS=base, ZC_IMAGE_PROVIDERS="none", ZC_MODELS=json.dumps(models or [
                    {"id": "echo", "label": "Demo (echo)", "provider": "echo", "description": "Offline demo"},
                    {"id": "echo-vision", "label": "Demo vision", "provider": "echo", "vision": True},
                    {"id": "broken", "label": "Offline server", "provider": "openai", "base_url": "http://127.0.0.1:9/v1", "model": "x"}]))
-    pp = [str(ROOT / "backend")]
+    env.update(extra_env or {})
+    pp = [str(ROOT / "backend"), str(ROOT / "e2e")]
     try:
         import fastapi  # noqa: F401
     except ImportError:
         pp.append(str(ROOT / "tools" / "fastapi_offline_shim"))
     env["PYTHONPATH"] = os.pathsep.join(pp + [env.get("PYTHONPATH", "")])
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory", "--port", str(port), "--log-level", "warning"],
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", factory, "--factory", "--port", str(port), "--log-level", "warning"],
                             cwd=ROOT / "backend", env=env)
-    for _ in range(100):
+    for _ in range(600):
         try:
             urllib.request.urlopen(base + "/api/health", timeout=1)
             break
@@ -55,6 +55,12 @@ def server(tmp_path_factory):
     else:
         proc.kill()
         raise RuntimeError("server did not start")
+    return base, proc
+
+
+@pytest.fixture(scope="session")
+def server(tmp_path_factory):
+    base, proc = start_server(tmp_path_factory)
     yield base
     proc.terminate()
     proc.wait(5)

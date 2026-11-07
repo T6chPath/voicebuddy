@@ -17,6 +17,15 @@ const P: Record<string, string> = {
   close: "M6 6l12 12M18 6L6 18",
   down: "M12 5v14M6 13l6 6 6-6",
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",
+  image: "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9.5a1.5 1.5 0 1 0 0-.01",
+  download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  wand: "M15 4V2M15 10V8M12 5h-2M20 5h-2M18 7.5l1.5 1.5M18 2.5L19.5 1M3 21l11-11 2 2L5 23z",
+  brush: "M14 4l6 6-8 8H6v-6zM3 21c2 0 3-1 3-3",
+  layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
+  scissors: "M6 9a3 3 0 1 0 0-.01M6 21a3 3 0 1 0 0-.01M8.5 7.5L20 19M8.5 16.5L20 5",
+  expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  sliders: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
+  eraser: "M8 20h12M5 15l9-9 5 5-9 9H8z",
   alert: "M12 8v5M12 16.5v.5M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
 };
 

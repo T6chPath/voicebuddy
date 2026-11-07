@@ -22,11 +22,20 @@ class OpenAICompatProvider:
         self.cfg, self.timeout = cfg, timeout
 
     async def stream(self, messages: list[dict], temperature: float) -> AsyncIterator[str]:
+        async for kind, val in self.events(messages, temperature):
+            if kind == "text":
+                yield val
+
+    async def events(self, messages: list[dict], temperature: float, tools: list | None = None) -> AsyncIterator[tuple[str, object]]:
+        """Yields ("text", delta) while streaming, then ("tool_calls", [{name, arguments}]) if the model called tools."""
         import httpx
         headers = {"Content-Type": "application/json"}
         if self.cfg.api_key_env and os.environ.get(self.cfg.api_key_env):
             headers["Authorization"] = f"Bearer {os.environ[self.cfg.api_key_env]}"
         body = {"model": self.cfg.model, "messages": messages, "stream": True, "temperature": temperature}
+        if tools:
+            body["tools"], body["tool_choice"] = tools, "auto"
+        calls: dict[int, dict] = {}
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=5.0)) as client:
                 async with client.stream("POST", self.cfg.base_url.rstrip("/") + "/chat/completions",
@@ -36,19 +45,29 @@ class OpenAICompatProvider:
                     if r.status_code == 429:
                         raise ProviderError("The model is busy (rate limited). Try again shortly.", "rate_limited")
                     if r.status_code >= 400:
+                        if tools and r.status_code in (400, 404, 422, 500, 501):
+                            raise ProviderError("This model server doesn't support tool calling.", "tools_unsupported", False)
                         raise ProviderError(f"The model server returned an error ({r.status_code}).")
                     async for line in r.aiter_lines():
                         if not line.startswith("data:"):
                             continue
                         data = line[5:].strip()
                         if data == "[DONE]":
-                            return
+                            break
                         try:
-                            delta = json.loads(data)["choices"][0].get("delta", {}).get("content")
+                            delta = json.loads(data)["choices"][0].get("delta", {})
                         except (json.JSONDecodeError, KeyError, IndexError, TypeError):
                             continue
-                        if delta:
-                            yield delta
+                        if delta.get("content"):
+                            yield "text", delta["content"]
+                        for tc in delta.get("tool_calls") or []:
+                            slot = calls.setdefault(int(tc.get("index", 0)), {"id": "", "name": "", "arguments": ""})
+                            slot["id"] = tc.get("id") or slot["id"]
+                            fn = tc.get("function") or {}
+                            slot["name"] += fn.get("name") or ""
+                            slot["arguments"] += fn.get("arguments") or ""
+            if calls:
+                yield "tool_calls", [calls[k] for k in sorted(calls)]
         except httpx.ConnectError as e:
             raise ProviderError(f"Can't reach the model server for “{self.cfg.label}”. Is it running?", "unreachable") from e
         except httpx.TimeoutException as e:
@@ -63,8 +82,12 @@ class EchoProvider:
     def __init__(self, cfg: ModelConfig, delay_s: float = 0.02):
         self.cfg, self.delay = cfg, delay_s
 
+    async def events(self, messages: list[dict], temperature: float, tools: list | None = None):
+        async for t in self.stream(messages, temperature):
+            yield "text", t
+
     async def stream(self, messages: list[dict], temperature: float) -> AsyncIterator[str]:
-        last = messages[-1]["content"]
+        last = next((m for m in reversed(messages) if m["role"] == "user"), messages[-1])["content"]
         if isinstance(last, list):
             last = " ".join(p.get("text", "") for p in last if isinstance(p, dict))
         question = last.split("\n\n<attached_file", 1)[0].strip()

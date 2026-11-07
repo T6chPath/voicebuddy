@@ -178,7 +178,8 @@ def test_stop_saves_partial_reply(app, client, user):
     from app.routes.chat import _stream
     cid = new_conv(client)
     uid = user["id"]
-    resp = _stream(app.state.db, app.state.settings, uid, cid, "echo", None, {}, None)
+    from types import SimpleNamespace
+    resp = _stream(SimpleNamespace(app=app), app.state.db, app.state.settings, uid, cid, "echo", None, {}, None, {}, "hello", [])
 
     async def run():
         it = resp.body_iterator

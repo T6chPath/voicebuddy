@@ -1,0 +1,104 @@
+name: zenvqo images (real model)
+
+# Runs the image pipeline with the real local model (SD-Turbo + rembg + NSFW check) on a CPU runner, plus the browser
+# UI against it, and publishes the pictures it made so a person can look at them.
+on:
+  push:
+    branches: [zenvqo-chat-apk]
+    paths: ["backend/**", "frontend/src/**", "e2e/**", ".github/workflows/zenvqo-images-real.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  real-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      ZC_REAL_OUT: ${{ github.workspace }}/real-out
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache downloaded models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.u2net
+          key: zenvqo-image-models-v1
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-images.txt playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Frontend type check and build
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          node scripts/build-offline.mjs
+          node --import tsx --test src/api/*.test.ts src/lib/*.test.ts
+
+      - name: Download models
+        working-directory: backend
+        run: python -m app.images.local --download
+
+      - name: Backend tests (mocked providers)
+        working-directory: backend
+        run: python -m pytest tests -q
+
+      - name: Real model tests
+        working-directory: backend
+        env:
+          ZC_REAL_IMAGE_TESTS: "1"
+        run: |
+          mkdir -p "$ZC_REAL_OUT"
+          python -m pytest tests/test_images_real.py -v -s 2>&1 | tee "$ZC_REAL_OUT/real-tests.log"
+          test ${PIPESTATUS[0]} -eq 0 || { echo "::error title=Real image tests failed::see real-tests.log"; exit 1; }
+
+      - name: Browser UI with the real model
+        env:
+          ZC_E2E_IMAGES: real
+          ZC_IMAGE_PROVIDERS: local
+        run: |
+          python -m pytest e2e/test_images_ui.py -v -s 2>&1 | tee "$ZC_REAL_OUT/ui-tests.log"
+          test ${PIPESTATUS[0]} -eq 0 || { echo "::error title=Real UI tests failed::see ui-tests.log"; exit 1; }
+
+      - name: Browser UI controls (all e2e)
+        run: python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"; test ${PIPESTATUS[0]} -eq 0
+
+      - name: Package results
+        if: always()
+        run: |
+          mkdir -p real-out
+          cp e2e/screenshots/ui-*.png real-out/ 2>/dev/null || true
+          (cd real-out && zip -r ../zenvqo-images-real.zip .)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zenvqo-images-real
+          path: zenvqo-images-real.zip
+
+      - name: Publish results
+        if: always() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-images-test
+          name: zenvqo image tests (real model)
+          body: Pictures and logs from the latest real-model run of the zenvqo image tools (SD-Turbo + rembg on a CPU runner).
+          prerelease: true
+          make_latest: false
+          files: zenvqo-images-real.zip

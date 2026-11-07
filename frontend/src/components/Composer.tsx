@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
+import { forwardRef, type ReactNode, useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { api, ApiError, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
 import { fileSize, isMac } from "../lib/format";
@@ -25,12 +25,19 @@ interface Props {
   discard?: (f: UploadedFile) => void;
   accept?: string;
   placeholder?: string;
+  /** extra controls next to the attach button (e.g. image settings) */
+  tools?: ReactNode;
+  /** shown above the input (e.g. "Editing image #3") */
+  banner?: ReactNode;
+  /** popover anchored to the composer */
+  popover?: ReactNode;
 }
 
 const serverDiscard = (f: UploadedFile) => { api.deleteFile(f.id).catch(() => {}); };
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { busy, sendOnEnter, onSend, onStop, upload = uploadFile, discard = serverDiscard, accept = ACCEPT, placeholder = "Message zenvqo…" }, ref) {
+  { busy, sendOnEnter, onSend, onStop, upload = uploadFile, discard = serverDiscard, accept = ACCEPT, placeholder = "Message zenvqo…",
+    tools, banner, popover }, ref) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -117,6 +124,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     <form className={`composer${dragging ? " dragging" : ""}`} onSubmit={(e) => { e.preventDefault(); submit(); }}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
           aria-label="Message composer">
+      {popover}
+      {banner}
       {files.length > 0 && (
         <ul className="att-list pending" aria-label="Files to send">
           {files.map((p) => (
@@ -138,6 +147,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 disabled={files.length >= MAX_FILES}>
           <Icon name="clip" />
         </button>
+        {tools}
         <input ref={input} type="file" multiple accept={accept} hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
         <label htmlFor="composer-input" className="sr-only">Message</label>
         <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)}

@@ -67,11 +67,11 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(current_user
 
 
 @router.get("/files/{fid}")
-def download(fid: str, user: dict = Depends(current_user), db: Database = Depends(get_db)):
+def download(fid: str, download: int = 0, user: dict = Depends(current_user), db: Database = Depends(get_db)):
     f = db.one("SELECT * FROM files WHERE id = ? AND user_id = ?", (fid, user["id"]))
     if not f:
         raise HTTPException(404, "File not found.")
-    disp = "inline" if f["kind"] == "image" else "attachment"
+    disp = "inline" if f["kind"] == "image" and not download else "attachment"
     quoted = f["name"].encode("ascii", "replace").decode().replace('"', "'")
     return Response(Path(f["path"]).read_bytes(), media_type=f["mime"],
                     headers={"Content-Disposition": f'{disp}; filename="{quoted}"', "Cache-Control": "private, max-age=3600"})

@@ -1,33 +1,53 @@
-"""Streaming chat over Server-Sent Events.
+"""Streaming chat over Server-Sent Events, with image tools.
 
-POST /api/conversations/{id}/messages     {"content", "model"?, "file_ids"?}   → text/event-stream
-POST /api/conversations/{id}/regenerate                                         → text/event-stream
-Events:  meta {user_message, assistant_message} · delta {text} · done {status, title} · error {code, message, retryable}
-The assistant row is created as 'streaming' and updated in place. If the client disconnects (Stop button / closed tab),
-the generator is cancelled and the partial reply is saved with status 'stopped'.
+POST /api/conversations/{id}/messages     {"content", "model"?, "file_ids"?, "image"?}   → text/event-stream
+POST /api/conversations/{id}/regenerate                                                   → text/event-stream
+Events:
+  meta {user_message, assistant_message} · delta {text} · done {status, title}
+  tool {name, op, status, args}           — an image tool started (status "running") or finished ("done" / "failed")
+  progress {fraction, text}               — image progress
+  image {attachment}                      — a finished image, already stored and saved on the assistant message
+  error {code, message, retryable}
+
+Routing (ZC_IMAGE_ROUTER): "auto" = clear requests go straight to the tool by rules; anything else goes to the chat model,
+which may call generate_image / edit_image if it supports tools. "rules" never asks the model; "llm" always does.
+If the client disconnects, the partial reply is saved with status 'stopped' and image work is cancelled.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..config import Settings
 from ..db import Database, new_id, now
 from ..deps import current_user, get_db, get_settings
+from ..images.base import ImageError
+from ..images.intent import TOOLS, Plan, clean_edit, clean_prompt, detect, plan_from_tool
+from ..images.safety import SafetyBlocked
+from ..images.service import ImageService, conversation_images
+from ..images.spec import ImageRequest
 from ..providers import ProviderError, provider_for
 from ..schemas import MessageIn
 from .conversations import msg_out, owned
 
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
+log = logging.getLogger("zenvqo.chat")
 BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language)."
+TOOL_NAME = {"generate": "generate_image"}
 
 
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def get_images(request: Request) -> ImageService:
+    return request.app.state.images
 
 
 def user_settings(db: Database, uid: str) -> dict:
@@ -35,25 +55,43 @@ def user_settings(db: Database, uid: str) -> dict:
     return json.loads(row["data"]) if row else {}
 
 
-def build_messages(db: Database, uid: str, cid: str, s_user: dict, model_cfg, upto_id: str | None = None) -> list[dict]:
+def image_system(svc: ImageService, tools_on: bool) -> str:
+    if svc.available and tools_on:
+        return ("\n\nYou can create and edit images with the generate_image and edit_image tools — call them whenever the "
+                "user wants a picture made or changed; never say you are text-only. Images in this chat are numbered "
+                "#1, #2… (see the [Image #N …] notes). Write tool prompts in English.")
+    if svc.available:
+        return "\n\nThis app creates and edits images for the user automatically when they ask for one."
+    return ("\n\nImage generation is not available on this server. Technical reason: " + svc.unavailable_reason() +
+            " If the user asks for an image, say that and give this reason; do not claim to be text-only.")
+
+
+def build_messages(db: Database, uid: str, cid: str, s_user: dict, model_cfg, upto_id: str | None = None,
+                   extra_system: str = "") -> list[dict]:
     """System prompt + history (newest first until the char budget is used) with attachments inlined."""
-    system = BASE_SYSTEM + (("\n\n" + s_user["system_prompt"]) if s_user.get("system_prompt") else "")
+    system = BASE_SYSTEM + extra_system + (("\n\n" + s_user["system_prompt"]) if s_user.get("system_prompt") else "")
     rows = db.all("SELECT * FROM messages WHERE conversation_id = ? AND user_id = ? AND status != 'error' ORDER BY created_at",
                   (cid, uid))
     if upto_id:
         idx = next(i for i, r in enumerate(rows) if r["id"] == upto_id)
         rows = rows[: idx + 1]
+    numbers = {im["id"]: im["n"] for im in conversation_images(db, uid, cid)}
     out, used = [], len(system)
     for r in reversed(rows):
         content = r["content"]
         atts = json.loads(r["attachments"])
         images = []
         for a in atts:
+            if a.get("generated"):
+                content += f"\n[Image #{numbers.get(a['id'], '?')} generated ({a.get('width')}×{a.get('height')}): " \
+                           f"{(a.get('meta') or {}).get('scene') or (a.get('meta') or {}).get('prompt', '')}]"
+                continue
             f = db.one("SELECT * FROM files WHERE id = ? AND user_id = ?", (a["id"], uid))
             if not f:
                 continue
             if f["kind"] == "image":
                 images.append(f)
+                content += f"\n[Image #{numbers.get(f['id'], '?')} attached by the user: {f['name']}]"
             elif f["text"]:
                 content += f"\n\n<attached_file name=\"{f['name']}\">\n{f['text']}\n</attached_file>"
         if used + len(content) > model_cfg.context_chars and out:
@@ -69,36 +107,201 @@ def build_messages(db: Database, uid: str, cid: str, s_user: dict, model_cfg, up
     return [{"role": "system", "content": system}] + out[::-1]
 
 
-def _stream(db: Database, s: Settings, uid: str, cid: str, model_id: str, user_msg: dict | None, s_user: dict, upto_id: str | None):
+def _resolve_source(ref: str, explicit: str | None, attached: list[str], ctx: list[dict]) -> str | None:
+    known = {c["id"] for c in ctx}
+    if explicit:                       # ownership already checked in send()
+        return explicit
+    if ref == "attached" and attached:
+        return attached[-1]
+    if ref.startswith("#") and ref[1:].isdigit():
+        k = int(ref[1:])
+        if 1 <= k <= len(ctx):
+            return ctx[k - 1]["id"]
+    if ref in known:
+        return ref
+    if attached:
+        return attached[-1]
+    return ctx[-1]["id"] if ctx else None
+
+
+def _to_request(plan: Plan, opts: dict, source: str | None, ctx: list[dict]) -> ImageRequest:
+    def pick(name, default):
+        v = getattr(plan, name, None)
+        return v if v not in (None, "") else (opts.get(name) if opts.get(name) not in (None, "") else default)
+    scene = next((c["scene"] for c in ctx if c["id"] == source and c["generated"]), "")
+    return ImageRequest(op=plan.op, prompt=plan.prompt, negative_prompt=pick("negative_prompt", ""), style=pick("style", "none"),
+                        aspect_ratio=pick("aspect_ratio", "1:1"), resolution=pick("resolution", 512), seed=pick("seed", None),
+                        n=pick("n", 1), output_format=pick("output_format", "png"), strength=opts.get("strength") or 0.6,
+                        source_id=source if plan.op != "generate" else None, mask_id=opts.get("mask_id"),
+                        background=plan.background, context_prompt=scene)
+
+
+def _caption(req: ImageRequest, atts: list[dict], notes: list[str]) -> str:
+    n = len(atts)
+    what = {"generate": (f"Here's your image of **{req.prompt}**." if n == 1 else f"Here are {n} images of **{req.prompt}**."),
+            "edit": "Here's the edited image.", "variations": f"Here {'is a variation' if n == 1 else f'are {n} variations'}.",
+            "style": f"Here it is in **{req.style.replace('-', ' ')}** style.", "inpaint": "Here's the image with the painted area changed.",
+            "remove_object": f"Removed **{req.prompt or 'the object'}**.", "remove_background": "Background removed.",
+            "replace_background": f"Background replaced with **{req.background or req.prompt}**."}[req.op]
+    a = atts[0]["meta"]
+    detail = f"{a['provider']} · {a['model'].split('/')[-1]} · {atts[0]['width']}×{atts[0]['height']}"
+    if a.get("seed") is not None:
+        detail += f" · seed {a['seed']}" + ("…" if n > 1 else "")
+    lines = [what, "", f"_{detail}_"]
+    lines += [f"- {x}" for x in notes]
+    lines += ["", "Ask for changes in your own words (for example “make it night time”), or use the buttons on the image."]
+    return "\n".join(lines)
+
+
+def _stream(request: Request, db: Database, s: Settings, uid: str, cid: str, model_id: str, user_msg: dict | None,
+            s_user: dict, upto_id: str | None, opts: dict, user_text: str, attached: list[str]):
+    svc: ImageService = request.app.state.images
     cfg = s.model(model_id)
     provider = provider_for(cfg, s.echo_delay_s)
-    msgs = build_messages(db, uid, cid, s_user, cfg, upto_id)          # history first, then the placeholder row
+    mode = s.image_router if s.image_router in ("auto", "rules", "llm") else "auto"
+    tools_on = bool(cfg.tools) and mode != "rules" and cfg.provider == "openai"
+    msgs = build_messages(db, uid, cid, s_user, cfg, upto_id, image_system(svc, tools_on))
+    ctx = conversation_images(db, uid, cid)
+    rows = db.all("SELECT role, attachments FROM messages WHERE conversation_id = ? AND user_id = ? ORDER BY created_at", (cid, uid))
+    prev_assist = next((r for r in reversed(rows[:-1]) if r["role"] == "assistant"), None)
+    last_reply_has_image = bool(prev_assist and any(a.get("kind") == "image" for a in json.loads(prev_assist["attachments"])))
     aid, t = new_id("msg"), now()
     db.run("INSERT INTO messages (id, conversation_id, user_id, role, content, model, status, created_at) "
            "VALUES (?,?,?,?,?,?,?,?)", (aid, cid, uid, "assistant", "", model_id, "streaming", t + 0.001))
+    temperature = float(s_user.get("temperature", 0.7))
 
     async def gen():
-        text, status = "", "streaming"
+        text, status, out_atts, meta = "", "streaming", [], {}
         yield sse("meta", {"user_message": user_msg, "assistant_message": {"id": aid, "model": model_id}})
         try:
-            async for delta in provider.stream(msgs, float(s_user.get("temperature", 0.7))):
-                text += delta
-                yield sse("delta", {"text": delta})
+            plan: Plan | None = None
+            llm_answered = False
+            tool_call = None
+            if opts.get("op"):
+                plan = Plan(op=opts["op"], prompt=(clean_prompt(user_text) if opts["op"] == "generate" else clean_edit(user_text)),
+                            image_ref="attached" if attached else "latest", via="ui")
+                if opts["op"] in ("remove_background", "variations"):
+                    plan.prompt = ""
+                if opts["op"] == "replace_background":
+                    plan.background = plan.prompt
+            elif mode != "llm":
+                plan = detect(user_text, attached_image=bool(attached or opts.get("source_id")), has_images=bool(ctx),
+                              last_reply_has_image=last_reply_has_image)
+                if plan:
+                    for k in ("style", "aspect_ratio", "n", "seed", "negative_prompt", "output_format", "resolution"):
+                        if getattr(plan, k) is None and opts.get(k) is not None:
+                            setattr(plan, k, opts[k])
+            if plan is None and tools_on and svc.available:
+                try:
+                    async for kind, val in provider.events(msgs, temperature, TOOLS):
+                        if kind == "text":
+                            text += val
+                            yield sse("delta", {"text": val})
+                        elif kind == "tool_calls":
+                            for c in val:
+                                try:
+                                    args = json.loads(c["arguments"] or "{}")
+                                except json.JSONDecodeError:
+                                    continue
+                                p = plan_from_tool(c["name"], args if isinstance(args, dict) else {})
+                                if p:
+                                    plan, tool_call = p, c
+                                    break
+                    llm_answered = True
+                except ProviderError as e:
+                    if e.code != "tools_unsupported":
+                        raise
+                    log.info("model %s rejected tools; using rules", model_id)
+                    plan = detect(user_text, attached_image=bool(attached), has_images=bool(ctx), last_reply_has_image=last_reply_has_image)
+
+            if plan and plan.clarify:
+                text += plan.clarify
+                yield sse("delta", {"text": plan.clarify})
+            elif plan and not svc.available:
+                msg = ("I can't make or edit images on this server right now. Technical reason: " + svc.unavailable_reason())
+                text += msg
+                yield sse("delta", {"text": msg})
+            elif plan:
+                source = _resolve_source(plan.image_ref, opts.get("source_id"), attached, ctx)
+                req = _to_request(plan, opts, source, ctx)
+                tname = TOOL_NAME.get(req.op, "edit_image")
+                args = {"op": req.op, "prompt": req.prompt, "style": req.style, "aspect_ratio": req.aspect_ratio,
+                        "n": req.n, "seed": req.seed, "source_id": req.source_id, "mask": bool(req.mask_id), "via": plan.via}
+                meta["tool"] = {"name": tname, "args": args}
+                yield sse("tool", {"name": tname, "op": req.op, "status": "running", "args": args})
+                q: asyncio.Queue = asyncio.Queue()
+                task = asyncio.create_task(svc.run(uid, cid, req, lambda f, s_: q.put_nowait((f, s_)), user_text))
+                try:
+                    while not task.done():
+                        try:
+                            f, s_ = await asyncio.wait_for(q.get(), timeout=0.5)
+                            yield sse("progress", {"fraction": round(max(0.0, min(1.0, f)), 3), "text": s_})
+                        except asyncio.TimeoutError:
+                            pass
+                    out_atts, notes = task.result()
+                except BaseException:
+                    task.cancel()
+                    raise
+                for a in out_atts:
+                    yield sse("image", {"attachment": a})
+                db.run("UPDATE messages SET attachments = ? WHERE id = ? AND user_id = ?", (json.dumps(out_atts), aid, uid))
+                yield sse("tool", {"name": tname, "op": req.op, "status": "done", "images": [a["id"] for a in out_atts]})
+                caption = None
+                if tool_call and llm_answered:
+                    caption = await _follow_up(provider, msgs, tool_call, out_atts, notes, ctx, temperature)
+                caption = caption or _caption(req, out_atts, notes)
+                sep = "\n\n" if text else ""
+                text += sep + caption
+                yield sse("delta", {"text": sep + caption})
+            elif not llm_answered:
+                async for delta in provider.stream(msgs, temperature):
+                    text += delta
+                    yield sse("delta", {"text": delta})
             status = "complete"
             title = _maybe_title(db, uid, cid)
             yield sse("done", {"status": status, "title": title, "message_id": aid})
-        except ProviderError as e:
+        except SafetyBlocked as e:
+            msg = f"{e} I can make something else — try a different idea."
+            text += ("\n\n" if text else "") + msg
+            yield sse("delta", {"text": msg})
+            if meta.get("tool"):
+                yield sse("tool", {"name": meta["tool"]["name"], "status": "failed", "code": "safety"})
+            status = "complete"
+            yield sse("done", {"status": status, "title": _maybe_title(db, uid, cid), "message_id": aid})
+        except (ProviderError, ImageError) as e:
             status = "error"
+            if meta.get("tool"):
+                yield sse("tool", {"name": meta["tool"]["name"], "status": "failed", "code": e.code})
             db.run("UPDATE messages SET error = ? WHERE id = ?", (str(e), aid))
             yield sse("error", {"code": e.code, "message": str(e), "retryable": e.retryable, "message_id": aid})
         finally:
             if status == "streaming":
                 status = "stopped"                                   # client went away mid-stream
-            db.run("UPDATE messages SET content = ?, status = ? WHERE id = ? AND user_id = ?", (text, status, aid, uid))
+            db.run("UPDATE messages SET content = ?, status = ?, meta = ? WHERE id = ? AND user_id = ?",
+                   (text, status, json.dumps(meta), aid, uid))
             db.run("UPDATE conversations SET updated_at = ? WHERE id = ? AND user_id = ?", (now(), cid, uid))
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _follow_up(provider, msgs, call, atts, notes, ctx, temperature) -> str | None:
+    """Give the tool result back to the chat model so it can describe what it made, in the user's language."""
+    base_n = len(ctx)
+    result = {"ok": True, "images": [{"ref": f"#{base_n + i + 1}", "width": a["width"], "height": a["height"],
+                                      "provider": a["meta"]["provider"], "seed": a["meta"].get("seed")} for i, a in enumerate(atts)],
+              "notes": notes, "shown_to_user": True}
+    convo = msgs + [{"role": "assistant", "content": None, "tool_calls": [
+        {"id": call.get("id") or "call_1", "type": "function", "function": {"name": call["name"], "arguments": call["arguments"] or "{}"}}]},
+        {"role": "tool", "tool_call_id": call.get("id") or "call_1", "content": json.dumps(result)}]
+    try:
+        out = ""
+        async for kind, val in provider.events(convo, temperature):
+            if kind == "text":
+                out += val
+        return out.strip() or None
+    except ProviderError:
+        return None
 
 
 def _maybe_title(db: Database, uid: str, cid: str) -> str | None:
@@ -114,32 +317,40 @@ def _maybe_title(db: Database, uid: str, cid: str) -> str | None:
 
 
 @router.post("/{cid}/messages")
-def send(cid: str, body: MessageIn, user: dict = Depends(current_user), db: Database = Depends(get_db),
+def send(cid: str, body: MessageIn, request: Request, user: dict = Depends(current_user), db: Database = Depends(get_db),
          s: Settings = Depends(get_settings)):
     conv = owned(db, cid, user["id"])
     model_id = body.model or conv["model"]
     cfg = s.model(model_id)
     if not cfg:
         raise HTTPException(400, "Unknown model.")
+    svc: ImageService = request.app.state.images
     atts = []
     for fid in dict.fromkeys(body.file_ids):
         f = db.one("SELECT id, name, mime, size, kind FROM files WHERE id = ? AND user_id = ?", (fid, user["id"]))
         if not f:
             raise HTTPException(400, "An attached file was not found. Remove it and try again.")
-        if f["kind"] == "image" and not cfg.vision:
+        if f["kind"] == "image" and not cfg.vision and not svc.available:
             raise HTTPException(400, f"“{cfg.label}” can't read images. Choose a vision model or remove the image.")
         atts.append(f)
+    opts = body.image.model_dump(exclude_none=True) if body.image else {}
+    for key in ("source_id", "mask_id"):
+        if opts.get(key) and not db.one("SELECT id FROM files WHERE id = ? AND user_id = ? AND kind = 'image'", (opts[key], user["id"])):
+            raise HTTPException(400, "The image to edit was not found.")
     if model_id != conv["model"]:
         db.run("UPDATE conversations SET model = ? WHERE id = ? AND user_id = ?", (model_id, cid, user["id"]))
     mid = new_id("msg")
-    db.run("INSERT INTO messages (id, conversation_id, user_id, role, content, model, status, attachments, created_at) "
-           "VALUES (?,?,?,?,?,?,?,?,?)", (mid, cid, user["id"], "user", body.content, None, "complete", json.dumps(atts), now()))
+    db.run("INSERT INTO messages (id, conversation_id, user_id, role, content, model, status, attachments, created_at, meta) "
+           "VALUES (?,?,?,?,?,?,?,?,?,?)", (mid, cid, user["id"], "user", body.content, None, "complete", json.dumps(atts), now(),
+                                            json.dumps({"image": opts} if opts else {})))
     user_msg = msg_out(db.one("SELECT * FROM messages WHERE id = ?", (mid,)))
-    return _stream(db, s, user["id"], cid, model_id, user_msg, user_settings(db, user["id"]), None)
+    attached = [a["id"] for a in atts if a["kind"] == "image"]
+    return _stream(request, db, s, user["id"], cid, model_id, user_msg, user_settings(db, user["id"]), None, opts, body.content, attached)
 
 
 @router.post("/{cid}/regenerate")
-def regenerate(cid: str, user: dict = Depends(current_user), db: Database = Depends(get_db), s: Settings = Depends(get_settings)):
+def regenerate(cid: str, request: Request, user: dict = Depends(current_user), db: Database = Depends(get_db),
+               s: Settings = Depends(get_settings)):
     """Replace the last assistant reply (or answer an unanswered/failed last user message)."""
     conv = owned(db, cid, user["id"])
     rows = db.all("SELECT id, role FROM messages WHERE conversation_id = ? AND user_id = ? ORDER BY created_at", (cid, user["id"]))
@@ -149,4 +360,9 @@ def regenerate(cid: str, user: dict = Depends(current_user), db: Database = Depe
         raise HTTPException(400, "Nothing to regenerate.")
     if not s.model(conv["model"]):
         raise HTTPException(400, "Unknown model.")
-    return _stream(db, s, user["id"], cid, conv["model"], None, user_settings(db, user["id"]), rows[-1]["id"])
+    last = db.one("SELECT * FROM messages WHERE id = ?", (rows[-1]["id"],))
+    opts = dict(json.loads(last.get("meta") or "{}").get("image") or {})
+    opts.pop("seed", None)                                  # a regenerate should give a new picture
+    attached = [a["id"] for a in json.loads(last["attachments"]) if a.get("kind") == "image"]
+    return _stream(request, db, s, user["id"], cid, conv["model"], None, user_settings(db, user["id"]), rows[-1]["id"],
+                   opts, last["content"], attached)
