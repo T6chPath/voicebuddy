@@ -111,7 +111,7 @@ function Workspace() {
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConfirmDialog open={!!toDelete} title="Delete conversation?" confirmLabel="Delete"
                      body={`“${toDelete?.title ?? ""}” and its messages will be permanently deleted.`}
-                     onConfirm={() => toDelete && remove(toDelete)} onClose={() => setToDelete(null)} />
+                     onConfirm={() => (toDelete ? remove(toDelete) : undefined)} onClose={() => setToDelete(null)} />
     </div>
   );
 }

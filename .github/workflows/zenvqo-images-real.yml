@@ -47,7 +47,7 @@ jobs:
         working-directory: frontend
         run: |
           npm install --no-audit --no-fund
-          npx tsc --noEmit
+          npx tsc --noEmit --pretty false > tsc.log || { sed 's/^/::error ::/' tsc.log; exit 1; }
           node scripts/build-offline.mjs
           node --import tsx --test src/api/*.test.ts src/lib/*.test.ts
 
