@@ -1,6 +1,8 @@
 """Math rendering (KaTeX) in the real browser: standalone app (as in the APK) and the server app, desktop and phone."""
 from pathlib import Path
 
+import pytest
+from conftest import start_server
 from playwright.sync_api import expect
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +61,7 @@ def test_standalone_math_phone_dark(browser):
     ctx.close()
 
 
-def test_server_app_renders_math(page, server):
+def test_server_app_renders_math(page):
     page.goto("/")
     page.get_by_role("button", name="Create an account").click()
     page.get_by_label("Name").fill("Asha")
@@ -70,3 +72,22 @@ def test_server_app_renders_math(page, server):
     reply = ask(page, "explain an equation for me")
     check_math(page, reply)
     assert page.errors == []
+
+
+@pytest.fixture(scope="module")
+def own_server(tmp_path_factory):
+    """A server of its own: the shared one allows only 10 sign-ups per 10 minutes (the login rate limit)."""
+    base, proc = start_server(tmp_path_factory)
+    yield base
+    proc.terminate()
+    proc.wait(10)
+
+
+@pytest.fixture
+def page(browser, own_server):
+    ctx = browser.new_context(base_url=own_server, viewport={"width": 1280, "height": 800})
+    pg = ctx.new_page()
+    pg.errors = []
+    pg.on("pageerror", lambda e: pg.errors.append(str(e)))
+    yield pg
+    ctx.close()

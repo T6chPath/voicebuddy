@@ -20,7 +20,7 @@ export function speakable(text: string): string {
   let t = text || "";
   // formulas are read in words ("x squared plus y squared"), not as LaTeX source
   t = t.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g, (_, a, b, c) => ` ${texToSpeech(a || b || c)} `)
-    .replace(/(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)/g, (m, pre, tex) => (/^\d+([.,]\d+)?$/.test(tex) ? m : `${pre}${texToSpeech(tex)}`));
+    .replace(/(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)/g, (_, pre, tex) => `${pre}${texToSpeech(tex)}`);
   for (const [rx, rep] of MD) t = t.replace(rx, rep);
   t = t.replace(EMOJI, "").replace(/₹\s?([\d,]+(?:\.\d+)?)/g, "$1 rupees").replace(/₹/g, " rupees ").replace(/&/g, " and ").replace(/%/g, " percent");
   return t.split("\n").map((l) => l.split(/\s+/).filter(Boolean).join(" ")).filter((l) => l.replace(/[ ,]/g, "")).join("\n");

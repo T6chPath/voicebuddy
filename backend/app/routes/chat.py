@@ -39,7 +39,8 @@ from .conversations import msg_out, owned
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
 log = logging.getLogger("zenvqo.chat")
 BASE_SYSTEM = ("You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). "
-               "Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines.")
+               "Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. "
+               "When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs.")
 TOOL_NAME = {"generate": "generate_image"}
 
 

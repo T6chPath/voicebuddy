@@ -365,3 +365,14 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .md .katex-error { font-family: var(--mono); font-size: .9em; }
 .md table .katex { font-size: 1em; }
 .md .math-source { font-family: var(--mono); font-size: .9em; color: var(--text-soft); background: var(--bg-soft); padding: 0 .3em; border-radius: 4px; }
+
+/* ---------------- PDF ---------------- */
+.pdf-card { display: flex; align-items: center; gap: 12px; margin: 10px 0 4px; padding: 10px 12px; max-width: 520px; border-radius: 12px;
+  border: 1px solid var(--border-strong); background: var(--bg-elev); }
+.pdf-card .pdf-icon { width: 40px; height: 48px; border-radius: 6px; display: grid; place-items: center; flex: none; color: #fff; background: #dc2626; }
+.pdf-card.making .pdf-icon { animation: orb-pulse 1.2s ease-in-out infinite; }
+.pdf-card.error .pdf-icon { background: var(--muted); }
+.pdf-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pdf-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-actions { display: flex; gap: 6px; flex: none; }
+@media (max-width: 520px) { .pdf-card { flex-wrap: wrap; } .pdf-info { flex-basis: calc(100% - 56px); } .pdf-actions { margin-left: 52px; } }

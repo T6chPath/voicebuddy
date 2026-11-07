@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
     private NativeNet net;
     private NativeTTS speech;
     private NativeASR ears;
+    private NativePDF pdf;
     private ValueCallback<Uri[]> pendingFiles;
 
     @Override
@@ -62,6 +63,8 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(speech, "ZenvqoTTS");      // read replies aloud with the phone's TTS engine
         ears = new NativeASR(this, web);
         web.addJavascriptInterface(ears, "ZenvqoASR");        // voice input with the phone's speech recognizer
+        pdf = new NativePDF(this, web);
+        web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
 
         web.setWebViewClient(new WebViewClient() {
             @Override

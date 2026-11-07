@@ -61,7 +61,7 @@ export function extractMath(src: string): { text: string; blocks: MathBlock[] } 
     t = t.replace(/\\\[((?:(?!\n\s*\n)[\s\S])+?)\\\]/g, (_, tex) => keep(tex, true));
     t = t.replace(/\\\(([\s\S]+?)\\\)/g, (_, tex) => keep(tex, false));
     // $…$ inline: no space just inside the dollars, no digit right after the closing one, one line only
-    t = t.replace(/(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)/g, (m, pre, tex) => (/^\d+([.,]\d+)?$/.test(tex) ? m : pre + keep(tex, false)));
+    t = t.replace(/(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)/g, (_, pre, tex) => pre + keep(tex, false));
     out += t.replace(/ZQDOLLARZQ/g, "\\$");
   }
   return { text: out, blocks };

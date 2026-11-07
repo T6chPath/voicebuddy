@@ -310,7 +310,7 @@ export interface StreamHandlers {
   onError?: (e: ApiError) => void;
 }
 
-const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines.";
+const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs.";
 type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
@@ -335,6 +335,32 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
 
 const DATE_Q = /\b(date|day|today|time|year|month|tarikh|tareekh|din|samay|kitne baje|aaj)\b|तारीख|दिन|समय|आज|कितने बजे/i;
 
+/** Demo content for "make a PDF of …" so the PDF feature can be tried without a real AI. */
+function demoDocument(q: string): string {
+  if (/quiz|question|mcq|test/i.test(q)) {
+    const n = Math.min(30, Math.max(1, Number(q.match(/\b(\d{1,2})\b/)?.[1] || 10)));
+    const items = [
+      ["What is the SI unit of force?", ["Joule", "Newton", "Watt", "Pascal"], 1],
+      ["Which planet is known as the Red Planet?", ["Venus", "Jupiter", "Mars", "Mercury"], 2],
+      ["What is $\\frac{3}{4} + \\frac{1}{4}$?", ["$1$", "$\\frac{1}{2}$", "$\\frac{4}{8}$", "$2$"], 0],
+      ["भारत की राजधानी क्या है?", ["मुंबई", "नई दिल्ली", "कोलकाता", "चेन्नई"], 1],
+      ["Water boils at sea level at:", ["90 °C", "100 °C", "110 °C", "120 °C"], 1],
+      ["Solve for $x$: $2x + 6 = 14$", ["$x = 3$", "$x = 4$", "$x = 5$", "$x = 10$"], 1],
+    ] as const;
+    let out = `# Practice Quiz (${n} questions)\n\n_Demo questions from the offline demo — connect a real AI for questions on your topic._\n\n`;
+    for (let i = 0; i < n; i++) {
+      const [qq, opts] = items[i % items.length];
+      out += `${i + 1}. ${qq}\n${opts.map((o, j) => `   - (${"abcd"[j]}) ${o}`).join("\n")}\n`;
+    }
+    out += "\n## Answer key\n\n" + Array.from({ length: n }, (_, i) => `${i + 1}. (${"abcd"[items[i % items.length][2]]})`).join(" · ") + "\n\n";
+    return out;
+  }
+  return "# A Paragraph on Artificial Intelligence\n\nArtificial intelligence (AI) is the ability of computers to learn from data and solve problems that once needed human thinking. " +
+    "It helps doctors read scans, farmers predict rain, and students practise with instant feedback. A simple idea behind many AI systems is fitting a function: " +
+    "given examples $(x_i, y_i)$, the model chooses parameters that make the error $\\sum_i (y_i - \\hat{y}_i)^2$ as small as possible. " +
+    "आज AI हमारे फ़ोन, बैंक और स्कूलों में हर जगह है, इसलिए इसे समझदारी से इस्तेमाल करना ज़रूरी है।\n\n";
+}
+
 async function* echoStream(messages: ChatMsg[], temperature: number, signal: AbortSignal): AsyncGenerator<string> {
   const last = messages[messages.length - 1].content;
   const text = typeof last === "string" ? last : last.map((p) => p.text || "").join(" ");
@@ -350,14 +376,15 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
   }
   if (files) reply += `I can see ${files} attached file(s). First line: \`${(text.split("<attached_file")[1]?.split(">")[1] || "").trim().split("\n")[0].slice(0, 80).replace(/`/g, "'")}\`\n\n`;
   if (/code/i.test(q)) reply += "Here's how code looks:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";
-  if (/math|equation|formula|ganit/i.test(q)) reply += "Here's how math looks — inline $E = mc^2$ and $a^2 + b^2 = c^2$, and displayed:\n\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n";
+  if (/\bpdf\b/i.test(q)) reply += demoDocument(q);
+  if (/math|equation|formula|ganit/i.test(q) && !/\bpdf\b/i.test(q)) reply += "Here's how math looks — inline $E = mc^2$ and $a^2 + b^2 = c^2$, and displayed:\n\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n";
   if (/table/i.test(q)) reply += "| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n";
   reply += `(_demo · ${messages.length - 2} earlier message(s) in context · temperature ${temperature}_)`;
   const toks = reply.match(/[^\s]*\s*/g)!.filter(Boolean);
   for (const [i, t] of toks.entries()) {
     if (signal.aborted) return;
     if (q.includes("[fail]") && i === 6) throw new ApiError(502, "The demo model failed on purpose ([fail] in your message).", undefined, "demo_failure");
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, toks.length > 300 ? 3 : 20));   // long demo replies stream faster
     yield t;
   }
 }

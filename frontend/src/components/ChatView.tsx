@@ -12,6 +12,8 @@ import { speech } from "../speech/player";
 import { loadServerVoices } from "../speech/setup";
 import { voice } from "../voice/session";
 import { MicIndicator, VoicePanel } from "./VoiceViews";
+import { canSaveFile, wantsPdf } from "../pdf/pdf";
+import { pdfStore } from "../pdf/store";
 
 interface Props {
   conversationId: string | null;
@@ -59,6 +61,16 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     if (m.content && voiceOn) voice.replyToken();
     speech.feed(m.id, m.content, m.status !== "streaming");
     if (m.status !== "streaming" && voiceOn) voice.replyFinished();
+  }, [messages]);
+  // "make a PDF of …": when that reply is complete, turn it into a PDF (Android app: saved straight to Downloads;
+  // browsers: a card with "Save PDF", which opens the print window — browsers only allow that after a tap)
+  useEffect(() => {
+    const m = messages[messages.length - 1];
+    if (!m || m.role !== "assistant" || m.status !== "complete" || !m.content || !liveReplies.current.has(m.id) || pdfStore.get(m.id)) return;
+    const req = [...messages].reverse().find((x) => x.role === "user")?.content || "";
+    if (!wantsPdf(req)) return;
+    if (canSaveFile()) void pdfStore.make(m.id, m.content, req);
+    else pdfStore.offer(m.id, m.content, req);
   }, [messages]);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -351,6 +363,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           )}
           {loadState === "idle" && messages.map((m, i) => (
             <MessageView key={m.id} m={m} isLast={i === messages.length - 1} busy={busy} models={models}
+                         request={m.role === "assistant" ? [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content : undefined}
                          showTime={settings.show_timestamps} onRegenerate={regenerate}
                          onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf} />
           ))}

@@ -97,7 +97,13 @@ class EchoProvider:
             parts.append(f"I can see {n_files} attached file(s). First line: `{_first_line(last)}`\n\n")
         if "code" in question.lower():
             parts.append("Here's an example:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n")
-        if any(w in question.lower() for w in ("math", "equation", "formula", "maths", "ganit")):
+        if "pdf" in question.lower():
+            n = min(30, max(1, int(next(iter(__import__("re").findall(r"\b(\d{1,2})\b", question)), 10))))
+            qs = ["What is the SI unit of force? (a) Joule (b) Newton (c) Watt (d) Pascal",
+                  "Solve for $x$: $2x + 6 = 14$. (a) $3$ (b) $4$ (c) $5$ (d) $10$",
+                  "भारत की राजधानी क्या है? (a) मुंबई (b) नई दिल्ली (c) कोलकाता (d) चेन्नई"]
+            parts.append(f"# Practice Quiz ({n} questions)\n\n" + "\n".join(f"{i + 1}. {qs[i % 3]}" for i in range(n)) + "\n\n")
+        elif any(w in question.lower() for w in ("math", "equation", "formula", "maths", "ganit")):
             parts.append("Inline math looks like $E = mc^2$ or $a^2 + b^2 = c^2$, and a displayed equation like this:\n\n"
                          "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n"
                          "$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n")

@@ -126,6 +126,20 @@ All endpoints are under `/api`.
 | POST | `/images` `{op, prompt, style?, aspect_ratio?, n?, seed?, source_id?, mask_id?, …}` | runs one image job outside chat; `{images, notes}` |
 | GET | `/files/{id}?download=1` | the same file as a download instead of inline |
 
+## PDF files
+
+Ask for one — "generate a PDF of 30 quiz questions on physics", "make a paragraph on pollution as a PDF", "isko PDF me
+bana do" — and the assistant writes the content and the app turns that reply into a PDF. Any reply can also be saved with
+the **Save as PDF** button.
+- **Android app**: the PDF is rendered by Android's own print engine in an off-screen WebView and saved straight to
+  **Downloads/zenvqo** (Android 10+, no storage permission), with **Open** and **Share**. On Android 7–9 the system print
+  screen opens with "Save as PDF".
+- **Browsers**: a card offers **Save PDF**, which opens the browser's print window with the document ready ("Save as PDF").
+- **The file**: A4, title and date header, page numbers, the reply exactly as rendered — typeset math, tables, code,
+  Hindi — without the app's buttons or the chat around it ("Sure, here's your quiz…"). Text stays selectable/searchable.
+- The chat models are told that the app makes the PDF, so they write a complete document with a `#` title instead of
+  saying they can't create files.
+
 ## Math
 
 Replies typeset LaTeX with **KaTeX** (MIT, offline — fonts are bundled, nothing loads from the internet):
