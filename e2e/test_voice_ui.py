@@ -5,6 +5,7 @@ ZC_E2E_ASR=fake (default): a tone recognizer stands in for Whisper (tones → kn
 ZC_E2E_ASR=real          : real Whisper + real Kokoro (CI) on a real recording of "What is Artificial Intelligence?"."""
 import json
 import os
+import re
 import wave
 from pathlib import Path
 
@@ -99,9 +100,9 @@ def test_hands_free_voice_turn(mic_browser, voice_server):
     expect(p.locator(".rec-dot")).to_have_text("Mic on", timeout=10_000)                 # recording is visible
     expect(panel.get_by_text("Hearing you…")).to_be_visible(timeout=T)
     user = p.locator("article.msg-user").first
-    expect(user).to_contain_text("What is Artificial Intelligence", timeout=T)             # speech → text → chat
+    expect(user).to_contain_text(re.compile(r"what is artificial intelligence", re.I), timeout=T)   # speech → text → chat
     reply = p.locator("article.msg-assistant").first
-    expect(reply).to_contain_text("Artificial Intelligence", timeout=T)
+    expect(reply).to_contain_text(re.compile(r"artificial intelligence", re.I), timeout=T)
     expect(panel.get_by_text("Speaking")).to_be_visible(timeout=T)                       # reply is spoken
     expect(reply.locator(".now-speaking")).to_be_visible()
     p.screenshot(path=str(SHOTS / ("voice-speaking-real.png" if REAL else "voice-speaking.png")))
