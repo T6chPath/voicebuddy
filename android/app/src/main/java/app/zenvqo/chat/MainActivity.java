@@ -68,7 +68,6 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(ears, "ZenvqoASR");        // voice input with the phone's speech recognizer
         pdf = new NativePDF(this, web);
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
-        web.postDelayed(pdf::prewarm, 1500);                  // renderer ready before the first PDF is asked for
 
         web.setWebViewClient(new WebViewClient() {
             @Override

@@ -9,12 +9,15 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.print.PdfPrint;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -51,29 +54,37 @@ final class NativePDF {
         this.web = web;
     }
 
-    /** One off-screen WebView, created ahead of time, so a PDF doesn't wait for a renderer to start. */
-    private WebView spare;
+    // The renderer is never attached to the screen, and Android holds View.post/postDelayed tasks of a detached view
+    // until it is attached — i.e. forever. All timing therefore goes through a main-thread Handler.
+    private final Handler main = new Handler(Looper.getMainLooper());
 
-    /** Create the renderer in the background shortly after startup (called from MainActivity). */
-    void prewarm() {
-        activity.runOnUiThread(() -> { if (spare == null) spare = newRenderer(); });
-    }
+    private final java.util.List<WebView> printing = new java.util.ArrayList<>();
 
     private WebView newRenderer() {
         WebView w = new WebView(activity);
         w.getSettings().setJavaScriptEnabled(false);              // the document is static HTML
         w.getSettings().setAllowFileAccess(false);
         w.getSettings().setAllowContentAccess(false);
-        w.loadDataWithBaseURL("https://zenvqo.local/", "<!DOCTYPE html><html><body></body></html>", "text/html", "utf-8", null);
+        // give the detached view a page-sized box so layout happens as it would on screen
+        int width = 1240, height = 1754;
+        w.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                  View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        w.layout(0, 0, width, height);
         return w;
     }
 
     @JavascriptInterface
     public void save(final String id, final String html, final String fileName) {
         final String name = fileName.endsWith(".pdf") ? fileName : fileName + ".pdf";
+        Log.i(TAG, "PDF " + id + ": " + html.length() + " chars → " + name);
         activity.runOnUiThread(() -> {
-            WebView w = spare != null ? spare : newRenderer();
-            spare = null;
+            final WebView w;
+            try {
+                w = newRenderer();
+            } catch (Throwable t) {
+                fail(id, "This phone's PDF engine failed (" + t.getClass().getSimpleName() + ").", t);
+                return;
+            }
             rendering.put(id, w);
             w.setWebViewClient(new WebViewClient() {
                 private boolean started;
@@ -82,13 +93,18 @@ final class NativePDF {
                 public void onPageFinished(WebView view, String url) {
                     if (started) return;
                     started = true;
-                    view.postDelayed(() -> print(id, view, name), 60);   // one frame for layout; fonts are inline
+                    Log.i(TAG, "PDF " + id + ": page loaded");
+                    main.postDelayed(() -> print(id, view, name), 60);   // one frame for layout; fonts are inline
                 }
             });
             w.loadDataWithBaseURL("https://zenvqo.local/", html, "text/html", "utf-8", null);
             // never leave the page waiting: if the engine doesn't answer, say so
-            w.postDelayed(() -> {
-                if (rendering.remove(id) != null) fail(id, "Creating the PDF took too long. Try again.", null);
+            main.postDelayed(() -> {
+                WebView stuck = rendering.remove(id);
+                if (stuck != null) {
+                    fail(id, "Creating the PDF took too long. Try again.", null);
+                    stuck.destroy();
+                }
             }, 30_000);
         });
     }
@@ -117,15 +133,14 @@ final class NativePDF {
         if (Build.VERSION.SDK_INT < 29) {
             PrintManager pm = (PrintManager) activity.getSystemService(Context.PRINT_SERVICE);
             pm.print(name, adapter, attrs);
-            rendering.remove(id);
+            printing.add(rendering.remove(id));                     // the print screen still uses this view
             send(id, "dialog", "");
-            prewarm();
             return;
         }
         final File tmp = new File(activity.getCacheDir(), "pdf/" + id + ".pdf");
         PdfPrint.write(adapter, attrs, tmp, error -> {
-            rendering.remove(id);
-            prewarm();
+            WebView done = rendering.remove(id);
+            if (done != null) main.post(done::destroy);
             if (error != null) {
                 fail(id, error, null);
                 return;
