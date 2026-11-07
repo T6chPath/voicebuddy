@@ -296,7 +296,7 @@ class LocalProvider:
     def _op_variations(self, req, inp, prog, cancel):
         return self._i2i_many(req, inp.source, self._with_context(req), min(req.strength, 0.5), prog, cancel, "Variation")
 
-    def _masked(self, req, inp, prompt, prog, cancel, label) -> list[Produced]:
+    def _masked(self, req, inp, prompt, prog, cancel, label, strength: float) -> list[Produced]:
         import cv2
         src = inp.source
         grow = max(9, int(min(src.size) * 0.04)) | 1                 # people paint slightly inside the edge: grow ~4%
@@ -304,16 +304,13 @@ class LocalProvider:
         rgb = np.array(src)
         m = np.array(mask)
         filled = cv2.inpaint(rgb, (m > 127).astype(np.uint8) * 255, 7, cv2.INPAINT_TELEA)   # neutral fill first
-        rng = np.random.default_rng(req.seed)
-        noise = rng.normal(0, 28, filled.shape)                       # texture for the model to work from, not a flat smear
-        filled = np.where((m > 127)[..., None], np.clip(filled + noise, 0, 255), filled).astype(np.uint8)
         pre = Image.fromarray(filled)
         w, h = self._work_size(src, min(req.resolution, 768))
         feather = mask.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
         out = []
         for i in range(req.n):
             seed = None if req.seed is None else req.seed + i
-            p = self._i2i_one(pre.resize((w, h), Image.LANCZOS), prompt, req.styled_negative(), max(req.strength, 0.75),
+            p = self._i2i_one(pre.resize((w, h), Image.LANCZOS), prompt, req.styled_negative(), strength,
                               seed, prog, cancel, i / req.n, 1 / req.n, label)
             painted = p.image.resize(src.size, Image.LANCZOS)
             p.image = Image.composite(painted, src, feather)          # outside the mask stays pixel-identical
@@ -324,14 +321,16 @@ class LocalProvider:
     def _op_inpaint(self, req, inp, prog, cancel):
         if inp.mask is None:
             raise ImageError("Paint the area to change first (Edit → Mask), then send the instruction.", "mask_required", status=400)
-        return self._masked(req, inp, req.styled_prompt(), prog, cancel, "Inpainting")
+        return self._masked(req, inp, req.styled_prompt(), prog, cancel, "Inpainting", max(req.strength, 0.75))
 
     def _op_remove_object(self, req, inp, prog, cancel):
         if inp.mask is None:
             raise ImageError("The local model needs to know where the object is: tap Edit → Mask, paint over it, "
                              "then say “remove it”.", "mask_required", status=400)
         prompt = "empty background, seamless continuation of the surroundings, nothing there"
-        return self._masked(req, inp, prompt, prog, cancel, "Removing")
+        out = self._masked(req, inp, prompt, prog, cancel, "Removing", 0.5)     # light touch: refine the fill, don't invent
+        out[0].notes.append("Large objects can leave a smooth patch with the local model; for cleaner removal use a hosted provider.")
+        return out
 
     def _cutout(self, src: Image.Image) -> Image.Image:
         from rembg import remove
