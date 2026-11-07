@@ -29,6 +29,7 @@ public final class PdfPrint {
                     cb.done("Couldn't create the file.");
                     return;
                 }
+                try {
                 adapter.onWrite(new PageRange[]{PageRange.ALL_PAGES}, fd, new CancellationSignal(), new PrintDocumentAdapter.WriteResultCallback() {
                     @Override
                     public void onWriteFinished(PageRange[] pages) {
@@ -44,6 +45,10 @@ public final class PdfPrint {
                         cb.done(error == null ? "Writing the PDF failed." : error.toString());
                     }
                 });
+                } catch (Throwable t) {
+                    close(fd);
+                    cb.done("Writing the PDF failed (" + t.getClass().getSimpleName() + ").");
+                }
             }
 
             @Override

@@ -47,6 +47,9 @@ public class MainActivity extends Activity {
         setContentView(root);
         applyInsets(root);
 
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true);   // test builds only: lets the automated phone test drive the page
+        }
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);                       // localStorage (settings) + IndexedDB (chats)

@@ -14,6 +14,7 @@ import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -26,7 +27,9 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Turns a reply into a real PDF. Exposed as window.ZenvqoPDF.
@@ -40,6 +43,8 @@ final class NativePDF {
     private final WebView web;
     private final Map<String, Uri> files = new HashMap<>();
     private final Map<String, WebView> rendering = new HashMap<>();
+    private final Set<String> answered = new HashSet<>();
+    private static final String TAG = "ZenvqoPDF";
 
     NativePDF(Activity activity, WebView web) {
         this.activity = activity;
@@ -81,10 +86,28 @@ final class NativePDF {
                 }
             });
             w.loadDataWithBaseURL("https://zenvqo.local/", html, "text/html", "utf-8", null);
+            // never leave the page waiting: if the engine doesn't answer, say so
+            w.postDelayed(() -> {
+                if (rendering.remove(id) != null) fail(id, "Creating the PDF took too long. Try again.", null);
+            }, 30_000);
         });
     }
 
+    private void fail(String id, String msg, Throwable t) {
+        Log.e(TAG, "PDF " + id + ": " + msg, t);
+        send(id, "error", msg);
+    }
+
     private void print(String id, WebView view, String name) {
+        try {
+            printNow(id, view, name);
+        } catch (Throwable t) {                                    // incl. errors from the print framework on some devices
+            rendering.remove(id);
+            fail(id, "This phone's PDF engine failed (" + t.getClass().getSimpleName() + ").", t);
+        }
+    }
+
+    private void printNow(String id, WebView view, String name) {
         PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(name);
         PrintAttributes attrs = new PrintAttributes.Builder()
                 .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
@@ -104,15 +127,15 @@ final class NativePDF {
             rendering.remove(id);
             prewarm();
             if (error != null) {
-                send(id, "error", error);
+                fail(id, error, null);
                 return;
             }
             try {
                 Uri uri = toDownloads(tmp, name);
                 files.put(id, uri);
                 send(id, "saved", "Downloads/zenvqo");
-            } catch (Exception e) {
-                send(id, "error", "Couldn't save to Downloads.");
+            } catch (Throwable e) {
+                fail(id, "Couldn't save to Downloads.", e);
             } finally {
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
@@ -168,6 +191,8 @@ final class NativePDF {
     }
 
     private void send(String id, String status, String data) {
+        synchronized (answered) { if (!answered.add(id)) return; }     // one answer per PDF
+        Log.i(TAG, "PDF " + id + " -> " + status + " " + data);
         final String js = "window.__zpdf&&window.__zpdf(" + JSONObject.quote(id) + "," + JSONObject.quote(status) + "," + JSONObject.quote(data) + ")";
         web.post(() -> web.evaluateJavascript(js, null));
     }
