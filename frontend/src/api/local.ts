@@ -310,7 +310,7 @@ export interface StreamHandlers {
   onError?: (e: ApiError) => void;
 }
 
-const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language).";
+const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines.";
 type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
@@ -350,6 +350,7 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
   }
   if (files) reply += `I can see ${files} attached file(s). First line: \`${(text.split("<attached_file")[1]?.split(">")[1] || "").trim().split("\n")[0].slice(0, 80).replace(/`/g, "'")}\`\n\n`;
   if (/code/i.test(q)) reply += "Here's how code looks:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";
+  if (/math|equation|formula|ganit/i.test(q)) reply += "Here's how math looks — inline $E = mc^2$ and $a^2 + b^2 = c^2$, and displayed:\n\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n";
   if (/table/i.test(q)) reply += "| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n";
   reply += `(_demo · ${messages.length - 2} earlier message(s) in context · temperature ${temperature}_)`;
   const toks = reply.match(/[^\s]*\s*/g)!.filter(Boolean);

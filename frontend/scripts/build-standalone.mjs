@@ -23,7 +23,7 @@ const swapApi = {
 const r = await build({
   entryPoints: [resolve(root, "src/main.tsx")], bundle: true, minify: true, format: "esm", target: "es2020",
   jsx: "automatic", write: false, outdir: "out", plugins: [swapApi], logLevel: "warning",
-  define: { "process.env.NODE_ENV": '"production"' }, loader: { ".css": "css" }, legalComments: "eof",
+  define: { "process.env.NODE_ENV": '"production"' }, loader: { ".css": "css", ".woff2": "dataurl", ".woff": "empty", ".ttf": "empty" }, legalComments: "eof",
 });
 const js = r.outputFiles.find((f) => f.path.endsWith(".js")).text.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
 const css = r.outputFiles.find((f) => f.path.endsWith(".css")).text;

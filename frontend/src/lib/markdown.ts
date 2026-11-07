@@ -18,15 +18,15 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import { Marked, type Tokens } from "marked";
+import { escapeHtml } from "./escape";
+import { extractMath, restoreMath } from "./math";
 
 const LANGS: Record<string, unknown> = { bash, cpp, css, go, java, javascript, json, kotlin, markdown, python, rust, sql, typescript, xml, yaml };
 for (const [name, lang] of Object.entries(LANGS)) hljs.registerLanguage(name, lang as never);
 const ALIAS: Record<string, string> = { js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript", py: "python",
   sh: "bash", shell: "bash", zsh: "bash", html: "xml", htm: "xml", yml: "yaml", md: "markdown", "c++": "cpp", c: "cpp", kt: "kotlin", rs: "rust" };
 
-export function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
+export { escapeHtml };
 
 const marked = new Marked({ gfm: true, breaks: false });
 marked.use({
@@ -79,11 +79,12 @@ function hookPurify() {
 
 export function renderMarkdown(src: string): string {
   hookPurify();
-  const html = marked.parse(src, { async: false }) as string;
-  return DOMPurify.sanitize(html, {
+  const { text, blocks } = extractMath(src);
+  const html = marked.parse(text, { async: false }) as string;
+  return restoreMath(DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
     ADD_ATTR: ["target", "data-copy", "aria-label", "tabindex", "role"],
     FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
     FORBID_ATTR: ["onerror", "onload", "onclick"],
-  });
+  }), blocks);                                       // KaTeX output goes in after sanitising (it is generated, not model HTML)
 }

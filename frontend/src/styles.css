@@ -348,3 +348,20 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .segmented.small label { padding: 4px 10px; font-size: .9em; }
 .rec-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .85em; color: var(--danger); font-weight: 600; margin-right: 6px; }
 .rec-dot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: orb-pulse 1.4s ease-in-out infinite; }
+
+/* ---------------- math (KaTeX) ---------------- */
+.md .katex { font-size: 1.12em; color: inherit; }
+.md .math-inline .katex { white-space: nowrap; padding: 0 .08em; }
+.md .math-display { position: relative; margin: .9em 0; padding: .7em 1em; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-soft)); border: 1px solid var(--border); }
+.md .math-scroll { overflow-x: auto; overflow-y: hidden; padding: .2em 0; text-align: center; -webkit-overflow-scrolling: touch; }
+.md .math-scroll:focus-visible { outline: none; box-shadow: var(--focus); border-radius: 4px; }
+.md .math-display .katex-display { margin: 0; }
+.md .math-display .katex { font-size: 1.22em; }
+.md .math-copy { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-soft); opacity: 0; transition: opacity .15s; }
+.md .math-display:hover .math-copy, .md .math-copy:focus-visible { opacity: 1; }
+@media (hover: none) { .md .math-copy { opacity: .85; } }
+.md .katex-error { font-family: var(--mono); font-size: .9em; }
+.md table .katex { font-size: 1em; }
+.md .math-source { font-family: var(--mono); font-size: .9em; color: var(--text-soft); background: var(--bg-soft); padding: 0 .3em; border-radius: 4px; }

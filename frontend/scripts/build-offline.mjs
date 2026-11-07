@@ -9,7 +9,7 @@ mkdirSync("dist/assets", { recursive: true });
 const r = await build({
   entryPoints: ["src/main.tsx"], bundle: true, minify: true, sourcemap: true, format: "esm", target: "es2022",
   jsx: "automatic", outdir: "dist/assets", entryNames: "app", metafile: true,
-  define: { "process.env.NODE_ENV": '"production"' }, loader: { ".css": "css" }, logLevel: "warning",
+  define: { "process.env.NODE_ENV": '"production"' }, loader: { ".css": "css", ".woff2": "file", ".woff": "empty", ".ttf": "empty" }, assetNames: "fonts/[name]-[hash]", logLevel: "warning",
 });
 const hash = (f) => createHash("sha256").update(readFileSync(f)).digest("hex").slice(0, 10);
 const js = `app-${hash("dist/assets/app.js")}.js`, css = `app-${hash("dist/assets/app.css")}.css`;

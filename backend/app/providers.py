@@ -97,6 +97,10 @@ class EchoProvider:
             parts.append(f"I can see {n_files} attached file(s). First line: `{_first_line(last)}`\n\n")
         if "code" in question.lower():
             parts.append("Here's an example:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n")
+        if any(w in question.lower() for w in ("math", "equation", "formula", "maths", "ganit")):
+            parts.append("Inline math looks like $E = mc^2$ or $a^2 + b^2 = c^2$, and a displayed equation like this:\n\n"
+                         "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n"
+                         "$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n")
         if "table" in question.lower():
             parts.append("| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n")
         earlier = sum(1 for m in messages[:-1] if m["role"] != "system")

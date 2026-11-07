@@ -5,6 +5,15 @@ import { renderMarkdown } from "../lib/markdown";
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const html = useMemo(() => renderMarkdown(text), [text]);
   function onClick(e: MouseEvent<HTMLDivElement>) {
+    const tex = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copy-tex]");
+    if (tex) {
+      copyText(tex.dataset.copyTex || "").then((ok) => {
+        tex.textContent = ok ? "Copied" : "Copy failed";
+        tex.setAttribute("aria-label", tex.textContent);
+        window.setTimeout(() => { tex.textContent = "Copy LaTeX"; tex.setAttribute("aria-label", "Copy LaTeX"); }, 1500);
+      });
+      return;
+    }
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copy]");
     if (!btn) return;
     const code = btn.closest(".code-block")?.querySelector("code")?.textContent ?? "";

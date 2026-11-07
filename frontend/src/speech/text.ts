@@ -1,4 +1,5 @@
 // Same rules as backend/app/tts/text.py: Markdown → speakable text, sentence splitting, language per sentence.
+import { texToSpeech } from "../lib/texspeech";
 
 export type SpeechLang = "en" | "hi" | "hinglish" | "es" | "fr" | "it" | "pt";
 export interface Segment { text: string; lang: SpeechLang }
@@ -17,6 +18,9 @@ toh to sab koi kaun kab kahan kitna kitne liye wala wali sakte sakta sakti hota 
 
 export function speakable(text: string): string {
   let t = text || "";
+  // formulas are read in words ("x squared plus y squared"), not as LaTeX source
+  t = t.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g, (_, a, b, c) => ` ${texToSpeech(a || b || c)} `)
+    .replace(/(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)/g, (m, pre, tex) => (/^\d+([.,]\d+)?$/.test(tex) ? m : `${pre}${texToSpeech(tex)}`));
   for (const [rx, rep] of MD) t = t.replace(rx, rep);
   t = t.replace(EMOJI, "").replace(/₹\s?([\d,]+(?:\.\d+)?)/g, "$1 rupees").replace(/₹/g, " rupees ").replace(/&/g, " and ").replace(/%/g, " percent");
   return t.split("\n").map((l) => l.split(/\s+/).filter(Boolean).join(" ")).filter((l) => l.replace(/[ ,]/g, "")).join("\n");

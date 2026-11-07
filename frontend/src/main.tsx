@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { setupSpeech } from "./speech/setup";
 import { applyTheme } from "./state/session";
+import "katex/dist/katex.min.css";
 import "./styles.css";
 
 try {                                                  // apply saved theme before first paint (no flash)

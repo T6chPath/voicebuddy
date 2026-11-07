@@ -28,3 +28,9 @@ test("streaming: only finished sentences, nothing inside an open code block", ()
   assert.deepEqual(finishedSegments("Here is code that prints a greeting for you.\n```py\nprint('a. b. c. d')").map((s) => s.text),
     ["Here is code that prints a greeting for you."]);
 });
+
+test("formulas are spoken in words", () => {
+  assert.equal(speakable("Pythagoras: $a^2 + b^2 = c^2$."), "Pythagoras: a squared plus b squared equals c squared.");
+  assert.ok(speakable("$$\\frac{1}{2}$$").includes("1 over 2"));
+  assert.equal(speakable("It costs $5 and $10."), "It costs $5 and $10.");
+});

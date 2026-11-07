@@ -126,6 +126,16 @@ All endpoints are under `/api`.
 | POST | `/images` `{op, prompt, style?, aspect_ratio?, n?, seed?, source_id?, mask_id?, …}` | runs one image job outside chat; `{images, notes}` |
 | GET | `/files/{id}?download=1` | the same file as a download instead of inline |
 
+## Math
+
+Replies typeset LaTeX with **KaTeX** (MIT, offline — fonts are bundled, nothing loads from the internet):
+`$…$` or `\(…\)` inline, `$$…$$`, `\[…\]` or a ```` ```math ```` block for displayed equations. Displayed equations sit in
+their own box, scroll sideways on phones instead of breaking the layout, and have **Copy LaTeX**. Each formula also carries
+MathML, so screen readers read it as math, and Read aloud speaks it in words ("x squared plus y squared equals r squared").
+Code blocks are never touched, "$5 and $10" stays money, and a formula that isn't valid (or is cut off mid-stream) is shown
+as its source instead of an error. The chat models are told to write math this way. Try it with the demo model: "show me
+math equations".
+
 ## Voice: replies read aloud
 
 Every reply has **Read aloud**. While it plays you get Pause, Resume, Stop and Replay, a sentence counter, and a strip

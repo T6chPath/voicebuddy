@@ -22,8 +22,28 @@ bahut bohot kuch abhi kal aaj matlab chalo ruko batao bolo dekho ghar kaam paisa
 toh to sab koi kaun kab kahan kitna kitne liye wala wali sakte sakta sakti hota hoti hote jaise agar lekin""".split())
 
 
+TEX_WORDS = [(r"\\sqrt\s*\{([^{}]*)\}", r" square root of \1 "),
+             (r"\^\s*\{?2\}?", " squared "), (r"\^\s*\{?3\}?", " cubed "), (r"\^\s*\{([^{}]*)\}", r" to the power \1 "),
+             (r"\^\s*(\w)", r" to the power \1 "), (r"_\s*\{([^{}]*)\}", r" sub \1 "),
+             (r"\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}", r" \1 over \2 "), (r"\\[dt]?frac\s*(\w)(\w)", r" \1 over \2 "), (r"\\(times|cdot)", " times "),
+             (r"\\pm", " plus or minus "), (r"\\approx", " approximately "), (r"\\infty", " infinity "), (r"\\sum", " the sum of "),
+             (r"\\int", " the integral of "), (r"\\(alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|phi|omega)\b", r" \1 "),
+             (r"=", " equals "), (r"\+", " plus "), (r"(?<=[\s\w])-(?=[\s\w])", " minus "),
+             (r"\\(left|right|mathrm|text|mathbf|displaystyle|,|;|!|quad|qquad)", " "), (r"[{}\\]", " ")]
+
+
+def tex_to_speech(tex: str) -> str:
+    t = f" {tex} "
+    for rx, rep in TEX_WORDS:
+        t = re.sub(rx, rep, t)
+    return " ".join(t.split())
+
+
 def speakable(text: str) -> str:
     t = text or ""
+    t = re.sub(r"\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)", lambda m: f" {tex_to_speech(m.group(1) or m.group(2) or m.group(3))} ", t)
+    t = re.sub(r"(^|[^\\$\w])\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)",
+               lambda m: m.group(0) if re.fullmatch(r"\d+([.,]\d+)?", m.group(2)) else m.group(1) + tex_to_speech(m.group(2)), t)
     for rx, rep in MD:
         t = rx.sub(rep, t)
     t = EMOJI.sub("", t)
