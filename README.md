@@ -146,7 +146,7 @@ claiming to be text-only.
 | Runs on | your CPU (or GPU) — nothing leaves the machine | Google's servers | OpenAI's servers |
 | Cost | free | paid tier only (Google lists $0.039 per image up to 1024px; free AI Studio keys get a quota error) | token-priced, a few cents per image |
 | Licence | SD-Turbo: Stability AI Community License (see stability.ai/license for commercial use) · rembg: MIT | Google API terms | OpenAI API terms |
-| Speed (512px) | seconds per image on a modern laptop CPU after the first load; the first load reads ~2.6 GB | a few seconds | several seconds |
+| Speed (512px) | measured on a 4-vCPU GitHub runner: 30–40 s per image incl. the safety check; background removal ~2 s | a few seconds | several seconds |
 | Quality | good for drafts, 512–768px; weak at text in images | high, very good instruction edits | high, best text rendering |
 | Masks | exact: outside the mask stays pixel-identical | approximate (mask sent as a 2nd picture) | yes (transparent-pixel mask) |
 | Seed / negative prompt | seed yes · negative prompt only for non-turbo checkpoints | no / folded into the prompt | no / folded into the prompt |
@@ -199,6 +199,13 @@ To let your Gemini chat model call the tools, add it to `ZC_MODELS`:
   Configured providers fall back in order, and the reply says which one was used and why.
 - **Logs** go to `zenvqo.images` as one JSON line per job: user id, operation, provider, status, duration, size.
   Prompt length is logged, the prompt text is not.
+
+### Known limits of the local model (seen in the real-model runs)
+- **Instruction edits are unreliable.** The local model can't follow instructions properly ("make it night time", "add a hat"). It repaints the whole picture with the new description, so the change shows up only some of the time.
+  Gemini and OpenAI are instruction-tuned and do these edits properly; masked edits (Paint to edit) work well locally.
+- **Large objects leave a patch when removed.** Object removal fills the masked area from its surroundings. The object goes away, but a large one can leave a smooth patch.
+  Small objects come out clean. Pixels outside the mask never change.
+- **Text in images and fine detail are weak** at 512px. Use 768px, `stabilityai/sdxl-turbo`, or a hosted provider for these.
 
 ### Using it from your phone
 Run the server on your laptop with `--host 0.0.0.0` and open `http://<laptop-ip>:8000` in the phone's browser. Image generation
