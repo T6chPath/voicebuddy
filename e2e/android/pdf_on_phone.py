@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import time
+import unicodedata
 import urllib.request
 from pathlib import Path
 
@@ -30,7 +31,12 @@ def page_socket():
         time.sleep(1)
     assert pid, "the app didn't start"
     adb("forward", "tcp:9222", f"localabstract:webview_devtools_remote_{pid.split()[0]}")
-    for _ in range(60):
+    last = None
+    for i in range(90):
+        if i == 45:                                   # the app may have been started before the system was ready
+            adb("shell", "am", "start", "-W", "-n", f"{PKG}/app.zenvqo.chat.MainActivity", check=False)
+            pid = adb("shell", "pidof", PKG, check=False).strip() or pid
+            adb("forward", "tcp:9222", f"localabstract:webview_devtools_remote_{pid.split()[0]}", check=False)
         try:
             pages = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=5))
             main = [p for p in pages if p.get("type") == "page" and "index.html" in p.get("url", "")]
@@ -121,7 +127,7 @@ def main():
         pages = int(next(l.split()[-1] for l in info.splitlines() if l.startswith("Pages:")))
         print(f"{name}: {pages} page(s), {len(text)} chars of text")
         texts.append(text)
-    joined = "\n".join(texts)
+    joined = unicodedata.normalize("NFKC", "\n".join(texts))   # PDF text keeps ligatures ("ﬁ")
     for e in results:
         assert e in joined, f"{e!r} missing from the PDFs"
     print("OK: both PDFs were saved to Downloads/zenvqo and contain the expected text")
