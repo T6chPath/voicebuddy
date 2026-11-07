@@ -100,7 +100,7 @@ export class ServerEngine implements Engine {
 
 /* ---------------- Android native ---------------- */
 interface NativeTTS { speak(id: string, text: string, lang: string, rate: number, pitch: number, volume: number, voice: string): void; stop(): void; voices(): string; status(): string }
-declare global { interface Window { ZenvqoTTS?: NativeTTS; __ztts?: (id: string, ev: string, a?: number, b?: number) => void; speechSynthesis: SpeechSynthesis } }
+declare global { interface Window { ZenvqoTTS?: NativeTTS; __ztts?: (id: string, ev: string, a?: number, b?: number) => void } }
 
 export class NativeEngine implements Engine {
   id = "native" as const;

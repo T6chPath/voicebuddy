@@ -117,9 +117,57 @@ All endpoints are under `/api`.
 | POST · GET · DELETE | `/files` (multipart `file`) · `/files/{id}` | owner only |
 | GET · PUT | `/settings` | validated (unknown fields rejected) |
 | GET | `/models` · `/health` | model list exposes no server URLs |
+| GET | `/tts/voices` | voice engines, voices (with gender where the engine states it), languages, defaults — or why none |
+| POST | `/tts` `{text, voice?, lang?, speed?, style?, gender?}` | `audio/wav` for one sentence; `X-TTS-Engine/Voice/Lang/Cache/Ms` headers |
 | GET | `/images/capabilities` | which image providers are ready, and the exact reason if none is |
 | POST | `/images` `{op, prompt, style?, aspect_ratio?, n?, seed?, source_id?, mask_id?, …}` | runs one image job outside chat; `{images, notes}` |
 | GET | `/files/{id}?download=1` | the same file as a download instead of inline |
+
+## Voice: replies read aloud
+
+Every reply has **Read aloud**. While it plays you get Pause, Resume, Stop and Replay, a sentence counter, and a strip
+showing the sentence being spoken; the current word is marked where the engine reports word timing (phone and browser
+voices). **Auto-speak** (speaker button in the chat header, or Settings → Voice) reads new replies sentence by sentence
+*while they stream*, so speech starts after the first sentence, not after the whole answer. Only one reply ever speaks:
+starting another, sending a message, or pressing Esc stops the current one.
+
+### Where the voice comes from
+| | Server voices (Kokoro, default) | Gemini TTS (server) | OpenAI TTS (server) | Phone (Android app) | Browser |
+|---|---|---|---|---|---|
+| What | Kokoro-82M via kokoro-onnx, on your laptop's CPU | `gemini-2.5-flash-preview-tts` | `gpt-4o-mini-tts` | Android `TextToSpeech` (usually Google's engine) | Web Speech API |
+| Cost / key | free, no key | Gemini API key on the server | paid, key on the server | free | free |
+| Languages | English (US/UK), Hindi, Spanish, French, Italian, Portuguese | many incl. Hindi and English (India) | many | whatever voice data is installed | depends on OS |
+| Voices | 18, labelled female/male by Kokoro's voice names | 30 prebuilt, female/male per Google's list | 10, gender not specified by OpenAI | the phone's list (Android doesn't say gender) | the OS list |
+| Speed / pitch / volume | speed · — · volume | speed in words · — · volume | speed · — · volume | all three | all three |
+| Style ("calm", "cheerful") | no | yes, in plain words | yes (`instructions`) | no | no |
+| Licence | Apache-2.0 weights; phonemiser uses espeak-ng (GPL-3) as a library | Google API terms | OpenAI API terms | — | — |
+
+Why this setup: you have a CPU laptop and a phone and wanted no running costs. Kokoro is a small (82M) model that runs
+faster than real time on a CPU and has Hindi voices; the Android app needed its own bridge because Android's WebView has
+no Web Speech API. Gemini/OpenAI are there for better Hindi and Hinglish when you have a key.
+
+### Languages
+Each sentence is checked on its own: Devanagari (including Devanagari mixed with English words) → Hindi voice;
+Hindi typed in English letters ("AI ek technology hai…") → Hinglish; anything else → English. You can force a language in
+Settings → Voice. Hinglish in Latin letters is the weak spot for Kokoro: it is read by an English voice, so Hindi words get
+an English accent — Gemini (told it's Hinglish) and the phone's `en-IN` voice handle it better.
+
+### Setup
+```bash
+cd backend
+pip install -r requirements-tts.txt     # kokoro-onnx (+ onnxruntime, espeak-ng phonemiser)
+python -m app.tts.download              # Kokoro model + voices, ~340 MB, into ~/.cache/zenvqo/kokoro
+```
+| Variable | Default | |
+|---|---|---|
+| `ZC_TTS_ENGINES` | `auto` | `auto` = every ready engine, Kokoro first; `kokoro,gemini`; `none` = device voices only |
+| `ZC_TTS_RATE` | `40000/3600` | characters per user per window (seconds) |
+| `ZC_TTS_CACHE_MB` | `200` | sentence audio cache (repeat plays cost nothing) |
+| `ZC_TTS_MAX_QUEUE` | `4` | syntheses waiting or running, server-wide |
+| `ZC_KOKORO_DIR` · `ZC_GEMINI_TTS_MODEL` · `ZC_OPENAI_TTS_MODEL` | | model locations / ids |
+
+On the **Android app** nothing needs setting up: it uses the phone's voices. For Hindi, make sure Hindi voice data is
+installed (Android Settings → Text-to-speech → Google → Install voice data → Hindi).
 
 ## Images: generate, edit, understand
 
