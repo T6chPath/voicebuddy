@@ -20,7 +20,7 @@ HDR = {"X-Requested-With": "zenvqo"}
 
 
 def make_settings(tmp_path, **kw):
-    s = Settings(data_dir=tmp_path, echo_delay_s=0.0, allowed_origins=["http://localhost:5173"],
+    s = Settings(data_dir=tmp_path, echo_delay_s=0.0, allowed_origins=["http://localhost:5173"], image_providers="none",
                  models=[ModelConfig("echo", "Demo (echo)", "echo"), ModelConfig("echo-vision", "Echo vision", "echo", vision=True)])
     for k, v in kw.items():
         setattr(s, k, v)

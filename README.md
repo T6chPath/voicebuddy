@@ -112,11 +112,98 @@ All endpoints are under `/api`.
 | POST | `/auth/register` `/auth/login` `/auth/logout` · GET `/auth/me` | session cookie |
 | GET | `/conversations?q=&limit=&before=` | `{items, has_more}` |
 | POST · GET · PATCH · DELETE | `/conversations` · `/conversations/{id}` | PATCH: `title`, `pinned`, `model` |
-| POST | `/conversations/{id}/messages` `{content, model?, file_ids?}` | **SSE**: `meta` → `delta`* → `done {title}` or `error {code, message, retryable}` |
+| POST | `/conversations/{id}/messages` `{content, model?, file_ids?, image?}` | **SSE**: `meta` → `delta`* → `done {title}` or `error {code, message, retryable}`; image replies add `tool` → `progress`* → `image`* |
 | POST | `/conversations/{id}/regenerate` | SSE, same events |
 | POST · GET · DELETE | `/files` (multipart `file`) · `/files/{id}` | owner only |
 | GET · PUT | `/settings` | validated (unknown fields rejected) |
 | GET | `/models` · `/health` | model list exposes no server URLs |
+| GET | `/images/capabilities` | which image providers are ready, and the exact reason if none is |
+| POST | `/images` `{op, prompt, style?, aspect_ratio?, n?, seed?, source_id?, mask_id?, …}` | runs one image job outside chat; `{images, notes}` |
+| GET | `/files/{id}?download=1` | the same file as a download instead of inline |
+
+## Images: generate, edit, understand
+
+The assistant makes and edits real images: text→image, image→image, variations, styles, masked inpainting and object
+removal, and background removal or replacement. Results are stored like uploads, shown in the chat with preview and
+download, and numbered (#1, #2…) so later messages can refer to them ("make it night time", "remove the car from image 2").
+
+### How a request is routed
+1. **UI buttons** (Variations, Remove background, Paint to edit, "Make an image from my next message") send an explicit operation.
+2. **Rules** catch clear requests in English and Hinglish ("Generate an image of…", "Remove the background", "background hata do",
+   "make it anime style", "3 variations", "16:9", "seed 42", "as webp").
+3. **The chat model** decides everything else through function calling (`generate_image`, `edit_image`), if its server supports
+   tools. Mark such models with `"tools": true` in `ZC_MODELS` (Gemini's OpenAI-compatible endpoint, OpenAI, llama-server started
+   with `--jinja`). The model also writes the caption. If the server rejects tools, the rules route takes over.
+
+`ZC_IMAGE_ROUTER=auto` (default) is rules first, then the model; `rules` never asks the model; `llm` always does.
+When no image provider is ready, the assistant explains the real reason (for example "GEMINI_API_KEY is not set") instead of
+claiming to be text-only.
+
+### Providers
+| | Local (default) | Gemini | OpenAI |
+|---|---|---|---|
+| Model | `stabilityai/sd-turbo` (diffusers) + rembg U²-Net | `gemini-2.5-flash-image` | `gpt-image-1` |
+| Runs on | your CPU (or GPU) — nothing leaves the machine | Google's servers | OpenAI's servers |
+| Cost | free | paid tier only (Google lists $0.039 per image up to 1024px; free AI Studio keys get a quota error) | token-priced, a few cents per image |
+| Licence | SD-Turbo: Stability AI Community License (see stability.ai/license for commercial use) · rembg: MIT | Google API terms | OpenAI API terms |
+| Speed (512px) | seconds per image on a modern laptop CPU after the first load; the first load reads ~2.6 GB | a few seconds | several seconds |
+| Quality | good for drafts, 512–768px; weak at text in images | high, very good instruction edits | high, best text rendering |
+| Masks | exact: outside the mask stays pixel-identical | approximate (mask sent as a 2nd picture) | yes (transparent-pixel mask) |
+| Seed / negative prompt | seed yes · negative prompt only for non-turbo checkpoints | no / folded into the prompt | no / folded into the prompt |
+| Transparent background | yes (rembg) | no — subject on white | yes |
+
+Why local is the default: you have a CPU-only laptop and wanted no running costs. SD-Turbo is the practical size for that hardware
+(1–4 denoising steps; FLUX.1-schnell is Apache-2.0 but a 12B model, too heavy for CPU). Hosted providers are for quality. List
+several and they act as fallbacks in order: `ZC_IMAGE_PROVIDERS=local,gemini`. Background removal always prefers rembg when installed.
+
+### Setup
+```bash
+cd backend
+pip install -r requirements-images.txt          # CPU PyTorch, diffusers, rembg, OpenCV (~1 GB)
+python -m app.images.local --download           # fetch SD-Turbo, U²-Net and the NSFW checker once (~3 GB)
+uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+```
+Hosted instead of (or as well as) local — keys live only in the server's environment:
+```bash
+export GEMINI_API_KEY=...        # needs billing enabled for image output
+export OPENAI_API_KEY=...        # needs organization verification for GPT image models
+export ZC_IMAGE_PROVIDERS=gemini,local
+```
+To let your Gemini chat model call the tools, add it to `ZC_MODELS`:
+```json
+[{"id":"gemini","label":"Gemini 2.5 Flash","provider":"openai","base_url":"https://generativelanguage.googleapis.com/v1beta/openai",
+  "model":"gemini-2.5-flash","api_key_env":"GEMINI_API_KEY","tools":true,"vision":true}]
+```
+| Variable | Default | |
+|---|---|---|
+| `ZC_IMAGE_PROVIDERS` | `auto` | `auto` = every provider that is ready, local first; `none` turns images off |
+| `ZC_IMAGE_ROUTER` | `auto` | `auto` · `rules` · `llm` |
+| `ZC_IMAGE_RATE` | `30/3600` | requests per user per window (seconds) |
+| `ZC_IMAGE_MAX_QUEUE` / `ZC_IMAGE_MAX_N` / `ZC_IMAGE_MAX_RES` | `3` / `4` / `1024` | server-wide jobs, images per request, longest side |
+| `ZC_LOCAL_IMAGE_MODEL` | `stabilityai/sd-turbo` | any diffusers text-to-image checkpoint, e.g. `stabilityai/sdxl-turbo` (better, ~3× slower) |
+| `ZC_LOCAL_STEPS` / `ZC_LOCAL_GUIDANCE` | 4 / 0 for turbo, 25 / 7 otherwise | |
+| `ZC_LOCAL_DEVICE` | auto | `cpu` or `cuda` |
+| `ZC_LOCAL_REMBG_MODEL` | `u2net` | e.g. `isnet-general-use` |
+| `ZC_LOCAL_NSFW_CHECK` | `1` | output classifier `Falconsai/nsfw_image_detection`; images it flags are not returned |
+| `ZC_LOCAL_IDLE_UNLOAD_S` | `900` | free the model's RAM after this long idle |
+| `ZC_GEMINI_IMAGE_MODEL` · `ZC_OPENAI_IMAGE_MODEL` · `ZC_OPENAI_IMAGE_QUALITY` | `gemini-2.5-flash-image` · `gpt-image-1` · `medium` | |
+
+### Safety, limits and resources
+- **Prompts are checked before any provider is called.** Sexual content, anything sexual involving minors, "undressing" a photo of a person, gore and extremist propaganda are refused.
+  Hosted providers' own refusals are reported as refusals. Local output passes an NSFW classifier.
+- **Every image file is validated and labelled.** Uploads are decoded with size limits (40 MP, decompression bombs refused) and EXIF-rotated.
+  Outputs are re-encoded (provider metadata dropped) and PNGs are labelled "AI-generated by zenvqo".
+- **Limits and resources.** There's a per-user rate limit and one job per user at a time. A server-wide queue cap applies.
+  The local model runs one job at a time, can be cancelled with Stop, and is unloaded after it sits idle.
+- **Failures are retried or handed on.** Hosted calls retry rate limits and server errors with backoff.
+  Configured providers fall back in order, and the reply says which one was used and why.
+- **Logs** go to `zenvqo.images` as one JSON line per job: user id, operation, provider, status, duration, size.
+  Prompt length is logged, the prompt text is not.
+
+### Using it from your phone
+Run the server on your laptop with `--host 0.0.0.0` and open `http://<laptop-ip>:8000` in the phone's browser. Image generation
+lives on the server. The standalone HTML file and the Android APK talk straight to a chat model and keep no server, so they
+show no image tools — the app says so instead of pretending.
 
 ## Tests
 
@@ -143,6 +230,11 @@ python -m pytest e2e -v                                 # 9 browser tests, deskt
 - XSS payloads neutralised.
 - Rename, pin, search, delete; settings persistence; keyboard flows.
 - A basic accessibility audit; the mobile drawer and overflow checks.
+
+Image tests: `backend/tests/test_images.py` (mocked provider + fake Gemini/OpenAI servers checking the exact request formats),
+`e2e/test_images_ui.py` (browser), and `backend/tests/test_images_real.py` (the real local model, opt-in with
+`ZC_REAL_IMAGE_TESTS=1`). The workflow `.github/workflows/zenvqo-images-real.yml` runs the real model on a CPU runner and
+publishes the pictures it made.
 
 ## Verification done here, and its limits
 

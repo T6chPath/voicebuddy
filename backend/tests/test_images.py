@@ -209,7 +209,7 @@ def test_unavailable_explains_real_reason(tmp_path):
 
 def test_local_provider_reports_missing_packages(tmp_path):
     from app.images.local import LocalProvider
-    p = LocalProvider()
+    p = LocalProvider()                     # reports what's missing when the image packages aren't installed
     if p.ops:
         pytest.skip("image packages are installed here")
     app, c = make(tmp_path, [p])

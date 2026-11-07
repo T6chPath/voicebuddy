@@ -57,7 +57,9 @@ jobs:
 
       - name: Backend tests (mocked providers)
         working-directory: backend
-        run: python -m pytest tests -q
+        run: |
+          python -m pytest tests -q -rf > mocked.log 2>&1 || { tail -60 mocked.log | sed 's/^/::error ::/'; exit 1; }
+          tail -3 mocked.log
 
       - name: Real model tests
         working-directory: backend
@@ -66,7 +68,7 @@ jobs:
         run: |
           mkdir -p "$ZC_REAL_OUT"
           python -m pytest tests/test_images_real.py -v -s 2>&1 | tee "$ZC_REAL_OUT/real-tests.log"
-          test ${PIPESTATUS[0]} -eq 0 || { echo "::error title=Real image tests failed::see real-tests.log"; exit 1; }
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/real-tests.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
 
       - name: Browser UI with the real model
         env:
@@ -74,17 +76,20 @@ jobs:
           ZC_IMAGE_PROVIDERS: local
         run: |
           python -m pytest e2e/test_images_ui.py -v -s 2>&1 | tee "$ZC_REAL_OUT/ui-tests.log"
-          test ${PIPESTATUS[0]} -eq 0 || { echo "::error title=Real UI tests failed::see ui-tests.log"; exit 1; }
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/ui-tests.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
 
       - name: Browser UI controls (all e2e)
-        run: python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"; test ${PIPESTATUS[0]} -eq 0
+        run: |
+          python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"
+          test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/e2e-all.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
 
       - name: Package results
         if: always()
         run: |
           mkdir -p real-out
           cp e2e/screenshots/ui-*.png real-out/ 2>/dev/null || true
-          (cd real-out && zip -r ../zenvqo-images-real.zip .)
+          echo "run ${{ github.run_id }} at $(date -u)" > real-out/run.txt
+          (cd real-out && zip -qr ../zenvqo-images-real.zip .)
 
       - uses: actions/upload-artifact@v4
         if: always()
