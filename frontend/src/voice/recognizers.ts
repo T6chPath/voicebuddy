@@ -34,13 +34,11 @@ export class ServerRecognizer implements StreamRecognizer {
   private waiting: { resolve: (r: FinalResult) => void; reject: (e: Error) => void } | null = null;
   private failures = 0;
   private opening: Promise<void> | null = null;
-  private closed = false;
   constructor(private postWav: (wav: Blob, lang: RecLang) => Promise<FinalResult>, private url = "") {}
 
   connect(): Promise<void> {
     if (this.transport === "http" || (this.ws && this.ws.readyState === WebSocket.OPEN)) return Promise.resolve();
     if (this.opening) return this.opening;
-    this.closed = false;
     const url = this.url || `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/voice/ws`;
     this.opening = new Promise<void>((resolve) => {
       let settled = false;
@@ -108,7 +106,7 @@ export class ServerRecognizer implements StreamRecognizer {
     this.frames = [];
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: "cancel" }));
   }
-  close() { this.closed = true; this.ws?.close(); this.ws = null; this.frames = []; }
+  close() { this.ws?.close(); this.ws = null; this.frames = []; }
 }
 
 /* ---------------- Android ---------------- */

@@ -96,7 +96,10 @@ export class VoiceSession {
     this.unsubSpeech = speech.subscribe((s) => this.onSpeech(s));
     try {
       if (pick === "server") {
-        const rec = new ServerRecognizer(async (wav, lang) => api.transcribe(wav, lang));
+        const rec = new ServerRecognizer(async (wav, lang) => {
+          const r = await api.transcribe(wav, lang);
+          return { ...r, ms: { decode: r.ms, after_end: r.ms } };
+        });
         rec.onPartial = (t) => { if (this.state.phase === "hearing") this.set({ partial: t }); };
         this.rec = rec;
         this.mic = new Mic((f, db) => this.onFrame(f, db), { noiseSuppression: this.settings.noiseSuppression });
