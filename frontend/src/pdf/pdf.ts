@@ -17,6 +17,15 @@ export function wantsPdf(text: string): boolean {
   return /\b(generate|make|create|export|download|save|give|send|write|prepare|produce|convert|banao|bana|banado|bnao|bana do|de do|dedo|chahiye|chaiye|as a pdf|as pdf|in pdf|into pdf|pdf me|pdf mein|pdf file|pdf format)\b/.test(t);
 }
 
+/** How far the document has got: the highest numbered item so far ("1." / "Q12." / "**12.**"), else the word count. */
+export function writtenSoFar(text: string): string {
+  let n = 0;
+  for (const m of text.matchAll(/^\s{0,3}(?:[*_#]+\s*)?(?:Q(?:uestion)?\s*)?(\d{1,3})[.):]/gim)) n = Math.max(n, +m[1]);
+  if (n > 1) return `${n} items written`;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  return words ? `${words} words written` : "starting";
+}
+
 export function pdfName(title: string): string {
   const slug = title.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "zenvqo";
   return `${slug}.pdf`;
@@ -84,14 +93,67 @@ function bodyHtml(title: string, markdown: string): string {
     `<div class="md">${renderMarkdown(documentMarkdown(markdown))}</div><footer class="pdf-foot">Made with zenvqo. AI-generated content can be wrong — check important information.</footer></article>`;
 }
 
-/** A complete, self-contained HTML document (app styles incl. KaTeX fonts copied in) — what the Android engine prints. */
+/* Only the CSS this document actually uses goes into the file the engine prints. Copying every app style (all screens,
+ * every KaTeX font as base64) made a ~450 KB document that was slow to hand over and to lay out; a plain quiz now needs a
+ * few KB, and math pulls in only the KaTeX fonts its symbols use. */
+const PSEUDO = /::?(before|after|hover|focus|focus-visible|focus-within|active|visited|first-line|first-letter|marker|placeholder|selection|-webkit-[\w-]+|-moz-[\w-]+)(\([^)]*\))?/g;
+
+function matches(doc: Document, selector: string): boolean {
+  try { if (doc.querySelector(selector)) return true; } catch { /* pseudo-classes querySelector can't take */ }
+  return selector.split(",").some((part) => {
+    const s = part.replace(PSEUDO, "").trim();
+    if (!s) return false;
+    try { return !!doc.querySelector(s); } catch { return false; }
+  });
+}
+
+function usedCss(doc: Document, rules: CSSRuleList, families: Set<string>, fonts: string[], base: string): string {
+  let out = "";
+  for (const r of Array.from(rules)) {
+    if (r instanceof CSSStyleRule) {
+      const sel = r.selectorText;
+      if (/^(:root|html|body|\*)\b|^\[data-theme/.test(sel.trim()) || matches(doc, sel)) {
+        out += r.cssText + "\n";
+        const ff = r.style.getPropertyValue("font-family");
+        if (ff) ff.split(",").forEach((f) => families.add(f.trim().replace(/^["']|["']$/g, "")));
+      }
+    } else if (r instanceof CSSMediaRule) {
+      const inner = usedCss(doc, r.cssRules, families, fonts, base);
+      if (inner) out += `@media ${r.conditionText} {\n${inner}}\n`;
+    } else if (r instanceof CSSFontFaceRule) {
+      const fam = r.style.getPropertyValue("font-family").trim().replace(/^["']|["']$/g, "");
+      // font files of a linked stylesheet are relative to it; the printed document has another base URL
+      fonts.push(fam + "\u0000" + r.cssText.replace(/url\((["']?)(?!data:)([^)"']+)\1\)/g, (_m, _q, u) => `url("${new URL(u, base).href}")`));
+    }
+  }
+  return out;
+}
+
+let cssCache: { key: string; css: string } | null = null;
+
+function documentCss(body: string): string {
+  const doc = document.implementation.createHTMLDocument("pdf");
+  doc.body.setAttribute("data-theme", "light");
+  doc.body.innerHTML = body;
+  const families = new Set<string>();
+  const fonts: string[] = [];
+  let css = "";
+  for (const sheet of Array.from(document.styleSheets)) {
+    try { css += usedCss(doc, sheet.cssRules, families, fonts, sheet.href || location.href); } catch { /* cross-origin sheet: skip */ }
+  }
+  const faces = fonts.filter((f) => families.has(f.slice(0, f.indexOf("\u0000")))).map((f) => f.slice(f.indexOf("\u0000") + 1)).join("\n");
+  return faces + "\n" + css;
+}
+
+/** A complete, self-contained HTML document — only the styles (and math fonts) it uses — what the Android engine prints. */
 export function printableDocument(title: string, markdown: string): string {
-  const styles = [...document.querySelectorAll('style, link[rel="stylesheet"]')].map((n) => {
-    if (n instanceof HTMLLinkElement) return `<link rel="stylesheet" href="${esc(new URL(n.getAttribute("href") || "", location.href).href)}">`;
-    return n.outerHTML;
-  }).join("\n");
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>${styles}<style>${PRINT_CSS}</style></head>` +
-    `<body data-theme="light">${bodyHtml(title, markdown)}</body></html>`;
+  const body = bodyHtml(title, markdown);
+  // documents of the same shape (same element/class set) share the computed CSS
+  const key = Array.from(new Set(body.match(/class="[^"]*"|<[a-z0-9]+/g) || [])).sort().join("|");
+  const css = cssCache?.key === key ? cssCache.css : documentCss(body);
+  cssCache = { key, css };
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}\n${PRINT_CSS}</style></head>` +
+    `<body data-theme="light">${body}</body></html>`;
 }
 
 /* ---------------- Android bridge ---------------- */

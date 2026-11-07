@@ -4,7 +4,8 @@ import { fileSize, timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
 import { ImageGallery, ToolProgress, type ImageAction } from "./ImageViews";
 import { copyText, Markdown } from "./Markdown";
-import { PdfButton, PdfCard } from "./PdfViews";
+import { PdfButton, PdfCard, PdfPending } from "./PdfViews";
+import { wantsPdf } from "../pdf/pdf";
 import { NowSpeaking, SpeakControls } from "./SpeechViews";
 
 interface Props {
@@ -59,6 +60,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
         {streaming && m.content && <span className="cursor" aria-hidden="true" />}
       </div>
       {m.role === "assistant" && <NowSpeaking id={m.id} />}
+      {m.role === "assistant" && streaming && request && wantsPdf(request) && <PdfPending text={m.content} request={request} />}
       {m.role === "assistant" && !streaming && m.content && <PdfCard id={m.id} text={m.content} request={request} />}
       {m.tool && m.tool.status === "running" && <ToolProgress t={m.tool} />}
       {m.role === "assistant" && m.attachments.some((a) => a.kind === "image" && fileHref(a)) && (

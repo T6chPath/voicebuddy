@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { documentMarkdown, pdfName, pdfTitle, wantsPdf } from "./pdf";
+import { documentMarkdown, pdfName, pdfTitle, wantsPdf, writtenSoFar } from "./pdf";
 
 test("recognises requests for a PDF, in English and Hinglish", () => {
   for (const t of ["generate pdf of 30 quiz questions", "Make a PDF of a paragraph on pollution", "export this as PDF",
@@ -18,4 +18,11 @@ test("titles and file names", () => {
 test("the file starts at the document, not the chat around it", () => {
   assert.equal(documentMarkdown("Sure! Here is your quiz.\n\n# Physics Quiz\n\n1. What is force?"), "1. What is force?");
   assert.equal(documentMarkdown("Just a paragraph."), "Just a paragraph.");
+});
+
+test("writtenSoFar counts numbered items, else words", () => {
+  assert.equal(writtenSoFar(""), "starting");
+  assert.equal(writtenSoFar("Here is your quiz"), "4 words written");
+  assert.equal(writtenSoFar("# Quiz\n\n1. What?\n   - (a) x\n2. Why?\n**12.** How?"), "12 items written");
+  assert.equal(writtenSoFar("Q7: what\nQuestion 8) why"), "8 items written");
 });

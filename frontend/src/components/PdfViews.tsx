@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { canSaveFile, openPdf, pdfName, sharePdf } from "../pdf/pdf";
+import { canSaveFile, openPdf, pdfName, pdfTitle, sharePdf, writtenSoFar } from "../pdf/pdf";
 import { pdfStore } from "../pdf/store";
 import { Icon } from "./Icon";
 
@@ -47,6 +47,19 @@ export function PdfCard({ id, text, request }: { id: string; text: string; reque
             {s.status === "error" ? "Try again" : "Save PDF"}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Shown from the moment a PDF was asked for, while the reply is still being written; the file is made the instant it ends. */
+export function PdfPending({ text, request }: { text: string; request: string }) {
+  return (
+    <div className="pdf-card making" role="status" aria-live="off">
+      <span className="pdf-icon" aria-hidden="true"><Icon name="pdf" size={22} /></span>
+      <div className="pdf-info">
+        <strong>{pdfName(pdfTitle(text, request))}</strong>
+        <span className="muted small-text">Writing the document… {writtenSoFar(text)} · the PDF is made as soon as it's done</span>
       </div>
     </div>
   );

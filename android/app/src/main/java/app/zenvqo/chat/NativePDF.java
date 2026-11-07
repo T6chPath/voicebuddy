@@ -46,14 +46,29 @@ final class NativePDF {
         this.web = web;
     }
 
+    /** One off-screen WebView, created ahead of time, so a PDF doesn't wait for a renderer to start. */
+    private WebView spare;
+
+    /** Create the renderer in the background shortly after startup (called from MainActivity). */
+    void prewarm() {
+        activity.runOnUiThread(() -> { if (spare == null) spare = newRenderer(); });
+    }
+
+    private WebView newRenderer() {
+        WebView w = new WebView(activity);
+        w.getSettings().setJavaScriptEnabled(false);              // the document is static HTML
+        w.getSettings().setAllowFileAccess(false);
+        w.getSettings().setAllowContentAccess(false);
+        w.loadDataWithBaseURL("https://zenvqo.local/", "<!DOCTYPE html><html><body></body></html>", "text/html", "utf-8", null);
+        return w;
+    }
+
     @JavascriptInterface
     public void save(final String id, final String html, final String fileName) {
         final String name = fileName.endsWith(".pdf") ? fileName : fileName + ".pdf";
         activity.runOnUiThread(() -> {
-            WebView w = new WebView(activity);
-            w.getSettings().setJavaScriptEnabled(false);              // the document is static HTML
-            w.getSettings().setAllowFileAccess(false);
-            w.getSettings().setAllowContentAccess(false);
+            WebView w = spare != null ? spare : newRenderer();
+            spare = null;
             rendering.put(id, w);
             w.setWebViewClient(new WebViewClient() {
                 private boolean started;
@@ -62,7 +77,7 @@ final class NativePDF {
                 public void onPageFinished(WebView view, String url) {
                     if (started) return;
                     started = true;
-                    view.postDelayed(() -> print(id, view, name), 400);   // let fonts and layout settle
+                    view.postDelayed(() -> print(id, view, name), 60);   // one frame for layout; fonts are inline
                 }
             });
             w.loadDataWithBaseURL("https://zenvqo.local/", html, "text/html", "utf-8", null);
@@ -81,11 +96,13 @@ final class NativePDF {
             pm.print(name, adapter, attrs);
             rendering.remove(id);
             send(id, "dialog", "");
+            prewarm();
             return;
         }
         final File tmp = new File(activity.getCacheDir(), "pdf/" + id + ".pdf");
         PdfPrint.write(adapter, attrs, tmp, error -> {
             rendering.remove(id);
+            prewarm();
             if (error != null) {
                 send(id, "error", error);
                 return;

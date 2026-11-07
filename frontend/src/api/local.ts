@@ -381,11 +381,12 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
   if (/table/i.test(q)) reply += "| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n";
   reply += `(_demo · ${messages.length - 2} earlier message(s) in context · temperature ${temperature}_)`;
   const toks = reply.match(/[^\s]*\s*/g)!.filter(Boolean);
-  for (const [i, t] of toks.entries()) {
+  const step = toks.length > 300 ? 12 : 1;                          // long demo replies (documents) arrive in bigger chunks
+  for (let i = 0; i < toks.length; i += step) {
     if (signal.aborted) return;
     if (q.includes("[fail]") && i === 6) throw new ApiError(502, "The demo model failed on purpose ([fail] in your message).", undefined, "demo_failure");
-    await new Promise((r) => setTimeout(r, toks.length > 300 ? 3 : 20));   // long demo replies stream faster
-    yield t;
+    await new Promise((r) => setTimeout(r, step > 1 ? 16 : 20));
+    yield toks.slice(i, i + step).join("");
   }
 }
 
