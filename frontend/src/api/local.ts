@@ -350,7 +350,7 @@ function demoDocument(q: string): string {
     let out = `# Practice Quiz (${n} questions)\n\n_Demo questions from the offline demo — connect a real AI for questions on your topic._\n\n`;
     for (let i = 0; i < n; i++) {
       const [qq, opts] = items[i % items.length];
-      out += `${i + 1}. ${qq}\n${opts.map((o, j) => `   - (${"abcd"[j]}) ${o}`).join("\n")}\n`;
+      out += `${i + 1}. ${qq}\n${opts.map((o, j) => `    - (${"abcd"[j]}) ${o}`).join("\n")}\n`;
     }
     out += "\n## Answer key\n\n" + Array.from({ length: n }, (_, i) => `${i + 1}. (${"abcd"[items[i % items.length][2]]})`).join(" · ") + "\n\n";
     return out;

@@ -10,7 +10,7 @@ const subs = new Set<() => void>();
 function set(id: string, s: PdfState) {
   states = { ...states, [id]: s };
   try {
-    const keep = Object.fromEntries(Object.entries(states).filter(([, v]) => v.status === "saved").slice(-200));
+    const keep = Object.fromEntries(Object.entries(states).filter(([, v]) => v.status === "saved" && v.result?.kind === "file").slice(-200));
     localStorage.setItem(KEY, JSON.stringify(keep));
   } catch { /* private mode */ }
   subs.forEach((f) => f());
@@ -25,7 +25,7 @@ export const pdfStore = {
     set(id, { status: "making", title });
     try {
       const r = await makePdf(title, reply);
-      set(id, { status: r.kind === "file" ? "saved" : "ready", result: r, title });
+      set(id, { status: r.kind === "dialog" ? "ready" : "saved", result: r, title });
     } catch (e) {
       set(id, { status: "error", error: (e as Error).message, title });
     }

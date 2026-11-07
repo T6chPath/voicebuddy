@@ -82,7 +82,42 @@ def test_android_app_saves_quiz_pdf(browser, tmp_path):
     ctx.close()
 
 
-def test_browser_print_layout_and_button(page, tmp_path):
+def pdf_pages(path: Path) -> int:
+    info = subprocess.run(["pdfinfo", str(path)], capture_output=True, text=True, check=True).stdout
+    return int(re.search(r"^Pages:\s+(\d+)", info, re.M).group(1))
+
+
+def ink(path: Path, page: int = 1) -> float:
+    """Share of non-white pixels on a page: a drawn document, not a blank sheet."""
+    from PIL import Image
+    png = path.with_suffix(f".p{page}.png")
+    subprocess.run(["pdftoppm", "-png", "-r", "40", "-f", str(page), "-l", str(page), "-singlefile", str(path), str(png.with_suffix(""))], check=True)
+    im = Image.open(png).convert("L")
+    return sum(1 for v in im.getdata() if v < 200) / (im.width * im.height)
+
+
+def test_android_falls_back_when_print_engine_fails(browser, tmp_path):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True)
+    ctx.add_init_script("""
+      window.__pdf = [];
+      window.ZenvqoPDF = {
+        save(id) { setTimeout(() => window.__zpdf(id, 'error', 'engine broke'), 50); },
+        saveBytes(id, b64, name) { window.__pdf.push({id, b64, name}); setTimeout(() => window.__zpdf(id, 'saved', 'Downloads/zenvqo'), 50); },
+        open() {}, share() {},
+      };""")
+    p = ctx.new_page()
+    p.goto(HTML.as_uri())
+    reply = ask(p, "generate pdf of 30 quiz questions")
+    expect(reply.locator(".pdf-card")).to_contain_text("Saved to Downloads/zenvqo", timeout=20_000)
+    got = p.evaluate("window.__pdf")[0]
+    import base64
+    out = tmp_path / got["name"]
+    out.write_bytes(base64.b64decode(got["b64"]))
+    assert out.read_bytes().startswith(b"%PDF") and pdf_pages(out) >= 3 and ink(out) > 0.01
+    ctx.close()
+
+
+def test_browser_downloads_real_pdf_file(page, tmp_path):
     page.goto("/")
     page.get_by_role("button", name="Create an account").click()
     page.get_by_label("Name").fill("Asha")
@@ -91,22 +126,33 @@ def test_browser_print_layout_and_button(page, tmp_path):
     page.get_by_role("button", name="Create account").click()
     expect(page.get_by_role("heading", name="How can I help?")).to_be_visible()
     page.evaluate("() => { window.__printed = 0; window.print = () => { window.__printed++; }; }")
-    reply = ask(page, "make a pdf of 12 practice questions")
+    with page.expect_download(timeout=30_000) as d:                                            # asked for → downloaded
+        reply = ask(page, "make a pdf of 12 practice questions")
+    dl = d.value
+    assert dl.suggested_filename == "practice-quiz-12-questions.pdf"
+    out = tmp_path / dl.suggested_filename
+    dl.save_as(out)
+    info = subprocess.run(["pdfinfo", str(out)], capture_output=True, text=True, check=True).stdout
+    assert "Practice Quiz (12 questions)" in info and "A4" in info and pdf_pages(out) >= 1
+    assert ink(out) > 0.01                                                                     # math fonts + text drawn
+    first_page_png(out, SHOTS / "pdf-browser-download-page1.png")
     card = reply.locator(".pdf-card")
-    expect(card).to_contain_text("Save as PDF")                                                 # browsers: needs a tap
-    card.get_by_role("button", name="Save PDF").click()
-    assert page.evaluate("window.__printed") == 1 and page.title().startswith("practice-quiz-12-questions")
+    expect(card).to_contain_text("Downloaded")
+    with page.expect_download():
+        card.get_by_role("button", name="Download again").click()
+    card.get_by_role("button", name="Print").click()                                           # sharper text via print
+    assert page.evaluate("window.__printed") == 1
     page.emulate_media(media="print")
-    out = tmp_path / "browser.pdf"
-    page.pdf(path=str(out), prefer_css_page_size=True, print_background=True)
-    text = pdf_text(out)
+    printed = tmp_path / "browser.pdf"
+    page.pdf(path=str(printed), prefer_css_page_size=True, print_background=True)
+    text = pdf_text(printed)
     assert "Practice Quiz (12 questions)" in text and "12." in text
     assert "New chat" not in text and "Message zenvqo" not in text                              # only the document prints
     page.emulate_media(media="screen")
     plain = ask(page, "tell me something")                                                     # any reply can be saved
-    plain.get_by_role("button", name="Save as PDF").click()
-    expect(plain.locator(".pdf-card")).to_be_visible()
-    assert page.evaluate("window.__printed") == 2
+    with page.expect_download():
+        plain.get_by_role("button", name="Save as PDF").click()
+    expect(plain.locator(".pdf-card")).to_contain_text("Downloaded")
     assert page.errors == []
 
 

@@ -109,6 +109,30 @@ final class NativePDF {
         });
     }
 
+    /** Fallback: a PDF the page drew itself (base64), written to Downloads/zenvqo like the engine's files. */
+    @JavascriptInterface
+    public void saveBytes(final String id, final String base64, final String fileName) {
+        final String name = fileName.endsWith(".pdf") ? fileName : fileName + ".pdf";
+        if (Build.VERSION.SDK_INT < 29) { fail(id, "Saving files needs Android 10 or newer.", null); return; }
+        try {
+            byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+            File tmp = new File(activity.getCacheDir(), "pdf/" + id + ".pdf");
+            //noinspection ResultOfMethodCallIgnored
+            tmp.getParentFile().mkdirs();
+            try (OutputStream out = new java.io.FileOutputStream(tmp)) { out.write(bytes); }
+            try {
+                Uri uri = toDownloads(tmp, name);
+                files.put(id, uri);
+                send(id, "saved", "Downloads/zenvqo");
+            } finally {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+        } catch (Throwable t) {
+            fail(id, "Couldn't save to Downloads.", t);
+        }
+    }
+
     private void fail(String id, String msg, Throwable t) {
         Log.e(TAG, "PDF " + id + ": " + msg, t);
         send(id, "error", msg);

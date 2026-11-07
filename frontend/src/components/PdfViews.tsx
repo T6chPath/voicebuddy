@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { canSaveFile, openPdf, pdfName, pdfTitle, sharePdf, writtenSoFar } from "../pdf/pdf";
+import { openPdf, pdfName, pdfTitle, printPdf, sharePdf, writtenSoFar } from "../pdf/pdf";
 import { pdfStore } from "../pdf/store";
 import { Icon } from "./Icon";
 
@@ -25,6 +25,7 @@ export function PdfCard({ id, text, request }: { id: string; text: string; reque
   const s = usePdf(id);
   if (!s) return null;
   const name = s.result?.name || pdfName(s.title);
+  const downloaded = s.result?.kind === "download";
   return (
     <div className={`pdf-card ${s.status}`} role="status">
       <span className="pdf-icon" aria-hidden="true"><Icon name="pdf" size={22} /></span>
@@ -32,15 +33,20 @@ export function PdfCard({ id, text, request }: { id: string; text: string; reque
         <strong>{name}</strong>
         <span className="muted small-text">
           {s.status === "making" ? "Creating the PDF…"
-            : s.status === "saved" ? `Saved to ${s.result?.where || "Downloads/zenvqo"}`
+            : s.status === "saved" ? (downloaded ? "Downloaded — it's in your Downloads folder" : `Saved to ${s.result?.where || "Downloads/zenvqo"}`)
             : s.status === "error" ? s.error
-            : canSaveFile() ? "Opened the Save as PDF screen" : "Ready — choose “Save as PDF” in the print window"}
+            : "Opened the Save as PDF screen"}
         </span>
       </div>
       <div className="pdf-actions">
-        {s.status === "saved" && s.result && <>
+        {s.status === "saved" && s.result && !downloaded && <>
           <button type="button" className="btn small primary" onClick={() => openPdf(s.result!.id)}>Open</button>
           <button type="button" className="btn small" onClick={() => sharePdf(s.result!.id)}>Share</button>
+        </>}
+        {downloaded && <>
+          <button type="button" className="btn small primary" onClick={() => void pdfStore.make(id, text, request)}>Download again</button>
+          <button type="button" className="btn small" title="Print, or save from the print window with selectable text"
+                  onClick={() => void printPdf(s.title, text)}>Print</button>
         </>}
         {(s.status === "ready" || s.status === "error") && (
           <button type="button" className="btn small primary" onClick={() => void pdfStore.make(id, text, request)}>

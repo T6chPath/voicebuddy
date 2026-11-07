@@ -6,6 +6,7 @@
 //                 (Android 10+), with Open and Share; older Android shows the system "Save as PDF" screen.
 //   browsers    — the same layout through the browser's print dialog ("Save as PDF").
 import { renderMarkdown } from "../lib/markdown";
+import { bytesToBase64, downloadBytes, rasterPdf } from "./raster";
 
 /** Did the user ask for a PDF? ("generate pdf of 30 quiz questions", "isko pdf me bana do", "export as PDF") */
 export function wantsPdf(text: string): boolean {
@@ -157,14 +158,15 @@ export function printableDocument(title: string, markdown: string): string {
 }
 
 /* ---------------- Android bridge ---------------- */
-interface NativePDF { save(id: string, html: string, fileName: string): void; open(id: string): void; share(id: string): void }
+interface NativePDF { save(id: string, html: string, fileName: string): void; saveBytes?(id: string, base64: string, fileName: string): void;
+  open(id: string): void; share(id: string): void }
 declare global { interface Window { ZenvqoPDF?: NativePDF; __zpdf?: (id: string, status: string, data: string) => void } }
 
-export interface PdfResult { kind: "file" | "dialog"; id: string; name: string; where: string }
+export interface PdfResult { kind: "file" | "dialog" | "download"; id: string; name: string; where: string }
 let seq = 0;
 const waiting = new Map<string, { resolve: (r: PdfResult) => void; reject: (e: Error) => void; name: string }>();
 
-function nativeSave(bridge: NativePDF, title: string, markdown: string, name: string): Promise<PdfResult> {
+function viaBridge(name: string, send: (id: string) => void): Promise<PdfResult> {
   const id = "pdf" + ++seq + "_" + Date.now();
   window.__zpdf = (rid, status, data) => {
     const w = waiting.get(rid);
@@ -176,8 +178,36 @@ function nativeSave(bridge: NativePDF, title: string, markdown: string, name: st
   };
   return new Promise<PdfResult>((resolve, reject) => {
     waiting.set(id, { resolve, reject, name });
-    bridge.save(id, printableDocument(title, markdown), name);
+    try { send(id); } catch (e) { waiting.delete(id); reject(e as Error); }
   });
+}
+
+async function nativeSave(bridge: NativePDF, title: string, markdown: string, name: string): Promise<PdfResult> {
+  const html = printableDocument(title, markdown);
+  try {
+    return await viaBridge(name, (id) => bridge.save(id, html, name));        // phone's print engine: selectable text
+  } catch (e) {
+    if (!bridge.saveBytes) throw e;
+    console.warn("print engine failed, drawing the PDF in the page instead:", e);
+    const bytes = await rasterPdf(await inlineFonts(html), title);              // works on any phone
+    return viaBridge(name, (id) => bridge.saveBytes!(id, bytesToBase64(bytes), name));
+  }
+}
+
+/** Fonts in a document drawn as an image must be inside it: turn linked font files into data: URLs (woff2 only). */
+async function inlineFonts(html: string): Promise<string> {
+  const faces = html.match(/@font-face\s*\{[^}]*\}/g) || [];
+  let out = html;
+  for (const face of faces) {
+    const woff2 = face.match(/url\((["']?)([^)"']+\.woff2)\1\)/);
+    if (!woff2 || woff2[2].startsWith("data:")) continue;
+    try {
+      const b = new Uint8Array(await (await fetch(woff2[2])).arrayBuffer());
+      const src = `src: url("data:font/woff2;base64,${bytesToBase64(b)}") format("woff2")`;
+      out = out.replace(face, face.replace(/src\s*:[^;}]*/, src));
+    } catch { /* math falls back to a system font */ }
+  }
+  return out;
 }
 
 /* ---------------- browsers: print the same layout ---------------- */
@@ -202,11 +232,23 @@ function browserPrint(title: string, markdown: string, name: string): Promise<Pd
   return Promise.resolve({ kind: "dialog", id: "print", name, where: "" });
 }
 
-export function canSaveFile(): boolean { return !!window.ZenvqoPDF; }
+export function canSaveFile(): boolean { return true; }
+
+/** Browsers: a real .pdf file, downloaded straight away. */
+async function browserDownload(title: string, markdown: string, name: string): Promise<PdfResult> {
+  const html = await inlineFonts(printableDocument(title, markdown));
+  downloadBytes(await rasterPdf(html, title), name);
+  return { kind: "download", id: "download", name, where: "your Downloads" };
+}
 
 export function makePdf(title: string, markdown: string): Promise<PdfResult> {
   const name = pdfName(title);
-  return window.ZenvqoPDF ? nativeSave(window.ZenvqoPDF, title, markdown, name) : browserPrint(title, markdown, name);
+  return window.ZenvqoPDF ? nativeSave(window.ZenvqoPDF, title, markdown, name) : browserDownload(title, markdown, name);
+}
+
+/** Browsers: the print window's "Save as PDF" (sharper, selectable text). */
+export function printPdf(title: string, markdown: string): Promise<PdfResult> {
+  return browserPrint(title, markdown, pdfName(title));
 }
 
 export function openPdf(id: string) { window.ZenvqoPDF?.open(id); }
