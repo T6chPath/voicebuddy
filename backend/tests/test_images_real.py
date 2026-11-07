@@ -106,8 +106,10 @@ def test_masked_object_removal_keeps_the_rest(c):
     src = pics[0].convert("RGB")
     mask = Image.new("L", src.size, 0)
     import cv2
-    rgb = np.asarray(src, dtype=np.int16)
-    orange = (rgb[..., 0] > 150) & (rgb[..., 1] < 150) & (rgb[..., 2] < 90)
+    def orange_of(im):                                                       # hue-based: orange to yellow-orange
+        hsv = cv2.cvtColor(np.asarray(im.convert("RGB")), cv2.COLOR_RGB2HSV)
+        return (hsv[..., 0] >= 5) & (hsv[..., 0] <= 28) & (hsv[..., 1] > 110) & (hsv[..., 2] > 110)
+    orange = orange_of(src)
     blob = cv2.morphologyEx(orange.astype(np.uint8), cv2.MORPH_OPEN, np.ones((9, 9), np.uint8))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(blob)
     assert n > 1, "no orange ball to remove"
@@ -130,7 +132,7 @@ def test_masked_object_removal_keeps_the_rest(c):
     REPORT["10-ball-removed"]["max_change_outside_mask"] = int(np.abs(o - s)[keep].max())
     assert np.abs(o - s)[keep].max() <= 2                                    # untouched outside the mask
     inside = ~outside
-    o_orange = (o[..., 0] > 150) & (o[..., 1] < 150) & (o[..., 2] < 90)
+    o_orange = orange_of(out[0])
     REPORT["10-ball-removed"]["orange_fraction_inside_before_after"] = [float(orange[inside].mean()), float(o_orange[inside].mean())]
     assert o_orange[inside].mean() < 0.15 * orange[inside].mean()             # the ball is gone, not just repainted
 
