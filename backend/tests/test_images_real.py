@@ -70,6 +70,7 @@ def test_text_to_image_success_criterion(c):
     a, b = (np.asarray(p.convert("L").resize((256, 256)), dtype=np.float32) for p in (pics[0], pics2[0]))
     REPORT["02-city-night"]["mean_brightness_before_after"] = [float(a.mean()), float(b.mean())]
     assert np.abs(a - b).mean() > 3                                          # it actually changed
+    assert b.mean() < a.mean() - 5                                           # and got darker
 
 
 def test_seed_is_reproducible_and_styles(c):
@@ -104,20 +105,28 @@ def test_masked_object_removal_keeps_the_rest(c):
     _, pics, _ = run(c, cid, "Generate an image of a single orange ball on green grass, top view, photo", "09-ball")
     src = pics[0].convert("RGB")
     mask = Image.new("L", src.size, 0)
-    ImageDraw.Draw(mask).ellipse((156, 156, 356, 356), fill=255)
+    rgb = np.asarray(src, dtype=np.int16)
+    orange = (rgb[..., 0] > 150) & (rgb[..., 1] < 150) & (rgb[..., 2] < 90)
+    ys, xs = np.nonzero(orange)
+    assert len(xs) > 2000, "no orange ball to remove"
+    box = (xs.min() - 6, ys.min() - 6, xs.max() + 6, ys.max() + 6)             # paint over the ball, like a person would
+    ImageDraw.Draw(mask).ellipse(box, fill=255)
+    REPORT["09-ball-mask"] = {"box": [int(v) for v in box]}
     b = io.BytesIO()
     mask.save(b, "PNG")
     mid = c.post("/api/files", files={"file": ("mask.png", b.getvalue(), "image/png")}).json()["id"]
     imgs, out, _ = run(c, cid, "remove it", "10-ball-removed", image={"op": "remove_object", "source_id": imgs_src(c, cid), "mask_id": mid})
     o, s = np.asarray(out[0].convert("RGB"), dtype=np.int16), np.asarray(src, dtype=np.int16)
     outside = np.asarray(mask.resize(src.size)) == 0
-    ring = np.zeros_like(outside)
-    ring[120:392, 120:392] = True                                           # feathered edge is allowed to change
+    from PIL import ImageFilter
+    ring = np.asarray(mask.filter(ImageFilter.MaxFilter(61))) > 0             # grown + feathered edge may change
     keep = outside & ~ring
     REPORT["10-ball-removed"]["max_change_outside_mask"] = int(np.abs(o - s)[keep].max())
     assert np.abs(o - s)[keep].max() <= 2                                    # untouched outside the mask
     inside = ~outside
-    assert np.abs(o - s)[inside].mean() > 10                                 # changed inside
+    o_orange = (o[..., 0] > 150) & (o[..., 1] < 150) & (o[..., 2] < 90)
+    REPORT["10-ball-removed"]["orange_fraction_inside_before_after"] = [float(orange[inside].mean()), float(o_orange[inside].mean())]
+    assert o_orange[inside].mean() < 0.15 * orange[inside].mean()             # the ball is gone, not just repainted
 
 
 def imgs_src(c, cid):

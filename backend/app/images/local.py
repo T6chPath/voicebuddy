@@ -284,7 +284,7 @@ class LocalProvider:
         return ", ".join(x for x in (change, scene) if x)
 
     def _op_edit(self, req, inp, prog, cancel):
-        out = self._i2i_many(req, inp.source, self._with_context(req), max(req.strength, 0.7), prog, cancel, "Editing")
+        out = self._i2i_many(req, inp.source, self._with_context(req), max(req.strength, 0.8), prog, cancel, "Editing")
         out[0].notes.append("The local model edits by repainting the whole picture. For a precise change, "
                             "paint over the area with Edit → Mask.")
         return out
@@ -298,7 +298,9 @@ class LocalProvider:
 
     def _masked(self, req, inp, prompt, prog, cancel, label) -> list[Produced]:
         import cv2
-        src, mask = inp.source, inp.mask
+        src = inp.source
+        grow = max(9, int(min(src.size) * 0.04)) | 1                 # people paint slightly inside the edge: grow ~4%
+        mask = inp.mask.filter(ImageFilter.MaxFilter(grow))
         rgb = np.array(src)
         m = np.array(mask)
         filled = cv2.inpaint(rgb, (m > 127).astype(np.uint8) * 255, 7, cv2.INPAINT_TELEA)   # neutral fill first
@@ -308,7 +310,7 @@ class LocalProvider:
         out = []
         for i in range(req.n):
             seed = None if req.seed is None else req.seed + i
-            p = self._i2i_one(pre.resize((w, h), Image.LANCZOS), prompt, req.styled_negative(), max(req.strength, 0.6),
+            p = self._i2i_one(pre.resize((w, h), Image.LANCZOS), prompt, req.styled_negative(), max(req.strength, 0.75),
                               seed, prog, cancel, i / req.n, 1 / req.n, label)
             painted = p.image.resize(src.size, Image.LANCZOS)
             p.image = Image.composite(painted, src, feather)          # outside the mask stays pixel-identical
