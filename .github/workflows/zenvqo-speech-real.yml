@@ -36,7 +36,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt -r backend/requirements-tts.txt faster-whisper playwright pillow reportlab pypdf
+          pip install -r backend/requirements.txt -r backend/requirements-tts.txt faster-whisper playwright pillow reportlab pypdf cryptography
           python -m playwright install --with-deps chromium
           sudo apt-get install -y -q poppler-utils   # pdftotext/pdfinfo for the PDF tests
       - name: Frontend type check, unit tests, build

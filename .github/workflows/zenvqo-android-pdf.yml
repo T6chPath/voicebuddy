@@ -39,7 +39,7 @@ jobs:
       - name: Tools
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
-          pip install -q websocket-client pillow reportlab pypdf
+          pip install -q websocket-client pillow reportlab pypdf cryptography
 
       - name: Enable KVM
         run: |
