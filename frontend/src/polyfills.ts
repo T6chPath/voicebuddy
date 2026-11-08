@@ -37,4 +37,23 @@ if (typeof AbortSignal !== "undefined" && typeof (AbortSignal as { timeout?: unk
   };
 }
 
+// ReadableStream async iteration (Chrome 124+): pdf.js reads text and compressed data with `for await`. The same code is
+// put in front of the pdf.js worker by scripts/build-standalone.mjs.
+const RS = typeof ReadableStream !== "undefined" ? (ReadableStream.prototype as unknown as Record<symbol | string, unknown>) : null;
+if (RS && typeof RS[Symbol.asyncIterator] !== "function") {
+  RS[Symbol.asyncIterator] = async function* iterate(this: ReadableStream) {
+    const reader = this.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+  if (typeof RS.values !== "function") RS.values = RS[Symbol.asyncIterator];
+}
+
 export {};

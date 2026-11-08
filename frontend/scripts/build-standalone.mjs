@@ -23,6 +23,12 @@ const swapApi = {
 
 // pdf.js (PDF reading) is bundled as text and started on demand from a blob: URL — see src/pdf/read.ts
 const pdfjsDir = dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json"));
+// the worker is its own global: it needs the stream polyfill from src/polyfills.ts too (Chrome < 124)
+const WORKER_POLYFILLS = `(() => { const RS = typeof ReadableStream !== "undefined" ? ReadableStream.prototype : null;
+  if (RS && typeof RS[Symbol.asyncIterator] !== "function") {
+    RS[Symbol.asyncIterator] = async function* () { const r = this.getReader();
+      try { for (;;) { const { done, value } = await r.read(); if (done) return; yield value; } } finally { r.releaseLock(); } };
+    if (typeof RS.values !== "function") RS.values = RS[Symbol.asyncIterator]; } })();`;
 const pdfjsText = {
   name: "pdfjs-text",
   setup(b) {
@@ -32,7 +38,7 @@ const pdfjsText = {
       // lowered for older Android WebViews (Chrome 80+: no private methods / static blocks there); the worker runs as a
       // classic script, since module workers from blob: URLs fail on file:// pages (the Android app)
       const contents = (await transform(src, { format: args.path === "worker" ? "iife" : "esm", minify: true, target: "chrome80",
-        legalComments: "none", logLevel: "silent" })).code;
+        legalComments: "none", logLevel: "silent", banner: args.path === "worker" ? WORKER_POLYFILLS : "" })).code;
       return { contents, loader: "text" };
     });
   },
