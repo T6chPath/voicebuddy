@@ -7,7 +7,7 @@ import { Icon } from "./Icon";
 
 const MAX_CHARS = 32000;
 const MAX_FILES = 5;
-const MAX_MB = 25;
+const MAX_MB = 50;
 const ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.yaml,.yml,.toml,.xml,.log,.java,.kt,.c,.cpp,.h,.go,.rs,.sh,.pdf,image/png,image/jpeg,image/webp,image/gif";
 
 interface Pending { key: string; file: File; progress: number; uploaded?: UploadedFile; error?: string; abort?: () => void }

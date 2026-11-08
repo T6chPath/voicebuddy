@@ -230,7 +230,7 @@ def test_scanned_pdf_pages_go_as_pictures(browser, tmp_path):
     p.locator("#composer-input").press("Enter")                       # → "Summarise this PDF."
     wait_reply(p, 1)
     text, images = user_parts(ai.requests[-1])
-    assert text.startswith("Summarise this PDF.") and "(Scanned PDF, 1 page(s)" in text
+    assert text.startswith("Summarise this PDF.") and "It is scanned: pictures of the pages are attached" in text
     assert len(images) == 1
     page = decode(images[0])
     assert max(page.size) >= 1200

@@ -71,6 +71,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(ears, "ZenvqoASR");        // voice input with the phone's speech recognizer
         pdf = new NativePDF(this, web);
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
+        web.addJavascriptInterface(new NativeAssets(this), "ZenvqoAssets");   // data files the PDF reader needs
 
         web.setWebViewClient(new WebViewClient() {
             @Override

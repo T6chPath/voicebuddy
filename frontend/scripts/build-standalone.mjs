@@ -2,7 +2,7 @@
 // or packaging inside the Android APK. Uses api/local.ts instead of the FastAPI client.
 //   node scripts/build-standalone.mjs        →  dist-standalone/zenvqo-chat.html  (+ copy into the Android assets)
 import { build, transform } from "esbuild";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -62,4 +62,17 @@ if (existsSync(resolve(root, "../android"))) {
   mkdirSync(assets, { recursive: true });
   copyFileSync(out, resolve(assets, "index.html"));
   console.log("copied →", resolve(assets, "index.html"));
+  // data files the PDF reader needs for some PDFs (CJK fonts, standard fonts, JPEG 2000/JBIG2 scans, CMYK colours)
+  const data = resolve(assets, "pdfjs");
+  rmSync(data, { recursive: true, force: true });
+  let bytes = 0;
+  for (const [dir, keep] of [["cmaps", /\.bcmap$|LICENSE/], ["standard_fonts", /./], ["wasm", /^(jbig2|openjpeg|qcms_bg)\.wasm$|LICENSE/], ["iccs", /./]]) {
+    mkdirSync(resolve(data, dir), { recursive: true });
+    for (const f of readdirSync(resolve(pdfjsDir, dir))) {
+      if (!keep.test(f)) continue;
+      copyFileSync(resolve(pdfjsDir, dir, f), resolve(data, dir, f));
+      bytes += statSync(resolve(data, dir, f)).size;
+    }
+  }
+  console.log("pdf.js data →", data, (bytes / 1024 / 1024).toFixed(1), "MB");
 }

@@ -261,7 +261,16 @@ export async function clearAllLocalData() {
 
 // ---------------- files ----------------
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|py|js|ts|tsx|jsx|html|css|sql|ya?ml|toml|xml|log|java|kt|c|cpp|h|go|rs|sh)$/i;
-const MAX_BYTES = 10 * 1024 * 1024, MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_BYTES = 10 * 1024 * 1024, MAX_PDF_BYTES = 50 * 1024 * 1024;
+
+/** "%PDF-" anywhere in the first 1 KB (some downloaded/emailed files have junk before it), or a .pdf name/type. */
+async function isPdf(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+  for (let i = 0; i + 4 < head.length; i++) {
+    if (head[i] === 0x25 && head[i + 1] === 0x50 && head[i + 2] === 0x44 && head[i + 3] === 0x46 && head[i + 4] === 0x2d) return true;
+  }
+  return false;
+}
 
 async function sniff(file: File): Promise<{ kind: Attachment["kind"]; mime: string }> {
   const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
@@ -270,7 +279,7 @@ async function sniff(file: File): Promise<{ kind: Attachment["kind"]; mime: stri
   if (starts(0xff, 0xd8, 0xff)) return { kind: "image", mime: "image/jpeg" };
   if (starts(0x47, 0x49, 0x46, 0x38)) return { kind: "image", mime: "image/gif" };
   if (starts(0x52, 0x49, 0x46, 0x46) && head[8] === 0x57 && head[9] === 0x45) return { kind: "image", mime: "image/webp" };
-  if (starts(0x25, 0x50, 0x44, 0x46)) return { kind: "pdf", mime: "application/pdf" };
+  if (await isPdf(file)) return { kind: "pdf", mime: "application/pdf" };
   if (TEXT_EXT.test(file.name) || !/\.[a-z0-9]+$/i.test(file.name)) {
     const sample = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
     if (sample.includes(0)) throw new ApiError(415, "This looks like a binary file, not text.");
@@ -306,7 +315,7 @@ export function uploadFile(file: File, onProgress: (frac: number) => void): { pr
   const promise = (async () => {
     if (file.size === 0) throw new ApiError(400, "The file is empty.");
     const { kind, mime } = await sniff(file);
-    if (file.size > (kind === "pdf" ? MAX_PDF_BYTES : MAX_BYTES)) throw new ApiError(413, `File is larger than ${kind === "pdf" ? 25 : 10} MB.`);
+    if (file.size > (kind === "pdf" ? MAX_PDF_BYTES : MAX_BYTES)) throw new ApiError(413, `File is larger than ${kind === "pdf" ? 50 : 10} MB.`);
     const name = file.name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").slice(0, 120) || "file";
     const row: FileRow = { id: uid("fil"), name, mime, size: file.size, kind, created_at: now() };
     let truncated = false;
@@ -318,14 +327,12 @@ export function uploadFile(file: File, onProgress: (frac: number) => void): { pr
       const { readPdf } = await import("../pdf/read");
       let doc;
       try {
-        doc = await readPdf(new Uint8Array(await file.arrayBuffer()), (f) => onProgress(f * 0.95));
+        doc = await readPdf(new Uint8Array(await file.arrayBuffer()), name, (f) => onProgress(f * 0.95));
       } catch (e) {
         throw new ApiError(415, (e as Error).message || "This PDF couldn't be read.");
       }
-      if (!doc.text.replace(/--- Page \d+ ---|\(no text on this page\)|\s/g, "") && !doc.images.length) throw new ApiError(415, "This PDF has no readable pages.");
-      row.text = doc.scanned
-        ? `(Scanned PDF, ${doc.pages} page(s): the pages are attached as pictures${doc.images.length < doc.pages ? ` — the first ${doc.images.length}` : ""}.)\n\n${doc.text}`
-        : doc.text;
+      if (!doc.images.length && !doc.text.replace(/^\(PDF[^\n]*\n|--- Page \d+ ---|\(no text on this page[^)]*\)|\s/gm, "")) throw new ApiError(415, "This PDF has no readable pages.");
+      row.text = doc.text;
       row.images = doc.images;
       row.pages = doc.pages;
       truncated = doc.truncated;
@@ -445,7 +452,7 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
   if (files) {
     const body = (text.split("<attached_file")[1] || "").replace(/^[^>]*>/, "");
     const pages = text.match(/<attached_file[^>]*pages="(\d+)"/)?.[1];
-    const first = body.split("\n").map((l) => l.trim()).find((l) => l && !/^--- Page \d+ ---$/.test(l)) || "";
+    const first = body.split("\n").map((l) => l.trim()).find((l) => l && !/^--- Page \d+ ---$/.test(l) && !/^\(PDF, \d+ page/.test(l)) || "";
     reply += `I can see ${files} attached file(s)${pages ? ` (a PDF with ${pages} page${pages === "1" ? "" : "s"}, read on your phone)` : ""}. First line: \`${first.slice(0, 80).replace(/`/g, "'")}\`\n\n`;
   }
   if (/code/i.test(q)) reply += "Here's how code looks:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";

@@ -3,10 +3,68 @@
 Run after pdf_on_phone.py (the app is already open). Usage: python read_on_phone.py OUT_DIR
 """
 import base64
+import json
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 from pdf_on_phone import OUT, Page, ask, page_socket
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pdf_corpus import build  # noqa: E402
+
+LAST_FILE = """(async () => {
+  const db = await new Promise((ok, no) => { const r = indexedDB.open("zenvqo-chat"); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  const rows = await new Promise((ok) => { const q = db.transaction("files").objectStore("files").getAll(); q.onsuccess = () => ok(q.result); });
+  const f = rows.sort((a, b) => a.created_at - b.created_at).pop();
+  let dark = -1;
+  if (f.images && f.images.length) {
+    const img = new Image(); img.src = f.images[0]; await img.decode();
+    const c = document.createElement("canvas"); c.width = 400; c.height = 566;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0, 400, 566);
+    const d = x.getImageData(0, 0, 400, 566).data; dark = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 450) dark++;
+  }
+  return JSON.stringify({ name: f.name, text: f.text || "", images: (f.images || []).length, dark });
+})()"""
+
+
+def inject(page, path, name):
+    data = base64.b64encode(Path(path).read_bytes()).decode()
+    page.js(f"""(() => {{
+      const bytes = Uint8Array.from(atob("{data}"), c => c.charCodeAt(0));
+      const dt = new DataTransfer(); dt.items.add(new File([bytes], {json.dumps(name)}, {{ type: "application/pdf" }}));
+      const input = document.querySelector("form.composer input[type=file]"); input.files = dt.files;
+      input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+    }})()""")
+
+
+def hard_pdfs(page):
+    """Each hard kind of PDF from e2e/pdf_corpus.py, read by the phone's own WebView with the APK's data files."""
+    folder = OUT / "corpus"
+    cases = build(folder)
+    failures = []
+    for name in ["scan-jpeg2000.pdf", "japanese-cid.pdf", "mixed.pdf", "legacy-hindi-font.pdf", "damaged-xref.pdf",
+                 "junk-before-header.pdf", "form-filled.pdf", "password-zen123.pdf"]:
+        expect, picture = cases[name]
+        t0 = time.time()
+        inject(page, folder / name, name)
+        if name.startswith("password"):
+            page.wait('!!document.querySelector(".pw-dialog input")', 30, "the password box")
+            page.js('(() => { const i = document.querySelector(".pw-dialog input"); i.value = "zen123"; '
+                    'document.querySelector(".pw-dialog").requestSubmit(); })()')
+        page.wait(f'(() => {{ const c = [...document.querySelectorAll(".att-list.pending .chip")].find(c => c.innerText.includes({json.dumps(name)})); '
+                  'return c && !c.querySelector("progress"); })()', 90, name)
+        chip = page.js(f'[...document.querySelectorAll(".att-list.pending .chip")].find(c => c.innerText.includes({json.dumps(name)})).className')
+        row = json.loads(page.js(LAST_FILE)) if "chip-error" not in chip else {"name": None}
+        ok = "chip-error" not in chip and row["name"] == name and expect in row["text"] and (row["images"] > 0) == picture and (not picture or row["dark"] > 30)
+        print(f"  {'OK ' if ok else 'BAD'} {name:26} {time.time() - t0:4.1f}s images={row.get('images')} dark={row.get('dark')} "
+              f"text={row.get('text', '')[:90]!r}", flush=True)
+        if not ok:
+            failures.append(name)
+        page.js(f'document.querySelector({json.dumps("[aria-label=" + json.dumps("Remove " + name) + "]")}).click()')
+    assert not failures, failures
 
 
 def tiny_pdf(lines):
@@ -74,6 +132,9 @@ def main():
     print("reply:", reply[:400])
     shot("pdf-read")
     assert "a PDF with 1 page" in reply and "Zenvqo phone test" in reply, reply
+    print("hard PDFs on this phone:")
+    hard_pdfs(page)
+    shot("hard-pdfs")
     print("OK: in-app camera works and PDFs are read on the phone")
 
 
