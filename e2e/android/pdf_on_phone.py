@@ -35,7 +35,11 @@ def page_socket():
     seen = None
     for i in range(90):
         if i in (30, 60):                             # the app may have been started before the system was ready
+            adb("shell", "am", "force-stop", PKG, check=False)
+            adb("shell", "am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS", check=False)
+            adb("shell", "input", "keyevent", "82", check=False)
             adb("shell", "am", "start", "-W", "-n", f"{PKG}/app.zenvqo.chat.MainActivity", check=False)
+            time.sleep(3)
             pid = adb("shell", "pidof", PKG, check=False).strip() or pid
             adb("forward", "tcp:9222", f"localabstract:webview_devtools_remote_{pid.split()[0]}", check=False)
         try:
