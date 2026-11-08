@@ -35,7 +35,7 @@ function blobUrl(src: string): string {
 const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
 const RELAXED_SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 15, 1, 13, 0, 65, 1, 253, 15, 65, 2,
   253, 15, 253, 128, 2, 11]);
-function validates(bytes: Uint8Array): boolean {
+function validates(bytes: BufferSource): boolean {
   try { return typeof WebAssembly === "object" && WebAssembly.validate(bytes); } catch { return false; }
 }
 const forceJs = !!(window as { __zvqNoWasm?: boolean }).__zvqNoWasm;              // tests: force the plain-JS path
