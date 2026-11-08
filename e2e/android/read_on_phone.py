@@ -103,8 +103,15 @@ def plots(page):
     for prompt, check in [("plot y = x^2 - 4", lambda r: "Root (−2, 0)" in r["readout"] and r["blue"] > 40),
                           ("3d plot of sin(x) cos(y)", lambda r: r["colours"] > 150)]:
         ask(page, prompt)
-        page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
-                  'return a && a.getAttribute("aria-busy") === "false" && a.querySelector(".plot canvas"); })()', 60, prompt)
+        try:
+            page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
+                      'return a && a.getAttribute("aria-busy") === "false" && a.querySelector(".plot canvas"); })()', 60, prompt)
+        except SystemExit:
+            shot("plot-failed")
+            print("composer:", page.js('document.querySelector("#composer-input").value'))
+            print("last messages:", page.js('[...document.querySelectorAll("article")].slice(-2).map(a => a.className + " busy=" + '
+                                            'a.getAttribute("aria-busy") + " :: " + a.innerHTML.slice(0, 600)).join("\\n---\\n")'))
+            raise
         time.sleep(1.5)
         r = json.loads(page.js(PAINT))
         ok = check(r)
