@@ -105,7 +105,7 @@ def plots(page):
         ask(page, prompt)
         try:
             page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
-                      'return a && a.getAttribute("aria-busy") === "false" && a.querySelector(".plot canvas"); })()', 60, prompt)
+                      'return a && a.getAttribute("aria-busy") === "false" && !!a.querySelector(".plot canvas"); })()', 60, prompt)
         except SystemExit:
             shot("plot-failed")
             print("composer:", page.js('document.querySelector("#composer-input").value'))
