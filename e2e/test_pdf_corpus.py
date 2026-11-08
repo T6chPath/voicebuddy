@@ -113,3 +113,22 @@ def test_password_cancelled_says_so(browser, corpus):
     dlg.get_by_role("button", name="Cancel").click()
     expect(p.locator(".chip-error")).to_contain_text("locked with a password", timeout=10_000)
     assert not errors, errors
+
+
+@pytest.mark.parametrize("name", ["scan-jpeg2000.pdf", "legacy-hindi-font.pdf", "mixed.pdf"])
+def test_older_webviews_without_wasm_simd(browser, corpus, name):
+    """Android WebViews before Chrome 91 can't run pdf.js's WebAssembly decoders: the plain-JS ones must take over."""
+    folder, cases = corpus
+    ai = FakeAI("Answer.")
+    p, errors = open_app(browser, ai, BRIDGE + "window.__zvqNoWasm = true; delete ArrayBuffer.prototype.transferToFixedLength;")
+    p.context.route("http://app-assets.test/**", serve_assets)
+    attach(p, folder / name)
+    p.locator("#composer-input").fill("What does it say?")
+    p.locator("#composer-input").press("Enter")
+    wait_reply(p, 1)
+    _, images = user_parts(ai.requests[-1])
+    from test_camera_pdf_read import decode
+    img = decode(images[0])
+    dark = sum(1 for x in range(0, img.width, 5) for y in range(0, img.height, 5) if sum(img.getpixel((x, y))) < 200)
+    assert dark > 50, f"page picture looks blank ({dark})"
+    assert not errors, errors

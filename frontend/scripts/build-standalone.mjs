@@ -25,13 +25,23 @@ const swapApi = {
 const pdfjsDir = dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json"));
 // the pdf.js worker is its own global: it gets the same polyfills as the page (src/polyfills.ts) for older WebViews
 const WORKER_POLYFILLS = (await build({ entryPoints: [resolve(root, "src/polyfills.ts")], bundle: true, write: false, format: "iife",
-  minify: true, target: "chrome80", logLevel: "warning" })).outputFiles[0].text;
+  minify: true, target: "chrome80", logLevel: "warning" })).outputFiles[0].text +
+  // the plain-JS image decoders, when the page supplied them (self.__zvqFallbackSrc: file name → script)
+  `self.__zvqFallback = async (name) => { const src = (self.__zvqFallbackSrc || {})[name.replace(/\\.js$/, ".iife.js")];
+     if (!src) throw new Error("decoder not available: " + name); return new Function(src + "\\n;return __zvqModule;")(); };`;
 const pdfjsText = {
   name: "pdfjs-text",
   setup(b) {
     b.onResolve({ filter: /^pdfjs-text:/ }, (args) => ({ path: args.path.slice(11), namespace: "pdfjs-text" }));
     b.onLoad({ filter: /.*/, namespace: "pdfjs-text" }, async (args) => {
-      const src = readFileSync(resolve(pdfjsDir, `legacy/build/pdf${args.path === "worker" ? ".worker" : ""}.min.mjs`), "utf8");
+      let src = readFileSync(resolve(pdfjsDir, `legacy/build/pdf${args.path === "worker" ? ".worker" : ""}.min.mjs`), "utf8");
+      if (args.path === "worker") {
+        // WebViews without WebAssembly SIMD (Chrome < 91) decode JPEG 2000 / JBIG2 scans with pdf.js's plain-JS decoders,
+        // which it would import() from a URL; the app hands them to the worker as source instead (see src/pdf/read.ts)
+        const re = /\(await import\(\s*\/\*webpackIgnore: true\*\/\s*\/\*@vite-ignore\*\/\s*`\$\{WasmImage\.#\w+\}\$\{this\._noWasmFilename\}`\)\)/;
+        if (!re.test(src)) throw new Error("pdf.js worker: fallback import not found — update the patch in build-standalone.mjs");
+        src = src.replace(re, "(await self.__zvqFallback(this._noWasmFilename))");
+      }
       // lowered for older Android WebViews (Chrome 80+: no private methods / static blocks there); the worker runs as a
       // classic script, since module workers from blob: URLs fail on file:// pages (the Android app)
       const contents = (await transform(src, { format: args.path === "worker" ? "iife" : "esm", minify: true, target: "chrome80",
@@ -73,6 +83,12 @@ if (existsSync(resolve(root, "../android"))) {
       copyFileSync(resolve(pdfjsDir, dir, f), resolve(data, dir, f));
       bytes += statSync(resolve(data, dir, f)).size;
     }
+  }
+  for (const f of ["openjpeg_nowasm_fallback.js", "jbig2_nowasm_fallback.js"]) {         // as plain scripts (see above)
+    const code = (await transform(readFileSync(resolve(pdfjsDir, "wasm", f), "utf8"), { format: "iife", globalName: "__zvqModule",
+      minify: true, target: "chrome80", legalComments: "none", logLevel: "silent" })).code;
+    writeFileSync(resolve(data, "wasm", f.replace(/\.js$/, ".iife.js")), code);
+    bytes += code.length;
   }
   console.log("pdf.js data →", data, (bytes / 1024 / 1024).toFixed(1), "MB");
 }

@@ -32,19 +32,23 @@ def page_socket():
     assert pid, "the app didn't start"
     adb("forward", "tcp:9222", f"localabstract:webview_devtools_remote_{pid.split()[0]}")
     last = None
+    seen = None
     for i in range(90):
-        if i == 45:                                   # the app may have been started before the system was ready
+        if i in (30, 60):                             # the app may have been started before the system was ready
             adb("shell", "am", "start", "-W", "-n", f"{PKG}/app.zenvqo.chat.MainActivity", check=False)
             pid = adb("shell", "pidof", PKG, check=False).strip() or pid
             adb("forward", "tcp:9222", f"localabstract:webview_devtools_remote_{pid.split()[0]}", check=False)
         try:
             pages = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=5))
-            main = [p for p in pages if p.get("type") == "page" and "index.html" in p.get("url", "")]
+            seen = [(p.get("type"), p.get("url", "")[:80]) for p in pages]
+            main = [p for p in pages if p.get("type") == "page" and p.get("url", "").startswith("file:///android_asset/index.html")]
             if main:
                 return websocket.create_connection(main[0]["webSocketDebuggerUrl"], timeout=120, suppress_origin=True)
         except Exception as e:  # not up yet
             last = e
         time.sleep(1)
+    print("pages seen:", seen, "| app process:", adb("shell", "pidof", PKG, check=False).strip(),
+          "| sockets:", adb("shell", "grep -o 'webview_devtools_remote_[0-9]*' /proc/net/unix", check=False).split())
     raise SystemExit(f"no debuggable page: {last!r}")
 
 

@@ -56,4 +56,19 @@ if (RS && typeof RS[Symbol.asyncIterator] !== "function") {
   if (typeof RS.values !== "function") RS.values = RS[Symbol.asyncIterator];
 }
 
+// ArrayBuffer.prototype.transfer / transferToFixedLength (Chrome 114+): pdf.js moves image data between threads with
+// them; without them pages that contain pictures or some fonts came out blank on older WebViews.
+const AB = ArrayBuffer.prototype as unknown as Record<string, unknown>;
+for (const name of ["transfer", "transferToFixedLength"]) {
+  if (typeof AB[name] !== "function") {
+    Object.defineProperty(ArrayBuffer.prototype, name, { configurable: true, writable: true,
+      value: function transfer(this: ArrayBuffer, length?: number) {
+        const n = length === undefined ? this.byteLength : length;
+        const out = new ArrayBuffer(n);
+        new Uint8Array(out).set(new Uint8Array(this, 0, Math.min(n, this.byteLength)));
+        return out;
+      } });
+  }
+}
+
 export {};

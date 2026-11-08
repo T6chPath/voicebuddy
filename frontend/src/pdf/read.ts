@@ -30,11 +30,27 @@ function blobUrl(src: string): string {
   return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
 }
 
+// WebAssembly with SIMD (Chrome 91+) runs pdf.js's JPEG 2000 / JBIG2 decoders; older WebViews get the plain-JS ones.
+const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
+function wasmUsable(): boolean {
+  if ((window as { __zvqNoWasm?: boolean }).__zvqNoWasm) return false;              // tests: force the plain-JS path
+  try { return typeof WebAssembly === "object" && WebAssembly.validate(SIMD_PROBE); } catch { return false; }
+}
+const useWasm = wasmUsable();
+
+async function fallbackDecoders(): Promise<string> {
+  const out: Record<string, string> = {};
+  for (const f of ["openjpeg_nowasm_fallback.iife.js", "jbig2_nowasm_fallback.iife.js"]) {
+    try { out[f] = new TextDecoder().decode(await asset("pdfjs/wasm/" + f)); } catch { /* that kind of scan can't be decoded */ }
+  }
+  return `self.__zvqFallbackSrc = ${JSON.stringify(out)};\n`;
+}
+
 function pdfjs(): Promise<PdfJs> {
   if (!lib) {
     lib = (async () => {
       const m = (await import(/* @vite-ignore */ blobUrl(libSource))) as PdfJs;
-      m.GlobalWorkerOptions.workerPort = new Worker(blobUrl(workerSource));
+      m.GlobalWorkerOptions.workerPort = new Worker(blobUrl((useWasm ? "" : await fallbackDecoders()) + workerSource));
       return m;
     })();
     lib.catch(() => { lib = null; });
@@ -145,7 +161,7 @@ function pageList(n: number[]): string {
 export async function readPdf(bytes: Uint8Array, name = "this PDF", onProgress?: (f: number) => void): Promise<PdfContent> {
   const m = await pdfjs();
   const task = m.getDocument({
-    data: bytes, useSystemFonts: true, stopAtErrors: false, enableXfa: true, isOffscreenCanvasSupported: false,
+    data: bytes, useSystemFonts: true, stopAtErrors: false, enableXfa: true, isOffscreenCanvasSupported: false, useWasm,
     useWorkerFetch: false, BinaryDataFactory: AppDataFactory,
     cMapUrl: "app:cmaps/", cMapPacked: true, standardFontDataUrl: "app:fonts/", wasmUrl: "app:wasm/",
     ...((await cmykProfile()) ? { iccUrl: iccUrl! } : {}),
