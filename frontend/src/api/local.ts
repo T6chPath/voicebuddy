@@ -9,6 +9,7 @@
  *    PDFs need the server app (no PDF parser in the single file, to keep it small)
  */
 import { createSSEParser } from "./sse";
+import { parseSpec } from "../plot/spec";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 export const LOCAL_MODE = true;
@@ -365,7 +366,8 @@ export interface StreamHandlers {
 
 const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. " +
   "When the user shares a photo or image, look at it carefully and explain everything in it: what it shows, all visible text (read it out exactly), objects, numbers, diagrams, charts, problems or questions written in it (solve them step by step), people's actions and expressions (never identify real people from their faces), and what it means — then answer the user's question about it. " +
-  "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file.";
+  "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file. " +
+  "When the user asks to plot, graph, draw or visualise a function, equation, curve or surface (2D or 3D), draw it: write a fenced code block with the language plot, one equation per line in plain maths notation (not LaTeX), for example ```plot\ny = sin(x)\ny = x^2/4\n```. Supported lines: y = f(x); x = f(y); any equation in x and y (x^2 + y^2 = 25); inequalities, shaded (y > x^2); polar r = f(theta); parametric x = f(t), y = g(t); points (2, 3); a domain at the end ({0 <= x <= 4}); 3D surfaces z = f(x, y); any equation in x, y, z (x^2 + y^2 + z^2 = 9); 3D curves x = f(t), y = g(t), z = h(t); parametric surfaces in u and v; options x: -5..5, y: …, z: …, t: 0..2pi, title: …; parameters with a slider a = 1 [0..5]. Use ^ for powers, sqrt, abs, ln, log (base 10), pi, e; implicit multiplication like 2x is fine. Choose ranges that show the interesting part. The app draws an interactive graph (zoom, trace, roots and turning points marked), so never say you can't draw graphs; after the block, briefly explain the key features (domain, intercepts, asymptotes, turning points, shape).";
 type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
@@ -436,13 +438,59 @@ function demoDocument(q: string): string {
     "आज AI हमारे फ़ोन, बैंक और स्कूलों में हर जगह है, इसलिए इसे समझदारी से इस्तेमाल करना ज़रूरी है।\n\n";
 }
 
+/** "plot y = x^2 and sin x", "graph of x^2 + y^2 = 25", "3d plot of sin(x) cos(y)": the demo draws these itself. */
+export function demoPlot(q: string): string | null {
+  if (!/\b(plot|graph|draw|sketch|visuali[sz]e)\b/i.test(q) || /\bpdf\b/i.test(q)) return null;
+  if (/^\s*(what|why|how|who|when|explain|define|meaning)\b/i.test(q) && !/[=^()]|\b(sin|cos|tan|log|sqrt|x)\b/i.test(q)) return null;   // a question about graphs
+  const want3d = /\b3\s*-?d\b|three[- ]dimensional|surface/i.test(q);
+  let body = q.replace(/^.*?\b(plot|graph|draw|sketch|visuali[sz]e)\b\s*(the\s+)?(graph\s+)?(of\s+)?/i, "")
+    .replace(/\b(in\s+)?(3\s*-?d|2\s*-?d|three[- ]dimensional|two[- ]dimensional)\b/gi, " ")
+    .replace(/\b(the|function|equation|curve|surface|please|for me|graph|plot|of|and also)\b/gi, (m) => (/^(and also)$/i.test(m) ? " and " : " "))
+    .replace(/[?.!]+\s*$/, "").trim();
+  const pieces = body.split(/\s+and\s+|\s*;\s*|\n/i).flatMap((p) => (/=|<|>/.test(p) ? splitOutsideBrackets(p) : [p])).map((p) => p.trim()).filter(Boolean);
+  const lines: string[] = [];
+  for (const p of pieces) {
+    let line = p;
+    const s = parseSpec(line);
+    if (!s.items.length) continue;
+    if (!/[=<>]/.test(line) && (s.dim === 3 || (want3d && s.items.every((i) => i.kind === "fx")))) line = `z = ${line}`;
+    lines.push(line);
+  }
+  if (!lines.length) {
+    body = "";
+    lines.push(...(want3d ? ["z = sin(x) * cos(y)"] : ["y = sin(x)", "y = x^2 / 4 - 2"]));
+  }
+  const spec = parseSpec(lines.join("\n"));
+  const named = body ? `**${lines.join("**, **")}**` : "two example functions";
+  return `Here's the ${spec.dim === 3 ? "3D " : ""}graph of ${named}:\n\n\`\`\`plot\n${lines.join("\n")}\n\`\`\`\n\n` +
+    (spec.dim === 3 ? "Drag to rotate it, pinch or scroll to zoom." : "Tap or drag along a curve to read coordinates; roots, turning points and intercepts are marked. Pinch or scroll to zoom.") +
+    "\n\n_The offline demo draws the graph on your phone. For an explanation of the function, connect a real AI in **Settings → Connection**._";
+}
+
+function splitOutsideBrackets(s: string): string[] {
+  // "y = x^2, y = 2x" → two; but keep "x = cos t, y = sin t" (parametric) and "max(x, 1)" together
+  if (/^\s*x\s*=.*,\s*y\s*=/i.test(s)) return [s];
+  const out: string[] = [];
+  let depth = 0, cur = "";
+  for (const c of s) {
+    if (c === "(") depth++;
+    if (c === ")") depth--;
+    if (c === "," && depth === 0) { out.push(cur); cur = ""; } else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
 async function* echoStream(messages: ChatMsg[], temperature: number, signal: AbortSignal): AsyncGenerator<string> {
   const last = messages[messages.length - 1].content;
   const text = typeof last === "string" ? last : last.map((p) => p.text || "").join(" ");
   const q = text.split("\n\n<attached_file")[0].trim();
   const files = (text.match(/<attached_file/g) || []).length;
   let reply: string;
-  if (DATE_Q.test(q) && !/code|table/i.test(q)) {
+  const plot = demoPlot(q);
+  if (plot) {
+    reply = plot;
+  } else if (DATE_Q.test(q) && !/code|table/i.test(q)) {
     const d = new Date();
     reply = `Today is **${d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}**, and the time is **${d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}** (from your device's clock).\n\n`;
   } else {

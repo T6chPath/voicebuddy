@@ -1,9 +1,27 @@
-import { memo, useMemo, type MouseEvent } from "react";
+import { memo, useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { renderMarkdown } from "../lib/markdown";
+import type { PlotHandle } from "../plot/mount";
 
 /** Renders sanitised Markdown. Code-block "Copy" buttons are handled by event delegation. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const html = useMemo(() => renderMarkdown(text), [text]);
+  const box = useRef<HTMLDivElement>(null);
+  // ```plot blocks → live graphs (after the text settles: while a reply streams in, the block keeps changing)
+  useEffect(() => {
+    const root = box.current;
+    if (!root || !html.includes("plot-block")) return;
+    const handles: PlotHandle[] = [];
+    const t = window.setTimeout(() => {
+      void import("../plot/mount").then(({ mountPlot }) => {
+        for (const el of root.querySelectorAll<HTMLElement>(".plot-block[data-plot]")) {
+          if (el.dataset.mounted) continue;
+          el.dataset.mounted = "1";
+          try { handles.push(mountPlot(el, decodeURIComponent(el.dataset.plot || ""))); } catch (e) { console.error("plot failed", e); }
+        }
+      });
+    }, 250);
+    return () => { clearTimeout(t); handles.forEach((h) => h.destroy()); };
+  }, [html]);
   function onClick(e: MouseEvent<HTMLDivElement>) {
     const tex = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copy-tex]");
     if (tex) {
@@ -22,7 +40,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
       window.setTimeout(() => { btn.textContent = "Copy"; }, 1500);
     });
   }
-  return <div className="md" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className="md" ref={box} onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
 export async function copyText(text: string): Promise<boolean> {

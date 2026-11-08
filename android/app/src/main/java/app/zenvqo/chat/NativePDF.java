@@ -112,7 +112,7 @@ final class NativePDF {
     /** Fallback: a PDF the page drew itself (base64), written to Downloads/zenvqo like the engine's files. */
     @JavascriptInterface
     public void saveBytes(final String id, final String base64, final String fileName) {
-        final String name = fileName.endsWith(".pdf") ? fileName : fileName + ".pdf";
+        final String name = fileName.endsWith(".pdf") || fileName.endsWith(".png") ? fileName : fileName + ".pdf";   // PDFs, and graph pictures
         if (Build.VERSION.SDK_INT < 29) { fail(id, "Saving files needs Android 10 or newer.", null); return; }
         try {
             byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
@@ -186,7 +186,7 @@ final class NativePDF {
         ContentResolver r = activity.getContentResolver();
         ContentValues v = new ContentValues();
         v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
-        v.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
+        v.put(MediaStore.MediaColumns.MIME_TYPE, name.endsWith(".png") ? "image/png" : "application/pdf");
         v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/zenvqo");
         v.put(MediaStore.MediaColumns.IS_PENDING, 1);
         Uri uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);

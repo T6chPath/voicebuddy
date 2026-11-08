@@ -87,6 +87,32 @@ def shot(name):
     subprocess.run(f"adb exec-out screencap -p > {OUT}/{name}.png", shell=True)
 
 
+PAINT = """(() => {
+  const c = [...document.querySelectorAll("article.msg-assistant")].pop().querySelector(".plot canvas");
+  if (!c) return null;
+  const x = document.createElement("canvas"); x.width = 120; x.height = 90;
+  const g = x.getContext("2d"); g.drawImage(c, 0, 0, 120, 90);
+  const d = g.getImageData(0, 0, 120, 90).data; const seen = new Set(); let blue = 0;
+  for (let i = 0; i < d.length; i += 4) { seen.add((d[i] >> 3) + "," + (d[i + 1] >> 3) + "," + (d[i + 2] >> 3)); if (d[i + 2] > 180 && d[i] < 90) blue++; }
+  return JSON.stringify({ colours: seen.size, blue, readout: c.closest(".plot").querySelector(".plot-readout").innerText });
+})()"""
+
+
+def plots(page):
+    """The demo draws graphs on the phone itself: a 2D function with its key points and a shaded 3D surface."""
+    for prompt, check in [("plot y = x^2 - 4", lambda r: "Root (−2, 0)" in r["readout"] and r["blue"] > 40),
+                          ("3d plot of sin(x) cos(y)", lambda r: r["colours"] > 150)]:
+        ask(page, prompt)
+        page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
+                  'return a && a.getAttribute("aria-busy") === "false" && a.querySelector(".plot canvas"); })()', 60, prompt)
+        time.sleep(1.5)
+        r = json.loads(page.js(PAINT))
+        ok = check(r)
+        print(f"  {'OK ' if ok else 'BAD'} {prompt:28} colours={r['colours']} blue={r['blue']} readout={r['readout'][:80]!r}", flush=True)
+        shot("plot-" + ("3d" if "3d" in prompt else "2d"))
+        assert ok, prompt
+
+
 def main():
     page = Page(page_socket())
     page.wait('!!document.querySelector("#composer-input")', 60, "the chat box")
@@ -132,6 +158,8 @@ def main():
     print("reply:", reply[:400])
     shot("pdf-read")
     assert "a PDF with 1 page" in reply and "Zenvqo phone test" in reply, reply
+    print("graphs on this phone:")
+    plots(page)
     print("hard PDFs on this phone:")
     hard_pdfs(page)
     shot("hard-pdfs")

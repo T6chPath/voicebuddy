@@ -408,3 +408,28 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .pw-dialog input { min-height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
 .pw-error { color: var(--danger); min-height: 1.2em; font-size: .9em; }
 .pw-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- graphs (```plot) ---------- */
+.plot-block { margin: 10px 0; }
+.plot-block .plot-src { font-size: .85em; opacity: .7; }
+.plot { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--bg-elev, var(--bg)); max-width: 720px; }
+.plot-title { font-weight: 600; margin: 2px 4px 8px; }
+.plot-frame { position: relative; border-radius: 8px; overflow: hidden; }
+.plot-frame canvas { display: block; border-radius: 8px; cursor: crosshair; outline: none; }
+.plot-frame canvas:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
+.plot-tools { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; }
+.plot-btn { min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev, var(--bg));
+  color: var(--text); font: 600 .85em/1 system-ui, sans-serif; cursor: pointer; opacity: .92; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.plot-btn:hover { opacity: 1; background: var(--bg-soft); }
+.plot-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.plot-legend { list-style: none; margin: 8px 4px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .88em; }
+.plot-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.plot-swatch { width: 16px; height: 4px; border-radius: 2px; flex: none; }
+.plot-eq { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.plot-params { display: grid; gap: 6px; margin: 10px 4px 2px; }
+.plot-param { display: grid; grid-template-columns: auto 1fr 5.5em; align-items: center; gap: 10px; font-size: .9em; }
+.plot-param-name { font-style: italic; font-family: Georgia, serif; font-weight: 600; }
+.plot-param input { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.plot-param-value { font-variant-numeric: tabular-nums; color: var(--muted); }
+.plot-readout { min-height: 1.3em; margin: 6px 4px 0; font-size: .82em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plot-error { margin: 6px 4px 0; font-size: .85em; color: var(--danger); }

@@ -63,7 +63,7 @@ class FakeAI:
         if req.url.endswith("/models"):
             return route.fulfill(status=200, headers=cors, content_type="application/json", body=json.dumps({"data": [{"id": "vision-1"}]}))
         self.requests.append(json.loads(req.post_data))
-        chunks = [{"choices": [{"delta": {"content": w + " "}}]} for w in self.reply.split()]
+        chunks = [{"choices": [{"delta": {"content": w}}]} for w in re.findall(r"\S+\s*|\s+", self.reply)]   # keeps line breaks
         body = "".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n"
         route.fulfill(status=200, headers=cors, content_type="text/event-stream", body=body)
 

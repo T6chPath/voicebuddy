@@ -33,6 +33,10 @@ marked.use({
   renderer: {
     code({ text, lang }: Tokens.Code) {
       const raw = (lang || "").trim().split(/\s+/)[0].toLowerCase();
+      // ```plot (or graph): drawn as an interactive graph by the Markdown component; the source shows until then
+      if (raw === "plot" || raw === "graph") {
+        return `<div class="plot-block" data-plot="${escapeHtml(encodeURIComponent(text))}"><pre class="plot-src">${escapeHtml(text)}</pre></div>`;
+      }
       const name = ALIAS[raw] || raw;
       let html: string;
       if (name && hljs.getLanguage(name)) {
@@ -83,7 +87,7 @@ export function renderMarkdown(src: string): string {
   const html = marked.parse(text, { async: false }) as string;
   return restoreMath(DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
-    ADD_ATTR: ["target", "data-copy", "aria-label", "tabindex", "role"],
+    ADD_ATTR: ["target", "data-copy", "data-plot", "aria-label", "tabindex", "role"],
     FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
     FORBID_ATTR: ["onerror", "onload", "onclick"],
   }), blocks);                                       // KaTeX output goes in after sanitising (it is generated, not model HTML)

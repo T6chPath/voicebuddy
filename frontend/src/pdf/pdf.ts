@@ -6,6 +6,27 @@
 //                 (Android 10+), with Open and Share; older Android shows the system "Save as PDF" screen.
 //   browsers    — the same layout through the browser's print dialog ("Save as PDF").
 import { renderMarkdown } from "../lib/markdown";
+import { plotImage } from "../plot/mount";
+
+/** graphs (```plot blocks) become pictures in the PDF */
+function plotsToImages(html: string): string {
+  if (!html.includes("plot-block")) return html;
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  for (const el of t.content.querySelectorAll<HTMLElement>(".plot-block[data-plot]")) {
+    let src: string | null = null;
+    try { src = plotImage(decodeURIComponent(el.dataset.plot || ""), 640); } catch { src = null; }
+    if (!src) continue;
+    const fig = document.createElement("figure");
+    fig.className = "pdf-plot";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Graph";
+    fig.append(img);
+    el.replaceWith(fig);
+  }
+  return t.innerHTML;
+}
 import { bytesToBase64, downloadBytes, rasterPdf } from "./raster";
 
 /** Did the user ask for a PDF? ("generate pdf of 30 quiz questions", "isko pdf me bana do", "export as PDF") */
@@ -74,6 +95,8 @@ body { margin: 0; font: 11.5pt/1.55 system-ui, -apple-system, "Segoe UI", Roboto
 .pdf-doc .katex-mathml { display: none !important; }   /* screen-reader copy: in a PDF it would only add invisible duplicate text */
 .pdf-doc a { color: #1d4ed8; text-decoration: none; }
 .pdf-doc img { max-width: 100%; break-inside: avoid; }
+.pdf-doc .pdf-plot { margin: 10px 0; text-align: center; break-inside: avoid; }
+.pdf-doc .pdf-plot img { width: 100%; max-width: 15cm; border: 1px solid #e5e7eb; border-radius: 6px; }
 .pdf-foot { margin-top: 24px; color: #888; font-size: 8.5pt; border-top: 1px solid #eee; padding-top: 6px; }
 `;
 
@@ -91,7 +114,7 @@ export function documentMarkdown(reply: string): string {
 function bodyHtml(title: string, markdown: string): string {
   const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   return `<article class="pdf-doc"><header class="pdf-head"><h1>${esc(title)}</h1><div class="pdf-meta">${esc(date)} · zenvqo</div></header>` +
-    `<div class="md">${renderMarkdown(documentMarkdown(markdown))}</div><footer class="pdf-foot">Made with zenvqo. AI-generated content can be wrong — check important information.</footer></article>`;
+    `<div class="md">${plotsToImages(renderMarkdown(documentMarkdown(markdown)))}</div><footer class="pdf-foot">Made with zenvqo. AI-generated content can be wrong — check important information.</footer></article>`;
 }
 
 /* Only the CSS this document actually uses goes into the file the engine prints. Copying every app style (all screens,
