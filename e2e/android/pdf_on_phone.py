@@ -133,4 +133,5 @@ def main():
     print("OK: both PDFs were saved to Downloads/zenvqo and contain the expected text")
 
 
-main()
+if __name__ == "__main__":
+    main()

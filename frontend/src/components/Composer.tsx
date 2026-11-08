@@ -2,11 +2,12 @@ import { forwardRef, type ReactNode, useCallback, useEffect, useId, useImperativ
 import { api, ApiError, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
 import { fileSize, isMac } from "../lib/format";
+import { CameraDialog } from "./CameraViews";
 import { Icon } from "./Icon";
 
 const MAX_CHARS = 32000;
 const MAX_FILES = 5;
-const MAX_MB = 10;
+const MAX_MB = 25;
 const ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.yaml,.yml,.toml,.xml,.log,.java,.kt,.c,.cpp,.h,.go,.rs,.sh,.pdf,image/png,image/jpeg,image/webp,image/gif";
 
 interface Pending { key: string; file: File; progress: number; uploaded?: UploadedFile; error?: string; abort?: () => void }
@@ -35,12 +36,26 @@ interface Props {
 
 const serverDiscard = (f: UploadedFile) => { api.deleteFile(f.id).catch(() => {}); };
 
+/** What a message with only attachments asks. */
+export function defaultQuestion(files: { kind: string }[]): string {
+  if (files.length && files.every((f) => f.kind === "image")) return files.length > 1 ? "Explain everything in these images." : "Explain everything in this image.";
+  if (files.length && files.every((f) => f.kind === "pdf")) return files.length > 1 ? "Summarise these PDFs." : "Summarise this PDF.";
+  return "Explain these files.";
+}
+
+function Thumb({ file }: { file: File }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => { const u = URL.createObjectURL(file); setUrl(u); return () => URL.revokeObjectURL(u); }, [file]);
+  return url ? <img className="chip-thumb" src={url} alt="" /> : null;
+}
+
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   { busy, sendOnEnter, onSend, onStop, upload = uploadFile, discard = serverDiscard, accept = ACCEPT, placeholder = "Message zenvqo…",
     tools, banner, popover }, ref) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [camera, setCamera] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const hintId = useId();
@@ -84,14 +99,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   const uploading = files.some((f) => !f.uploaded && !f.error);
   const hasErrors = files.some((f) => f.error);
-  const canSend = !busy && !uploading && !hasErrors && text.trim().length > 0 && text.length <= MAX_CHARS;
+  const ready = files.filter((f) => f.uploaded);
+  // a photo or PDF can be sent on its own: the question then is "explain this" / "summarise this"
+  const canSend = !busy && !uploading && !hasErrors && (text.trim().length > 0 || ready.length > 0) && text.length <= MAX_CHARS;
 
   async function submit() {
     if (!canSend) return;
     const draft = text, sent = files;
     setText("");                                       // clear right away; the reply streams below
     setFiles([]);
-    const ok = await onSend(draft.trim(), sent.filter((f) => f.uploaded).map((f) => f.uploaded!));
+    const up = sent.filter((f) => f.uploaded).map((f) => f.uploaded!);
+    const ok = await onSend(draft.trim() || defaultQuestion(up), up);
     if (!ok) {                                         // rejected before streaming (e.g. image + text-only model): restore the draft
       setText((t) => t || draft);
       setFiles((cur) => (cur.length ? cur : sent));
@@ -125,12 +143,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
           aria-label="Message composer">
       {popover}
+      {camera && <CameraDialog onPhoto={(f) => addFiles([f])} onClose={() => { setCamera(false); ta.current?.focus(); }} />}
       {banner}
       {files.length > 0 && (
         <ul className="att-list pending" aria-label="Files to send">
           {files.map((p) => (
             <li key={p.key} className={`chip${p.error ? " chip-error" : ""}`}>
-              <Icon name="file" size={14} />
+              {p.file.type.startsWith("image/") && !p.error ? <Thumb file={p.file} /> : <Icon name="file" size={14} />}
               <span className="chip-name">{p.file.name}</span>
               {p.error ? <span className="chip-status" role="alert">{p.error}</span>
                 : p.uploaded ? <span className="muted">{fileSize(p.uploaded.size)}{p.uploaded.truncated ? " · truncated" : ""}</span>
@@ -147,10 +166,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 disabled={files.length >= MAX_FILES}>
           <Icon name="clip" />
         </button>
+        <button type="button" className="icon-btn" aria-label="Take a photo" title="Take a photo" onClick={() => setCamera(true)}
+                disabled={files.length >= MAX_FILES}>
+          <Icon name="camera" />
+        </button>
         {tools}
         <input ref={input} type="file" multiple accept={accept} hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
         <label htmlFor="composer-input" className="sr-only">Message</label>
-        <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)}
+        <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={files.length ? "Ask about it — or just send" : placeholder} onChange={(e) => setText(e.target.value)}
                   onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"} />
         {busy ? (
           <button type="button" className="send-btn stop" onClick={onStop} aria-label="Stop generating">

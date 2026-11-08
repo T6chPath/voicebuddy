@@ -102,7 +102,7 @@ export function nowContext(d = new Date()): string {
 
 // ---------------- IndexedDB ----------------
 type StoreName = "conversations" | "messages" | "files";
-interface FileRow extends Attachment { text?: string; dataUrl?: string; created_at: number }
+interface FileRow extends Attachment { text?: string; dataUrl?: string; images?: string[]; pages?: number; created_at: number }
 interface MsgRow extends Message { conversation_id: string }
 
 let dbp: Promise<IDBDatabase> | null = null;
@@ -224,7 +224,11 @@ export const api = {
   conversation: async (id: string): Promise<ConversationDetail> => {
     const c = await get<Conversation>("conversations", id);
     if (!c) throw new ApiError(404, "Conversation not found.");
-    return { ...c, messages: (await messagesOf(id)).map(strip) };
+    const rows = await messagesOf(id);
+    for (const r of rows) for (const a of r.attachments) {
+      if (a.kind === "image" && !pictures.has(a.id)) { const f = await get<FileRow>("files", a.id); if (f?.dataUrl) pictures.set(a.id, f.dataUrl); }
+    }
+    return { ...c, messages: rows.map(strip) };
   },
   createConversation: async (model?: string): Promise<Conversation> => {
     const t = now();
@@ -257,7 +261,7 @@ export async function clearAllLocalData() {
 
 // ---------------- files ----------------
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|py|js|ts|tsx|jsx|html|css|sql|ya?ml|toml|xml|log|java|kt|c|cpp|h|go|rs|sh)$/i;
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 10 * 1024 * 1024, MAX_PDF_BYTES = 25 * 1024 * 1024;
 
 async function sniff(file: File): Promise<{ kind: Attachment["kind"]; mime: string }> {
   const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
@@ -266,38 +270,80 @@ async function sniff(file: File): Promise<{ kind: Attachment["kind"]; mime: stri
   if (starts(0xff, 0xd8, 0xff)) return { kind: "image", mime: "image/jpeg" };
   if (starts(0x47, 0x49, 0x46, 0x38)) return { kind: "image", mime: "image/gif" };
   if (starts(0x52, 0x49, 0x46, 0x46) && head[8] === 0x57 && head[9] === 0x45) return { kind: "image", mime: "image/webp" };
-  if (starts(0x25, 0x50, 0x44, 0x46)) throw new ApiError(415, "PDFs need the zenvqo server app. Paste the text instead.");
+  if (starts(0x25, 0x50, 0x44, 0x46)) return { kind: "pdf", mime: "application/pdf" };
   if (TEXT_EXT.test(file.name) || !/\.[a-z0-9]+$/i.test(file.name)) {
     const sample = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
     if (sample.includes(0)) throw new ApiError(415, "This looks like a binary file, not text.");
     return { kind: "text", mime: "text/plain" };
   }
-  throw new ApiError(415, "Unsupported file type. Use text, code, CSV/JSON or PNG/JPEG/WebP/GIF images.");
+  throw new ApiError(415, "Unsupported file type. Use PDF, text, code, CSV/JSON or PNG/JPEG/WebP/GIF images.");
+}
+
+/** Photos straight from a phone camera are often 4000 px / 5 MB: send at most 2048 px (sharp enough to read text). */
+async function imageDataUrl(file: File, mime: string): Promise<string> {
+  const raw = () => new Promise<string>((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result as string);
+    fr.onerror = () => rej(new ApiError(400, "Couldn't read the file."));
+    fr.readAsDataURL(file);
+  });
+  if (mime === "image/gif" || file.size < 1_500_000 || typeof createImageBitmap !== "function") return raw();
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 2048 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    return c.toDataURL("image/jpeg", 0.88);
+  } catch {
+    return raw();
+  }
 }
 
 export function uploadFile(file: File, onProgress: (frac: number) => void): { promise: Promise<UploadedFile>; abort: () => void } {
   const promise = (async () => {
-    if (file.size > MAX_BYTES) throw new ApiError(413, "File is larger than 10 MB.");
     if (file.size === 0) throw new ApiError(400, "The file is empty.");
     const { kind, mime } = await sniff(file);
+    if (file.size > (kind === "pdf" ? MAX_PDF_BYTES : MAX_BYTES)) throw new ApiError(413, `File is larger than ${kind === "pdf" ? 25 : 10} MB.`);
     const name = file.name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").slice(0, 120) || "file";
     const row: FileRow = { id: uid("fil"), name, mime, size: file.size, kind, created_at: now() };
-    if (kind === "text") row.text = (await file.text()).slice(0, 60000);
-    else row.dataUrl = await new Promise<string>((res, rej) => {
-      const fr = new FileReader();
-      fr.onload = () => res(fr.result as string);
-      fr.onerror = () => rej(new ApiError(400, "Couldn't read the file."));
-      fr.readAsDataURL(file);
-    });
+    let truncated = false;
+    if (kind === "text") {
+      const t = await file.text();
+      row.text = t.slice(0, 60000);
+      truncated = t.length > 60000;
+    } else if (kind === "pdf") {
+      const { readPdf } = await import("../pdf/read");
+      let doc;
+      try {
+        doc = await readPdf(new Uint8Array(await file.arrayBuffer()), (f) => onProgress(f * 0.95));
+      } catch (e) {
+        throw new ApiError(415, (e as Error).message || "This PDF couldn't be read.");
+      }
+      if (!doc.text.replace(/--- Page \d+ ---|\(no text on this page\)|\s/g, "") && !doc.images.length) throw new ApiError(415, "This PDF has no readable pages.");
+      row.text = doc.scanned
+        ? `(Scanned PDF, ${doc.pages} page(s): the pages are attached as pictures${doc.images.length < doc.pages ? ` — the first ${doc.images.length}` : ""}.)\n\n${doc.text}`
+        : doc.text;
+      row.images = doc.images;
+      row.pages = doc.pages;
+      truncated = doc.truncated;
+    } else {
+      row.dataUrl = await imageDataUrl(file, mime);
+    }
     await put("files", row);
+    if (row.dataUrl) pictures.set(row.id, row.dataUrl);
     onProgress(1);
-    return { id: row.id, name, mime, size: file.size, kind, chars: row.text?.length ?? 0, truncated: (row.text?.length ?? 0) >= 60000 };
+    return { id: row.id, name, mime, size: file.size, kind, chars: row.text?.length ?? 0, truncated };
   })();
   return { promise, abort: () => {} };
 }
 
 // ---------------- chat ----------------
-export const fileUrl = (_id: string, _download = false) => "";
+/** Pictures in the chat are shown from data: URLs kept in memory (filled on upload and when a chat is opened). */
+const pictures = new Map<string, string>();
+export const fileUrl = (id: string, _download = false) => pictures.get(id) || "";
 export async function ttsSpeak(_body: Record<string, unknown>, _signal: AbortSignal): Promise<Blob> { throw new ApiError(400, "No server voices in the standalone app."); }
 
 export interface StreamHandlers {
@@ -310,26 +356,48 @@ export interface StreamHandlers {
   onError?: (e: ApiError) => void;
 }
 
-const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs.";
+const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. " +
+  "When the user shares a photo or image, look at it carefully and explain everything in it: what it shows, all visible text (read it out exactly), objects, numbers, diagrams, charts, problems or questions written in it (solve them step by step), people's actions and expressions (never identify real people from their faces), and what it means — then answer the user's question about it. " +
+  "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file.";
 type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
   const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && !(m.role === "assistant" && !m.content));
   const out: ChatMsg[] = [];
   let used = 0;
-  for (const r of [...rows].reverse()) {
+  let i = rows.length - 1;
+  for (; i >= 0; i--) {
+    const r = rows[i];
     let text = r.content;
+    let docChars = 0;
     const images: string[] = [];
     for (const a of r.attachments) {
       const f = await get<FileRow>("files", a.id);
-      if (f?.text) text += `\n\n<attached_file name="${f.name}">\n${f.text}\n</attached_file>`;
-      if (f?.dataUrl && vision) images.push(f.dataUrl);
+      if (!f) continue;
+      if (f.text) {
+        text += `\n\n<attached_file name="${f.name.replace(/"/g, "'")}"${f.pages ? ` pages="${f.pages}"` : ""}>\n${f.text}\n</attached_file>`;
+        docChars += f.text.length;
+      }
+      if (vision) {
+        if (f.dataUrl) images.push(f.dataUrl);
+        if (f.images) images.push(...f.images);
+      }
     }
-    if (used + text.length > 24000 && out.length) break;
-    used += text.length;
+    // chat history is kept to ~24k characters; attached documents don't count against it (they're kept below)
+    if (used + text.length - docChars > 24000 && out.length) break;
+    used += text.length - docChars;
     out.push(images.length ? { role: r.role, content: [{ type: "text", text }, ...images.map((u) => ({ type: "image_url", image_url: { url: u } }))] } : { role: r.role, content: text });
   }
-  const system = BASE_SYSTEM + "\n" + nowContext() + (s.system_prompt ? "\n\n" + s.system_prompt : "");
+  // documents attached earlier than the kept history still count: follow-up questions ("what does page 4 say?")
+  let docs = "";
+  for (; i >= 0; i--) {
+    for (const a of rows[i].attachments) {
+      const f = await get<FileRow>("files", a.id);
+      if (f?.text && docs.length + f.text.length < 150_000) docs = `<attached_file name="${f.name.replace(/"/g, "'")}"${f.pages ? ` pages="${f.pages}"` : ""}>\n${f.text}\n</attached_file>\n\n` + docs;
+    }
+  }
+  const system = BASE_SYSTEM + "\n" + nowContext() + (s.system_prompt ? "\n\n" + s.system_prompt : "") +
+    (docs ? "\n\nFiles the user attached earlier in this chat:\n\n" + docs : "");
   return [{ role: "system", content: system }, ...out.reverse()];
 }
 
@@ -374,9 +442,14 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
     reply = `I'm the **offline demo**, not a real AI, so I can't answer “${q.slice(0, 120)}”.\n\n`;
     reply += "**To get real answers:** open **Settings → Connection**, choose **Google Gemini — free key**, paste a free key from Google AI Studio, tap **Test connection**, then **Save**.\n\n";
   }
-  if (files) reply += `I can see ${files} attached file(s). First line: \`${(text.split("<attached_file")[1]?.split(">")[1] || "").trim().split("\n")[0].slice(0, 80).replace(/`/g, "'")}\`\n\n`;
+  if (files) {
+    const body = (text.split("<attached_file")[1] || "").replace(/^[^>]*>/, "");
+    const pages = text.match(/<attached_file[^>]*pages="(\d+)"/)?.[1];
+    const first = body.split("\n").map((l) => l.trim()).find((l) => l && !/^--- Page \d+ ---$/.test(l)) || "";
+    reply += `I can see ${files} attached file(s)${pages ? ` (a PDF with ${pages} page${pages === "1" ? "" : "s"}, read on your phone)` : ""}. First line: \`${first.slice(0, 80).replace(/`/g, "'")}\`\n\n`;
+  }
   if (/code/i.test(q)) reply += "Here's how code looks:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Namaste, {name}!\"\n\nprint(greet(\"zenvqo\"))\n```\n\n";
-  if (/\bpdf\b/i.test(q)) reply += demoDocument(q);
+  if (/\bpdf\b/i.test(q) && !files) reply += demoDocument(q);
   if (/math|equation|formula|ganit/i.test(q) && !/\bpdf\b/i.test(q)) reply += "Here's how math looks — inline $E = mc^2$ and $a^2 + b^2 = c^2$, and displayed:\n\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\n$$\\int_0^1 x^2\\,dx = \\frac{1}{3} \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$\n\n";
   if (/table/i.test(q)) reply += "| Model | Size |\n|---|---|\n| zenvqo | 3B |\n| echo | 0B |\n\n";
   reply += `(_demo · ${messages.length - 2} earlier message(s) in context · temperature ${temperature}_)`;
@@ -465,6 +538,7 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
     }
     h.onDone?.({ status: "complete", title });
   } catch (e) {
+    if (!(e instanceof ApiError)) console.error("reply failed:", e);
     const err = e instanceof ApiError ? e : new ApiError(500, "Something went wrong.");
     row.status = "error";
     row.error = err.message;
@@ -484,7 +558,8 @@ export async function sendMessage(cid: string, body: { content: string; model?: 
   for (const id of body.file_ids) {
     const f = await get<FileRow>("files", id);
     if (!f) throw new ApiError(400, "An attached file was not found. Remove it and try again.");
-    if (f.kind === "image" && model === "echo") throw new ApiError(400, "The demo model can't read images. Connect a vision model in Settings.");
+    if ((f.kind === "image" || (f.kind === "pdf" && f.images?.length)) && model === "echo")
+      throw new ApiError(400, "The offline demo can't see pictures. To have photos explained, open Settings → Connection, choose Google Gemini — free key, and save.");
     atts.push({ id: f.id, name: f.name, mime: f.mime, size: f.size, kind: f.kind });
   }
   if (model !== c.model) await put("conversations", { ...c, model });

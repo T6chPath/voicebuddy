@@ -16,6 +16,7 @@
     "highlight.js": "^11.11.0",
     "katex": "^0.16.47",
     "marked": "^18.0.0",
+    "pdfjs-dist": "6.2.108",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

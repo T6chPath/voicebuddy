@@ -8,6 +8,7 @@ adb install -r -g "$APK"
 adb shell am start -W -n app.zenvqo.chat.debug/app.zenvqo.chat.MainActivity
 sleep 5
 python3 e2e/android/pdf_on_phone.py "$OUT"; rc=$?
+python3 e2e/android/read_on_phone.py "$OUT" || rc=1
 adb logcat -d > "$OUT/logcat.txt" || true
-grep -E "ZenvqoPDF|AndroidRuntime|FATAL|chromium.*(print|pdf)|PrintManager" -i "$OUT/logcat.txt" | tail -80
+grep -E "ZenvqoPDF|AndroidRuntime|FATAL|chromium.*(print|pdf|CONSOLE|camera)|PrintManager|Camera" -i "$OUT/logcat.txt" | grep -v SystemServerTiming | tail -80
 exit $rc

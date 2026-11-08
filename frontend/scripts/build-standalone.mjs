@@ -1,10 +1,11 @@
 // Builds ONE self-contained HTML file (JS + CSS inlined, no external requests) for opening directly in a browser
 // or packaging inside the Android APK. Uses api/local.ts instead of the FastAPI client.
 //   node scripts/build-standalone.mjs        →  dist-standalone/zenvqo-chat.html  (+ copy into the Android assets)
-import { build } from "esbuild";
+import { build, transform } from "esbuild";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -20,9 +21,25 @@ const swapApi = {
   },
 };
 
+// pdf.js (PDF reading) is bundled as text and started on demand from a blob: URL — see src/pdf/read.ts
+const pdfjsDir = dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json"));
+const pdfjsText = {
+  name: "pdfjs-text",
+  setup(b) {
+    b.onResolve({ filter: /^pdfjs-text:/ }, (args) => ({ path: args.path.slice(11), namespace: "pdfjs-text" }));
+    b.onLoad({ filter: /.*/, namespace: "pdfjs-text" }, async (args) => {
+      const src = readFileSync(resolve(pdfjsDir, `legacy/build/pdf${args.path === "worker" ? ".worker" : ""}.min.mjs`), "utf8");
+      // the worker runs as a classic script: module workers from blob: URLs fail on file:// pages (the Android app)
+      const contents = args.path === "worker"
+        ? (await transform(src, { format: "iife", minify: true, target: "es2020", legalComments: "none", logLevel: "silent" })).code : src;
+      return { contents, loader: "text" };
+    });
+  },
+};
+
 const r = await build({
   entryPoints: [resolve(root, "src/main.tsx")], bundle: true, minify: true, format: "esm", target: "es2020",
-  jsx: "automatic", write: false, outdir: "out", plugins: [swapApi], logLevel: "warning",
+  jsx: "automatic", write: false, outdir: "out", plugins: [swapApi, pdfjsText], logLevel: "warning",
   define: { "process.env.NODE_ENV": '"production"' }, loader: { ".css": "css", ".woff2": "dataurl", ".woff": "empty", ".ttf": "empty" }, legalComments: "eof",
 });
 const js = r.outputFiles.find((f) => f.path.endsWith(".js")).text.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");

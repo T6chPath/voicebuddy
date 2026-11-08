@@ -1,6 +1,6 @@
 # Real-phone check of PDF files: builds the debug APK, runs it on Android emulators, asks for PDFs in the chat and
 # verifies the files are written to Downloads/zenvqo with the right text. Logs, screenshots and the PDFs are uploaded.
-name: zenvqo PDF on Android (emulator)
+name: zenvqo PDF, camera and PDF reading on Android (emulator)
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back emulated -camera-front none
           script: bash e2e/android/run_pdf_test.sh zenvqo-chat.apk phone-out
 
       - uses: actions/upload-artifact@v4

@@ -4,6 +4,8 @@ const P: Record<string, string> = {
   menu: "M4 6h16M4 12h16M4 18h16",
   send: "M5 12h14M13 6l6 6-6 6",
   stop: "M7 7h10v10H7z",
+  camera: "M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  flip: "M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5",
   clip: "M21 11.5l-8.5 8.5a5 5 0 0 1-7-7L14 4.5a3.5 3.5 0 0 1 5 5L10.5 18a2 2 0 0 1-3-3L15 7.5",
   copy: "M9 9h10v10H9zM5 15V5h10",
   check: "M5 12l4 4 10-10",

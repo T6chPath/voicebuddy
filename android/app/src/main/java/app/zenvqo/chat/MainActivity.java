@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowInsets;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -30,6 +31,7 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private static final String START_URL = "file:///android_asset/index.html";
     private static final int FILE_REQUEST = 1001;
+    private static final int REQ_CAMERA = 1002;
 
     private WebView web;
     private NativeNet net;
@@ -37,6 +39,7 @@ public class MainActivity extends Activity {
     private NativeASR ears;
     private NativePDF pdf;
     private ValueCallback<Uri[]> pendingFiles;
+    private PermissionRequest pendingCamera;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +85,26 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            /** The in-app camera ("Take a photo"): only the camera is ever granted, and only to the app's own page. */
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                boolean video = false;
+                for (String r : request.getResources()) if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) video = true;
+                if (!video || !"file".equals(request.getOrigin().getScheme())) { request.deny(); return; }
+                if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                    return;
+                }
+                if (pendingCamera != null) pendingCamera.deny();
+                pendingCamera = request;
+                requestPermissions(new String[]{android.Manifest.permission.CAMERA}, REQ_CAMERA);
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (request == pendingCamera) pendingCamera = null;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (pendingFiles != null) pendingFiles.onReceiveValue(null);
@@ -192,6 +215,13 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_CAMERA && pendingCamera != null) {
+            boolean ok = grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (ok) pendingCamera.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+            else pendingCamera.deny();                                   // the page shows how to allow it, and offers the gallery
+            pendingCamera = null;
+            return;
+        }
         if (requestCode == NativeASR.REQ_MIC && ears != null) {
             ears.onPermission(grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
         }

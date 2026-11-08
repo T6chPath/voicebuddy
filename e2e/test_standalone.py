@@ -147,7 +147,7 @@ def test_unreachable_server_and_file_attach(app, tmp_path):
     pdf = tmp_path / "a.pdf"
     pdf.write_bytes(b"%PDF-1.4 fake")
     app.locator("input[type=file]").set_input_files(str(pdf))
-    expect(app.locator(".chip-error")).to_contain_text("PDFs need the zenvqo server app")
+    expect(app.locator(".chip-error")).to_contain_text("This PDF couldn't be read")             # real PDFs are read on the device
 
 
 def test_mobile_layout_standalone(browser):

@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- voice mode: asked for at first use, only while voice mode listens -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- "Take a photo": asked for the first time the camera is opened in the app -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Android 11+: let the app find the installed text-to-speech engine -->
     <queries>

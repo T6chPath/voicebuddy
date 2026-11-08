@@ -40,7 +40,9 @@ router = APIRouter(prefix="/api/conversations", tags=["chat"])
 log = logging.getLogger("zenvqo.chat")
 BASE_SYSTEM = ("You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). "
                "Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. "
-               "When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs.")
+               "When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. "
+               "When the user shares a photo or image, look at it carefully and explain everything in it: what it shows, all visible text (read it out exactly), objects, numbers, diagrams, charts, problems or questions written in it (solve them step by step), people's actions and expressions (never identify real people from their faces), and what it means — then answer the user's question about it. "
+               "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page for PDFs, and say plainly when the answer isn't in the file.")
 TOOL_NAME = {"generate": "generate_image"}
 
 

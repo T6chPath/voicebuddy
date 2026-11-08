@@ -365,7 +365,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
             <MessageView key={m.id} m={m} isLast={i === messages.length - 1} busy={busy} models={models}
                          request={m.role === "assistant" ? [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content : undefined}
                          showTime={settings.show_timestamps} onRegenerate={regenerate}
-                         onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf} />
+                         onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
+                         fileHref={(a, d) => fileUrl(a.id, d) || null} />
           ))}
         </div>
       </div>
