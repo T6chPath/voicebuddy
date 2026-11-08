@@ -29,9 +29,10 @@ const pdfjsText = {
     b.onResolve({ filter: /^pdfjs-text:/ }, (args) => ({ path: args.path.slice(11), namespace: "pdfjs-text" }));
     b.onLoad({ filter: /.*/, namespace: "pdfjs-text" }, async (args) => {
       const src = readFileSync(resolve(pdfjsDir, `legacy/build/pdf${args.path === "worker" ? ".worker" : ""}.min.mjs`), "utf8");
-      // the worker runs as a classic script: module workers from blob: URLs fail on file:// pages (the Android app)
-      const contents = args.path === "worker"
-        ? (await transform(src, { format: "iife", minify: true, target: "es2020", legalComments: "none", logLevel: "silent" })).code : src;
+      // lowered for older Android WebViews (Chrome 80+: no private methods / static blocks there); the worker runs as a
+      // classic script, since module workers from blob: URLs fail on file:// pages (the Android app)
+      const contents = (await transform(src, { format: args.path === "worker" ? "iife" : "esm", minify: true, target: "chrome80",
+        legalComments: "none", logLevel: "silent" })).code;
       return { contents, loader: "text" };
     });
   },

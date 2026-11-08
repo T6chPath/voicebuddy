@@ -167,7 +167,7 @@ export function bytesToBase64(b: Uint8Array): string {
 
 /** Hand bytes to the browser as a download. */
 export function downloadBytes(bytes: Uint8Array, name: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;

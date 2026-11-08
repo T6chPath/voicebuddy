@@ -44,7 +44,7 @@ function pageText(items: { str?: string; hasEOL?: boolean }[]): string {
 
 export async function readPdf(bytes: Uint8Array, onProgress?: (f: number) => void): Promise<PdfContent> {
   const m = await pdfjs();
-  const task = m.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true, stopAtErrors: false });
+  const task = m.getDocument({ data: bytes, useSystemFonts: true, stopAtErrors: false });
   let doc;
   try {
     doc = await task.promise;
