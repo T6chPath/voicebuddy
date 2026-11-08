@@ -30,13 +30,17 @@ function blobUrl(src: string): string {
   return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
 }
 
-// WebAssembly with SIMD (Chrome 91+) runs pdf.js's JPEG 2000 / JBIG2 decoders; older WebViews get the plain-JS ones.
+// pdf.js's JPEG 2000 / JBIG2 decoders are WebAssembly using SIMD (Chrome 91+) and relaxed SIMD (Chrome 114+). Where
+// that's missing, the plain-JS decoders are handed to the worker too, and pdf.js switches to them by itself.
 const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
-function wasmUsable(): boolean {
-  if ((window as { __zvqNoWasm?: boolean }).__zvqNoWasm) return false;              // tests: force the plain-JS path
-  try { return typeof WebAssembly === "object" && WebAssembly.validate(SIMD_PROBE); } catch { return false; }
+const RELAXED_SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 15, 1, 13, 0, 65, 1, 253, 15, 65, 2,
+  253, 15, 253, 128, 2, 11]);
+function validates(bytes: Uint8Array): boolean {
+  try { return typeof WebAssembly === "object" && WebAssembly.validate(bytes); } catch { return false; }
 }
-const useWasm = wasmUsable();
+const forceJs = !!(window as { __zvqNoWasm?: boolean }).__zvqNoWasm;              // tests: force the plain-JS path
+const useWasm = !forceJs && validates(SIMD_PROBE);
+const needJsDecoders = forceJs || !validates(SIMD_PROBE) || !validates(RELAXED_SIMD_PROBE);
 
 async function fallbackDecoders(): Promise<string> {
   const out: Record<string, string> = {};
@@ -50,7 +54,7 @@ function pdfjs(): Promise<PdfJs> {
   if (!lib) {
     lib = (async () => {
       const m = (await import(/* @vite-ignore */ blobUrl(libSource))) as PdfJs;
-      m.GlobalWorkerOptions.workerPort = new Worker(blobUrl((useWasm ? "" : await fallbackDecoders()) + workerSource));
+      m.GlobalWorkerOptions.workerPort = new Worker(blobUrl((needJsDecoders ? await fallbackDecoders() : "") + workerSource));
       return m;
     })();
     lib.catch(() => { lib = null; });
