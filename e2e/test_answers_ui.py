@@ -30,6 +30,6 @@ def test_answer_layout_and_instructions(browser):
     lead, body = md.locator("p").nth(0), md.locator("p").nth(1)
     size = lambda loc: float(loc.evaluate("e => parseFloat(getComputedStyle(e).fontSize)"))
     assert size(lead) > size(body), "the direct answer is a little larger"
-    hl = md.locator("p strong").first.evaluate("e => getComputedStyle(e).backgroundImage")
-    assert "gradient" in hl, "key terms are highlighted"
+    weight = md.locator("p strong").first.evaluate("e => parseInt(getComputedStyle(e).fontWeight)")
+    assert weight >= 600, "key terms stand out"
     assert not errors, errors

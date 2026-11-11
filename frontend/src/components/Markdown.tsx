@@ -1,10 +1,34 @@
-import { memo, useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { renderMarkdown } from "../lib/markdown";
 import type { PlotHandle } from "../plot/mount";
 
 /** Renders sanitised Markdown. Code-block "Copy" buttons are handled by event delegation. */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
-  const html = useMemo(() => renderMarkdown(text), [text]);
+export const Markdown = memo(function Markdown({ text, live = false }: { text: string; live?: boolean }) {
+  // While a reply streams in, re-format it only as often as this phone can keep up with: the gap between redraws
+  // adapts to how long the last one took (fast phones ~every 60 ms, slow ones less often), so typing stays smooth.
+  const [shown, setShown] = useState(text);
+  const latest = useRef(text);
+  const lastAt = useRef(0);
+  const cost = useRef(0);
+  const timer = useRef<number | undefined>(undefined);
+  latest.current = text;
+  useEffect(() => {
+    if (!live) return;
+    const gap = Math.max(60, Math.min(400, cost.current * 4));
+    const wait = lastAt.current + gap - performance.now();
+    if (wait <= 0) { lastAt.current = performance.now(); setShown(text); }
+    else if (timer.current === undefined) {
+      timer.current = window.setTimeout(() => { timer.current = undefined; lastAt.current = performance.now(); setShown(latest.current); }, wait);
+    }
+  }, [text, live]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const display = live ? shown : text;
+  const html = useMemo(() => {
+    const t0 = performance.now();
+    const h = renderMarkdown(display);
+    cost.current = performance.now() - t0;
+    return h;
+  }, [display]);
   const box = useRef<HTMLDivElement>(null);
   // ```plot blocks → live graphs (after the text settles: while a reply streams in, the block keeps changing)
   useEffect(() => {

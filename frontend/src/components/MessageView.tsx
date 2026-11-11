@@ -59,7 +59,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
       )}
       <div className="msg-body">
         {m.role === "user" ? <p className="plain">{m.content}</p>
-          : m.content ? <Markdown text={m.content} />
+          : m.content ? <Markdown text={m.content} live={streaming} />
           : streaming && !m.tool ? <span className="typing" role="img" aria-label="Assistant is typing"><i /><i /><i /></span> : null}
         {streaming && m.content && <span className="cursor" aria-hidden="true" />}
       </div>
