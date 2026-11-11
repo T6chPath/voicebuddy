@@ -102,7 +102,8 @@ def decode(data_url):
 def test_take_photo_and_ai_explains_it(camera_browser):
     ai = FakeAI("The photo shows a red circle and the words ZENVQO 42.")
     p, errors = open_app(camera_browser, ai)
-    p.get_by_role("button", name="Take a photo").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Take a photo").click()
     dialog = p.get_by_role("dialog", name="Take a photo")
     expect(dialog).to_be_visible()
     shutter = dialog.get_by_role("button", name="Take photo")
@@ -143,7 +144,8 @@ def test_take_photo_and_ai_explains_it(camera_browser):
 def test_camera_question_typed_and_retake(camera_browser):
     ai = FakeAI("It is a sign.")
     p, errors = open_app(camera_browser, ai)
-    p.get_by_role("button", name="Take a photo").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Take a photo").click()
     dialog = p.get_by_role("dialog", name="Take a photo")
     shutter = dialog.get_by_role("button", name="Take photo")
     expect(shutter).to_be_enabled(timeout=10_000)
@@ -164,7 +166,8 @@ def test_camera_question_typed_and_retake(camera_browser):
 def test_camera_permission_denied_shows_help(browser):
     deny = "navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError'));"
     p, errors = open_app(browser, FakeAI(), deny)
-    p.get_by_role("button", name="Take a photo").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Take a photo").click()
     dialog = p.get_by_role("dialog", name="Take a photo")
     expect(dialog.get_by_role("alert")).to_contain_text("Camera permission was denied")
     expect(dialog.get_by_role("button", name="Choose a photo instead")).to_be_visible()
@@ -241,7 +244,8 @@ def test_scanned_pdf_pages_go_as_pictures(browser, tmp_path):
 
 def test_demo_model_says_how_to_get_photos_explained(camera_browser):
     p, errors = open_app(camera_browser, FakeAI(), "localStorage.setItem('zc.local.settings', JSON.stringify({default_model: 'echo'}));")
-    p.get_by_role("button", name="Take a photo").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Take a photo").click()
     dialog = p.get_by_role("dialog", name="Take a photo")
     expect(dialog.get_by_role("button", name="Take photo")).to_be_enabled(timeout=10_000)
     dialog.get_by_role("button", name="Take photo").click()

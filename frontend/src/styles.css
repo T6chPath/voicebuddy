@@ -568,3 +568,35 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .project-files { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
 .project-files code { font: .8em var(--mono); background: var(--panel); padding: 3px 8px; border-radius: 8px; display: inline-block; }
 .project-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* ---------------- message box: "+" menu (like ChatGPT) ---------------- */
+.composer { border-radius: 28px; padding: 8px 8px 8px; }
+.composer textarea { font-size: 1.02em; padding: 6px 8px 6px; min-height: 44px; }
+.composer-text { padding: 2px 6px 0; }
+.composer-tools { gap: 4px; min-height: 44px; }
+.plus-wrap { position: relative; }
+.plus-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-elev); color: var(--text);
+  display: grid; place-items: center; cursor: pointer; transition: transform .18s ease, background-color .15s, border-color .15s; flex: none; }
+.plus-btn:hover { background: var(--panel); }
+.plus-btn.open { transform: rotate(45deg); background: var(--panel); border-color: transparent; }
+.plus-menu { position: absolute; left: -2px; bottom: calc(100% + 12px); z-index: 30; width: min(300px, calc(100vw - 32px)); padding: 6px;
+  border-radius: 20px; background: var(--bg-elev); box-shadow: var(--shadow), 0 0 0 1px var(--border); display: grid; gap: 2px;
+  transform-origin: bottom left; animation: pm-in .16s ease-out; }
+.plus-menu[hidden] { display: none; }
+@keyframes pm-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+.plus-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 6px 10px; border: 0; border-radius: 14px;
+  background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.plus-item:hover:not(:disabled), .plus-item:focus-visible { background: var(--panel); box-shadow: none; }
+.plus-item:disabled { opacity: .45; cursor: not-allowed; }
+.plus-item > svg:last-child { color: var(--accent); margin-left: auto; }
+.pi-ico { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent); }
+.plus-item.on .pi-ico { background: var(--accent); color: var(--accent-ink); }
+.pi-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.pi-label { font-weight: 600; }
+.pi-hint { font-size: .8em; color: var(--muted); }
+.mode-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 4px 0 12px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: .9em; }
+.mode-chip button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
+.mode-chip button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.composer-tools .icon-btn { border-radius: 50%; }
+@media (prefers-reduced-motion: reduce) { .plus-menu { animation: none; } .plus-btn { transition: none; } }

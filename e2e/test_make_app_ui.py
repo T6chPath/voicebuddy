@@ -81,3 +81,32 @@ def test_outside_the_android_app_it_says_where_it_works(browser):
     expect(dlg.get_by_role("alert")).to_contain_text("zenvqo Android app")
     expect(dlg.get_by_role("button", name="Make app")).to_be_disabled()
     assert not errors, errors
+
+
+def test_plus_menu_in_the_message_box(browser):
+    ai = FakeAI("ok")
+    p, errors = open_app(browser, ai)
+    plus = p.get_by_role("button", name="Add photos, files and more")
+    expect(p.get_by_role("button", name="Start voice conversation")).to_be_visible()          # the mic stays outside
+    expect(p.get_by_role("menu")).to_be_hidden()
+    plus.click()
+    menu = p.get_by_role("menu", name="Add to your message")
+    expect(menu).to_be_visible()
+    names = [x.strip().split("\n")[0] for x in menu.get_by_role("menuitem").all_inner_texts()]
+    assert names[:2] == ["Camera", "Photos & files"], names
+    expect(menu.get_by_role("menuitem").first).to_be_focused()
+    p.keyboard.press("ArrowDown")
+    expect(menu.get_by_role("menuitem", name="Attach files")).to_be_focused()
+    p.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    expect(plus).to_be_focused()
+    plus.click()
+    p.get_by_role("menuitem", name="Create image").click()
+    expect(p.locator(".mode-chip")).to_contain_text("Image")
+    expect(p.locator("#composer-input")).to_have_attribute("placeholder", "Describe the image to create…")
+    p.get_by_role("button", name="Cancel image mode").click()
+    expect(p.locator(".mode-chip")).to_have_count(0)
+    plus.click()
+    p.mouse.click(5, 5)                                                                          # tapping elsewhere closes it
+    expect(p.get_by_role("menu")).to_be_hidden()
+    assert not errors, errors

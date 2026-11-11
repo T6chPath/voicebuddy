@@ -12,6 +12,8 @@ const ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.
 
 interface Pending { key: string; file: File; progress: number; uploaded?: UploadedFile; error?: string; abort?: () => void }
 
+export interface MenuItem { key: string; icon: string; label: string; hint?: string; ariaLabel?: string; on?: boolean; disabled?: boolean; onSelect: () => void }
+
 export interface ComposerHandle { focus: () => void; setText: (t: string) => void }
 
 export type Uploader = (file: File, onProgress: (frac: number) => void) => { promise: Promise<UploadedFile>; abort: () => void };
@@ -26,8 +28,14 @@ interface Props {
   discard?: (f: UploadedFile) => void;
   accept?: string;
   placeholder?: string;
-  /** extra controls next to the attach button (e.g. image settings) */
+  /** extra controls next to the send button */
   tools?: ReactNode;
+  /** controls kept outside the "+" menu, next to send (the mic) */
+  trailing?: ReactNode;
+  /** extra entries in the "+" menu (after Camera and Photos & files) */
+  menu?: MenuItem[];
+  /** small mode tags next to "+" (e.g. "Image") */
+  chips?: ReactNode;
   /** shown above the input (e.g. "Editing image #3") */
   banner?: ReactNode;
   /** popover anchored to the composer */
@@ -51,7 +59,32 @@ function Thumb({ file }: { file: File }) {
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   { busy, sendOnEnter, onSend, onStop, upload = uploadFile, discard = serverDiscard, accept = ACCEPT, placeholder = "Message zenvqo…",
-    tools, banner, popover }, ref) {
+    tools, trailing, menu = [], chips, banner, popover }, ref) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const plus = useRef<HTMLButtonElement>(null);
+  const menuEl = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    menuEl.current?.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus();
+    const away = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!menuEl.current?.contains(t) && !plus.current?.contains(t)) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [menuOpen]);
+  const closeMenu = (refocus = true) => { setMenuOpen(false); if (refocus) plus.current?.focus(); };
+  function menuKeys(e: KeyboardEvent<HTMLDivElement>) {
+    const items = [...(menuEl.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)") || [])];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+    else if (e.key === "Home") { e.preventDefault(); items[0]?.focus(); }
+    else if (e.key === "End") { e.preventDefault(); items[items.length - 1]?.focus(); }
+    else if (e.key === "Tab") setMenuOpen(false);
+  }
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -167,17 +200,32 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                   onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"} />
       </div>
       <div className="composer-tools">
-        <button type="button" className="icon-btn" aria-label="Attach files" title="Attach files" onClick={() => input.current?.click()}
-                disabled={files.length >= MAX_FILES}>
-          <Icon name="clip" />
-        </button>
-        <button type="button" className="icon-btn" aria-label="Take a photo" title="Take a photo" onClick={() => setCamera(true)}
-                disabled={files.length >= MAX_FILES}>
-          <Icon name="camera" />
-        </button>
-        {tools}
+        <div className="plus-wrap">
+          <button type="button" ref={plus} className={`plus-btn${menuOpen ? " open" : ""}`} aria-label="Add photos, files and more" title="Add"
+                  aria-haspopup="menu" aria-expanded={menuOpen} aria-controls={menuId} onClick={() => setMenuOpen((x) => !x)}>
+            <Icon name="plus" size={20} />
+          </button>
+          <div id={menuId} ref={menuEl} role="menu" aria-label="Add to your message" className="plus-menu" hidden={!menuOpen} onKeyDown={menuKeys}>
+            {[
+              { key: "camera", icon: "camera", label: "Camera", hint: "Take a photo", ariaLabel: "Take a photo", disabled: files.length >= MAX_FILES, onSelect: () => setCamera(true) },
+              { key: "files", icon: "clip", label: "Photos & files", hint: "Images, PDFs, code, text", ariaLabel: "Attach files", disabled: files.length >= MAX_FILES,
+                onSelect: () => input.current?.click() },
+              ...menu,
+            ].map((it) => (
+              <button key={it.key} type="button" role="menuitem" className={`plus-item${it.on ? " on" : ""}`} aria-label={it.ariaLabel}
+                      disabled={it.disabled} onClick={() => { closeMenu(false); it.onSelect(); }}>
+                <span className="pi-ico" aria-hidden="true"><Icon name={it.icon} size={20} /></span>
+                <span className="pi-text"><span className="pi-label">{it.label}</span>{it.hint && <span className="pi-hint">{it.hint}</span>}</span>
+                {it.on && <Icon name="check" size={16} />}
+              </button>
+            ))}
+          </div>
+        </div>
+        {chips}
         <input ref={input} type="file" multiple accept={accept} hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
         <span className="spacer" />
+        {tools}
+        {trailing}
         {busy ? (
           <button type="button" className="send-btn stop" onClick={onStop} aria-label="Stop generating">
             <Icon name="stop" />

@@ -106,20 +106,21 @@ def test_upload_and_remove_background(pg, tmp_path):
 
 @fake_only
 def test_image_settings_and_buttons(pg):
-    pg.get_by_role("button", name="Image settings").click()
+    pg.get_by_role("button", name="Add photos, files and more").click()
+    pg.get_by_role("menuitem", name="Image settings").click()
     panel = pg.get_by_role("dialog", name="Image settings")
     panel.get_by_label("Style").select_option("anime")
     panel.get_by_label("Aspect ratio").select_option("16:9")
     panel.get_by_label("Images").select_option("2")
     panel.get_by_label("Make an image from my next message").check()
-    expect(pg.get_by_text("Your next message will create an image")).to_be_visible()
+    expect(pg.locator(".mode-chip")).to_contain_text("Image")
     panel.get_by_role("button", name="Close image settings").click()
     send(pg, "a cat on a scooter")                                                   # no "generate" word: the toggle forces it
     imgs = wait_images(pg, 2)
     box = imgs.first.bounding_box()
     assert 1.6 < box["width"] / box["height"] < 1.9                                  # 16:9 tiles
     expect(pg.locator("article.msg-assistant").last).to_contain_text("2 images")
-    expect(pg.get_by_text("Your next message will create an image")).to_have_count(0)
+    expect(pg.locator(".mode-chip")).to_have_count(0)
     card = pg.locator("article.msg-assistant").last.locator(".img-card").first
     card.get_by_role("button", name="Make variations").click()
     wait_images(pg, 2 + 2)
@@ -167,6 +168,7 @@ def test_mobile_image_layout(pg):
     send(pg, "generate an image of mountains")
     wait_images(pg, 1)
     assert pg.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 0
-    pg.get_by_role("button", name="Image settings").click()
+    pg.get_by_role("button", name="Add photos, files and more").click()
+    pg.get_by_role("menuitem", name="Image settings").click()
     assert pg.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 0
     pg.screenshot(path=str(SHOTS / "ui-mobile-images.png"))
