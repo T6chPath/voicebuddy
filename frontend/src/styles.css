@@ -696,3 +696,18 @@ button.fc-body:hover { background: var(--bg-soft); }
   overflow-wrap: anywhere; font: .85em/1.55 var(--mono); color: var(--text); }
 /* no note under the message box: a little breathing room instead */
 .composer-wrap { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+/* ---------------- slim message box (like ChatGPT): one line — [+] text [mic] [send] ---------------- */
+.composer.slim { display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 30px; }
+.composer.slim .composer-tools { display: contents; }
+.composer.slim .composer-tools > * { order: 4; }
+.composer.slim .plus-wrap { order: 1; }
+.composer.slim .mode-chip { order: 2; }
+.composer.slim .composer-text { order: 3; flex: 1; min-width: 0; padding: 0 2px; }
+.composer.slim .composer-tools > .spacer { display: none; }
+.composer.slim textarea { min-height: 40px; padding: 9px 6px; line-height: 22px; }
+.composer.slim .plus-btn, .composer.slim .send-btn, .composer.slim .composer-tools .icon-btn { width: 40px; height: 40px; }
+.composer.slim .composer-hint, .composer.slim .dict-error { display: none; }
+.composer.slim > .composer-hint.over { display: block; }
+.composer:not(.slim) .composer-text textarea { padding-bottom: 2px; }
+.composer:not(.slim) { padding-top: 6px; }

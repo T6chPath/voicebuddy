@@ -132,12 +132,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useImperativeHandle(ref, () => ({ focus: () => ta.current?.focus(), setText: (t) => { setText(t); ta.current?.focus(); },
     addFiles: (f) => addFilesRef.current(f) }), []);
 
+  // slim one-line box (like ChatGPT) until the message wraps; then text on top, tools below — back to slim once empty
+  const [tall, setTall] = useState(false);
   useEffect(() => {                                   // auto-grow up to ~40% of the viewport
     const el = ta.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.4) + "px";
-  }, [text]);
+    const h = el.scrollHeight;
+    el.style.height = Math.min(h, window.innerHeight * 0.4) + "px";
+    if (!text) setTall(false);
+    else if (text.includes("\n") || h > 52) setTall(true);
+  }, [text, tall]);                                   // measured again once the box has changed shape
 
   const addFilesRef = useRef<(f: FileList | File[]) => void>(() => {});
   const addFiles = useCallback((list: FileList | File[]) => {
@@ -211,7 +216,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   const over = text.length > MAX_CHARS;
   return (
-    <form className={`composer${dragging ? " dragging" : ""}`} onSubmit={(e) => { e.preventDefault(); submit(); }}
+    <form className={`composer${dragging ? " dragging" : ""}${!tall && !files.length && !banner && !recording ? " slim" : ""}`} onSubmit={(e) => { e.preventDefault(); submit(); }}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
           aria-label="Message composer">
       {popover}
