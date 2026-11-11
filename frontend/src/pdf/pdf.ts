@@ -92,6 +92,13 @@ body { margin: 0; font: 11.5pt/1.55 system-ui, -apple-system, "Segoe UI", Roboto
 .pdf-doc .math-display { background: #f7f7fb !important; border: 1px solid #e3e3ee; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .pdf-doc .math-scroll { overflow: visible !important; }
 .pdf-doc .math-copy { display: none !important; }
+.pdf-doc .callout { margin: 10px 0; padding: 8px 12px 2px; border-radius: 8px; border: 1px solid #d5e3e0; background: #eef6f4 !important; break-inside: avoid;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-doc .callout-label { font-weight: 700; margin: 0 0 2px; color: #0a6e6a; }
+.pdf-doc .callout-label::before { display: none; }
+.pdf-doc .callout-warn { background: #fdecea !important; border-color: #f3c6c1; } .pdf-doc .callout-warn .callout-label { color: #b42318; }
+.pdf-doc .callout-summary { background: #fff4dc !important; border-color: #f1d9a3; } .pdf-doc .callout-summary .callout-label { color: #7a5200; }
+.pdf-doc .callout-note, .pdf-doc .callout-example { background: #f4f6f6 !important; border-color: #dde3e2; } .pdf-doc .callout-note .callout-label, .pdf-doc .callout-example .callout-label { color: #3d5652; }
 .pdf-doc .katex-mathml { display: none !important; }   /* screen-reader copy: in a PDF it would only add invisible duplicate text */
 .pdf-doc a { color: #1d4ed8; text-decoration: none; }
 .pdf-doc img { max-width: 100%; break-inside: avoid; }
