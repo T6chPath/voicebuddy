@@ -8,6 +8,8 @@
     <!-- "Take a photo": asked for the first time the camera is opened in the app -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- "Make app": install the apps you build from web pages (Android asks you to allow it the first time) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android 11+: let the app find the installed text-to-speech engine -->
     <queries>

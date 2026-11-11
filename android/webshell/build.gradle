@@ -1,0 +1,28 @@
+// The template every "Make app" APK is made from: a full-screen WebView that shows assets/index.html.
+// zenvqo copies this (unsigned) APK on the phone, puts the user's HTML, name, package and icon in, and signs it.
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "app.zenvqo.webshell"
+    compileSdk 34
+
+    defaultConfig {
+        // a placeholder: the phone gives every app its own package name (see ApkMaker.TEMPLATE_PACKAGE)
+        applicationId "app.zenvqo.webshell.template"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    // the label is a literal placeholder the phone replaces with the app's name
+    lint { checkReleaseBuilds false; abortOnError false }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

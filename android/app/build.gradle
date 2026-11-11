@@ -54,3 +54,14 @@ android {
 }
 
 // no third-party dependencies: the app is a WebView around assets/index.html
+
+// "Make app": the web-app template (the :webshell module, built unsigned) is bundled as assets/webshell.apk
+def webshellOut = "$buildDir/generated/webshell"
+android.sourceSets.main.assets.srcDirs += [webshellOut]
+def copyWebShell = tasks.register("copyWebShell", Copy) {
+    dependsOn ":webshell:assembleRelease"
+    from(project(":webshell").layout.buildDirectory.dir("outputs/apk/release")) { include "*.apk" }
+    into webshellOut
+    rename { "webshell.apk" }
+}
+tasks.named("preBuild") { dependsOn copyWebShell }

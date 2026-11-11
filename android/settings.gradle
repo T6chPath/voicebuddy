@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "zenvqo-chat"
-include ":app"
+include ":app", ":webshell"

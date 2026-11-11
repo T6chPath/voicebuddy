@@ -45,6 +45,24 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk ../zenvqo-chat.apk
           ls -la ../zenvqo-chat.apk
 
+      - name: Check "Make app" (web page → APK) with Android's own tools
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          T=$(mktemp -d)
+          cp android/webshell/build/outputs/apk/release/*.apk "$T/template.apk"
+          javac -d "$T/cls" android/app/src/main/java/app/zenvqo/chat/ApkMaker.java
+          keytool -genkeypair -keystore "$T/k.p12" -storetype PKCS12 -storepass secret1 -keypass secret1 -alias a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=zenvqo test" >/dev/null 2>&1
+          printf '<!doctype html><title>Todo</title><h1>My Todo List</h1>' > "$T/page.html"
+          java -cp "$T/cls" app.zenvqo.chat.ApkMaker "$T/template.apk" "$T/page.html" "My Todo List" app.zenvqo.web.mytodolist_t1 "$T/k.p12" secret1 "$T/out.apk"
+          "$BT/apksigner" verify -v --min-sdk-version 24 "$T/out.apk"
+          "$BT/zipalign" -c -P 4 4 "$T/out.apk" || "$BT/zipalign" -c 4 "$T/out.apk"
+          "$BT/aapt2" dump badging "$T/out.apk" | tee "$T/badging.txt" | head -12
+          grep -q "package: name='app.zenvqo.web.mytodolist_t1'" "$T/badging.txt"
+          grep -q "application-label:'My Todo List'" "$T/badging.txt"
+          unzip -p "$T/out.apk" assets/index.html | grep -q "My Todo List"
+          cp "$T/out.apk" made-from-html-test.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: zenvqo-chat-apk

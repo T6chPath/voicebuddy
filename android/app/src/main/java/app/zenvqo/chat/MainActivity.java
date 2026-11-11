@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
         pdf = new NativePDF(this, web);
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
         web.addJavascriptInterface(new NativeAssets(this), "ZenvqoAssets");   // data files the PDF reader needs
+        web.addJavascriptInterface(new NativeApk(this, web), "ZenvqoApk");       // "Make app": web pages → installable APKs
         images = new NativeImageGen(this, web);
         web.addJavascriptInterface(images, "ZenvqoImageGen");  // pictures made on the phone itself (stable-diffusion.cpp)
 
