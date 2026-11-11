@@ -5,6 +5,9 @@ import { useSession } from "../state/session";
 import { useToasts } from "../state/toasts";
 import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
+import { Eye } from "./Brand";
+
+type IconName = string;
 import { changedOpts, DEFAULT_IMAGE_OPTS, type ImageAction, ImageSettings, Lightbox, MaskEditor } from "./ImageViews";
 import { MessageView } from "./MessageView";
 import { AutoSpeakToggle } from "./SpeechViews";
@@ -23,8 +26,10 @@ interface Props {
   sidebarOpen: boolean;
 }
 
-const SUGGESTIONS = ["Explain this code with an example", "Draft a polite email asking for leave", "Show a table comparing Python and JavaScript", "Summarise the file I attach"];
-const IMAGE_SUGGESTIONS = ["Generate an image of a futuristic city at sunset", "Make a logo for a chai shop called Garam", "Create a realistic portrait of an old fisherman", "Explain this code with an example"];
+const SUGGESTIONS: [IconName, string][] = [["code", "Explain this code with an example"], ["mail", "Draft a polite email asking for leave"],
+  ["table", "Show a table comparing Python and JavaScript"], ["graph", "Plot y = sin(x) and y = cos(x)"]];
+const IMAGE_SUGGESTIONS: [IconName, string][] = [["image", "Generate an image of a futuristic city at sunset"], ["wand", "Make a logo for a chai shop called Garam"],
+  ["graph", "Plot y = sin(x) and y = cos(x)"], ["code", "Explain this code with an example"]];
 
 export function ChatView({ conversationId, navigate, onConversationChange, onOpenSidebar, sidebarOpen }: Props) {
   const { settings, models } = useSession();
@@ -348,17 +353,20 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           )}
           {loadState === "idle" && messages.length === 0 && (
             <div className="empty">
+              <Eye big />
               <h2>How can I help?</h2>
+              <p className="lede">Ask anything, or make a picture, a graph or a PDF.</p>
               {LOCAL_MODE && (settings.default_model === "echo" || !settings.server_url) && (
                 <div className="setup-card" role="note">
-                  <strong>Connect a real AI to get answers</strong>
-                  <p>Right now only the offline demo is on, so it can't answer questions. Google Gemini is free: get a key in AI Studio and paste it in Settings → Connection.</p>
+                  <div><strong>Connect a real AI to get answers</strong>
+                  <p>Only the offline demo is on now. Google Gemini is free: get a key in AI Studio and paste it in Settings → Connection.</p></div>
                   <button type="button" className="btn primary" onClick={() => window.dispatchEvent(new Event("zc:open-settings"))}>Connect AI</button>
                 </div>
               )}
               <ul className="suggestions">
-                {(imagesOn ? IMAGE_SUGGESTIONS : SUGGESTIONS).map((s) => (
-                  <li key={s}><button type="button" className="suggestion" onClick={() => composer.current?.setText(s)}>{s}</button></li>
+                {(imagesOn ? IMAGE_SUGGESTIONS : SUGGESTIONS).map(([icon, s]) => (
+                  <li key={s}><button type="button" className="suggestion" onClick={() => composer.current?.setText(s)}>
+                    <span className="s-ico" aria-hidden="true"><Icon name={icon} size={18} /></span><span>{s}</span></button></li>
                 ))}
               </ul>
             </div>

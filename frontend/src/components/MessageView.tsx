@@ -1,3 +1,4 @@
+import { Eye } from "./Brand";
 import { memo, useState } from "react";
 import type { Attachment, ImageOp, Message, ModelInfo } from "../api/types";
 import { fileSize, timeLabel } from "../lib/format";
@@ -37,6 +38,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
   return (
     <article className={`msg msg-${m.role}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
       <header className="msg-head">
+        {m.role === "assistant" && <Eye />}
         <span className="who">{label}</span>
         {showTime && <time dateTime={new Date(m.created_at * 1000).toISOString()}>{timeLabel(m.created_at)}</time>}
       </header>

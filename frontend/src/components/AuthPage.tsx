@@ -1,3 +1,4 @@
+import { Eye } from "./Brand";
 import { useId, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import { useSession } from "../state/session";
@@ -30,7 +31,7 @@ export function AuthPage() {
   return (
     <main className="auth" id="main">
       <div className="auth-card">
-        <div className="brand" aria-hidden="true">z</div>
+        <Eye big />
         <h1>{mode === "login" ? "Sign in to zenvqo" : "Create your account"}</h1>
         <form onSubmit={submit} noValidate={false} aria-describedby={error ? errId : undefined}>
           {mode === "register" && (

@@ -161,7 +161,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           ))}
         </ul>
       )}
-      <div className="composer-row">
+      <div className="composer-text">
+        <label htmlFor="composer-input" className="sr-only">Message</label>
+        <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={files.length ? "Ask about it — or just send" : placeholder} onChange={(e) => setText(e.target.value)}
+                  onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"} />
+      </div>
+      <div className="composer-tools">
         <button type="button" className="icon-btn" aria-label="Attach files" title="Attach files" onClick={() => input.current?.click()}
                 disabled={files.length >= MAX_FILES}>
           <Icon name="clip" />
@@ -172,9 +177,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         </button>
         {tools}
         <input ref={input} type="file" multiple accept={accept} hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
-        <label htmlFor="composer-input" className="sr-only">Message</label>
-        <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={files.length ? "Ask about it — or just send" : placeholder} onChange={(e) => setText(e.target.value)}
-                  onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"} />
+        <span className="spacer" />
         {busy ? (
           <button type="button" className="send-btn stop" onClick={onStop} aria-label="Stop generating">
             <Icon name="stop" />
