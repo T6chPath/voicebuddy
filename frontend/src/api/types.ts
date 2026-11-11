@@ -4,7 +4,7 @@ export interface ModelInfo { id: string; label: string; vision: boolean; descrip
 
 export interface ImageMeta {
   op: ImageOp; prompt: string; seed: number | null; provider: string; model: string; parent_id: string | null;
-  style?: string; aspect_ratio?: string; negative_prompt?: string; scene?: string;
+  style?: string; aspect_ratio?: string; negative_prompt?: string; scene?: string; subject?: string; text?: string;
 }
 
 export interface Attachment {
@@ -13,7 +13,8 @@ export interface Attachment {
   generated?: boolean; width?: number; height?: number; meta?: ImageMeta;
 }
 
-export type ImageOp = "generate" | "edit" | "variations" | "style" | "inpaint" | "remove_object" | "remove_background" | "replace_background";
+export type ImageOp = "generate" | "edit" | "variations" | "style" | "inpaint" | "remove_object" | "remove_background" | "replace_background"
+  | "outpaint" | "replace_object" | "upscale";
 
 /** Image controls sent with a message. Without `op` the assistant decides from the text whether to make an image. */
 export interface ImageOptions {

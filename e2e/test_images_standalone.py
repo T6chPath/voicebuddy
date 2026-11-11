@@ -36,7 +36,7 @@ class Pollinations:
         self.calls.append({"prompt": prompt, **q})
         if self.busy_first and len(self.calls) == 1:
             return route.fulfill(status=429, headers={**CORS, "retry-after": "1"}, body="Too many requests")
-        colour = (220, 30, 30) if "red" in prompt else (20, 20, 60) if "night" in prompt else (200, 200, 200)
+        colour = (220, 30, 30) if "red" in prompt else (20, 20, 60) if "night" in prompt else (240, 200, 80) if "beach" in prompt else (200, 200, 200)
         route.fulfill(status=200, headers=CORS, content_type="image/jpeg", body=png(colour, (int(q.get("width", 512)) // 4, int(q.get("height", 512)) // 4), "JPEG"))
 
 
@@ -106,7 +106,7 @@ def test_free_images_in_the_demo_then_change_and_regenerate(browser):
     expect(reply2.locator("img").first).to_be_visible()
     assert polli.calls[1]["prompt"] == "a red apple on a wooden table, night time"
     assert polli.calls[1]["width"] == "1024" and polli.calls[1]["height"] == "576"            # same shape as the original
-    expect(reply2).to_contain_text("new version made from the original description")
+    expect(reply2).to_contain_text("new version drawn from the original description")
     # regenerate: a fresh picture with a new seed
     reply2.get_by_role("button", name="Regenerate").click()
     wait_reply(p, 2)
@@ -160,16 +160,18 @@ def test_gemini_makes_and_edits_including_your_photo(browser, tmp_path):
     assert not errors, errors
 
 
-def test_free_service_cannot_edit_your_photo_and_says_how(browser, tmp_path):
+def test_busy_photo_without_editor_says_how(browser, tmp_path):
+    """A photo with a busy background, no editor key and a chat model that can't see: the app says what would work."""
     p, errors, polli = app(browser, {"default_model": "echo"})
     photo = tmp_path / "me.png"
-    photo.write_bytes(png((10, 10, 200)))
+    im = Image.effect_noise((256, 256), 90).convert("RGB")
+    im.save(photo)
     p.locator("form.composer input[type=file]").set_input_files(str(photo))
-    p.locator("#composer-input").fill("remove the background")
+    p.locator("#composer-input").fill("make it look like a watercolor painting")
     expect(p.get_by_role("button", name="Send message")).to_be_enabled(timeout=5_000)
     p.locator("#composer-input").press("Enter")
     wait_reply(p, 1)
-    expect(p.locator("article.msg-assistant").last).to_contain_text("Changing your own photos needs an image editor")
+    expect(p.locator("article.msg-assistant").last).to_contain_text("needs an image editor")
     assert not polli.calls
     assert not errors, errors
 

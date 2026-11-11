@@ -11,11 +11,12 @@ function onDownload(e: { preventDefault(): void }, src: string, name: string) {
     (err: Error) => window.dispatchEvent(new CustomEvent("zc-toast", { detail: { kind: "error", text: err.message } })));
 }
 
-export type ImageAction = "edit" | "mask" | "variations" | "remove_background" | "open";
+export type ImageAction = "edit" | "mask" | "variations" | "remove_background" | "outpaint" | "upscale" | "open";
 export const OP_LABEL: Record<ImageOp, string> = {
   generate: "Generating image", edit: "Editing image", variations: "Making variations", style: "Restyling image",
   inpaint: "Changing the painted area", remove_object: "Removing object", remove_background: "Removing background",
-  replace_background: "Replacing background",
+  replace_background: "Replacing background", outpaint: "Expanding the image", replace_object: "Replacing an object",
+  upscale: "Upscaling",
 };
 
 /* ---------------- images inside a message ---------------- */
@@ -54,6 +55,8 @@ export function ImageGallery({ images, href, numberOf, onAction, actions, ops }:
                   {can("inpaint") && <button type="button" className="icon-btn small" title="Paint an area to change" aria-label="Paint an area to change" onClick={() => onAction("mask", a)}><Icon name="brush" size={16} /></button>}
                   <button type="button" className="icon-btn small" title="Variations" aria-label="Make variations" onClick={() => onAction("variations", a)}><Icon name="layers" size={16} /></button>
                   <button type="button" className="icon-btn small" title="Remove background" aria-label="Remove background" onClick={() => onAction("remove_background", a)}><Icon name="scissors" size={16} /></button>
+                  {can("outpaint") && <button type="button" className="icon-btn small" title="Expand (show more around it)" aria-label="Expand the image" onClick={() => onAction("outpaint", a)}><Icon name="outpaint" size={16} /></button>}
+                  {can("upscale") && <button type="button" className="icon-btn small" title="Make larger (upscale)" aria-label="Make larger" onClick={() => onAction("upscale", a)}><Icon name="upscale" size={16} /></button>}
                 </>}
               </div>
             )}
@@ -205,7 +208,9 @@ export function MaskEditor({ a, src, onCancel, onApply }: {
 
 export const DEFAULT_IMAGE_OPTS: ImageOptions = { style: "none", aspect_ratio: "1:1", resolution: 512, n: 1, output_format: "png" };
 const STYLE_LABEL: Record<string, string> = { none: "Any", photorealistic: "Photorealistic", anime: "Anime", "3d": "3D render", cinematic: "Cinematic",
-  cartoon: "Cartoon", "digital-art": "Digital art", illustration: "Illustration", logo: "Logo" };
+  cartoon: "Cartoon", "digital-art": "Digital art", illustration: "Illustration", logo: "Logo", "flat-2d": "2D flat / vector", isometric: "Isometric 3D",
+  icon: "App icon", branding: "Branding / mockup", sticker: "Sticker", watercolor: "Watercolor", "oil-painting": "Oil painting", "pixel-art": "Pixel art",
+  sketch: "Pencil sketch", comic: "Comic", "low-poly": "Low poly" };
 
 export function changedOpts(o: ImageOptions): ImageOptions {
   const out: ImageOptions = {};
@@ -222,7 +227,7 @@ export function ImageSettings({ caps, opts, setOpts, onClose }: {
   const set = <K extends keyof ImageOptions>(k: K, v: ImageOptions[K]) => setOpts({ ...opts, [k]: v });
   const seedOk = caps.providers.some((p) => p.ready && p.seed);
   const negOk = caps.providers.some((p) => p.ready && p.negative_prompt);
-  const res = [512, 768, 1024].filter((r) => r <= caps.max_resolution);
+  const res = [512, 768, 1024, 1536, 2048].filter((r) => r <= caps.max_resolution);
   return (
     <div className="img-settings" role="dialog" aria-label="Image settings" onKeyDown={(e) => e.key === "Escape" && onClose()}>
       <div className="img-settings-head">
@@ -244,7 +249,7 @@ export function ImageSettings({ caps, opts, setOpts, onClose }: {
         </label>
         <label className="field"><span>Size</span>
           <select value={opts.resolution || 512} onChange={(e) => set("resolution", Number(e.target.value))}>
-            {res.map((r) => <option key={r} value={r}>{r}px{r === 512 ? " (fast)" : ""}</option>)}
+            {res.map((r) => <option key={r} value={r}>{r}px{r === 512 ? " (fast)" : r === 1536 ? " (Full HD)" : r === 2048 ? " (2K)" : ""}</option>)}
           </select>
         </label>
         <label className="field"><span>Images</span>

@@ -20,6 +20,11 @@ export interface ImageJob {
   source?: string;          // data: URL of the image to change
   mask?: string;            // data: URL, white = change
   background?: string;
+  references?: string[];    // data: URLs of pictures to follow
+  refMode?: "style" | "subject";
+  text?: string;            // exact words to show
+  target?: string;          // replace_object: what to replace
+  noText?: boolean;         // ask for a picture without lettering (the app adds the words itself)
 }
 
 export interface MadeImage { dataUrl: string; mime: string; width: number; height: number; engine: string; model: string; notes: string[] }
@@ -66,6 +71,8 @@ export const POLLINATIONS = "https://image.pollinations.ai/prompt/";
 export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSignal, progress: Progress): Promise<MadeImage> {
   const [w, h] = sizeFor(job.aspect, Math.min(job.resolution, 1024), 64);
   let prompt = styledPrompt(job.prompt, job.style);
+  if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters, no words" : ", clean empty space for a title, no text, no letters, no words, no watermark";
+  else if (job.text) prompt += `, with the text "${job.text}" written clearly`;
   if (job.negative) prompt += `. Avoid: ${job.negative}`;
   const q = new URLSearchParams({ width: String(w), height: String(h), seed: String(job.seed), model: "flux", nologo: "true", safe: "true", referrer: "zenvqo" });
   const url = POLLINATIONS + encodeURIComponent(prompt.slice(0, 1500)) + "?" + q.toString();
@@ -106,14 +113,22 @@ function instruction(job: ImageJob): string {
   const style = STYLES[normStyle(job.style)][0];
   const avoid = job.negative ? ` Avoid: ${job.negative}.` : "";
   const p = job.prompt.trim();
+  const words = job.text ? ` The picture must show the text "${job.text}" exactly as written (same spelling and capitals), clear and legible.` : "";
+  const refs = job.references?.length
+    ? job.refMode === "style"
+      ? ` Use the attached reference picture${job.references.length > 1 ? "s" : ""} only for the visual style (colours, medium, lighting, mood), not for the content.`
+      : ` Keep the character / object from the attached reference picture${job.references.length > 1 ? "s" : ""} exactly the same (face, body, clothes, colours, proportions) in the new scene.`
+    : "";
   switch (job.op) {
-    case "generate": return `Generate an image: ${styledPrompt(p, job.style)}.${avoid}`;
+    case "generate": return `Generate an image: ${styledPrompt(p, job.style)}.${words}${refs}${avoid}`;
     case "style": return `Redraw this image in this style: ${style || p}. Keep the same subject and composition.${avoid}`;
     case "variations": return `Create a new variation of this image: same subject and style, different details and composition. ${p}${avoid}`;
     case "remove_background": return "Remove the background completely. Put the subject alone on a plain pure white background. Do not change the subject.";
     case "replace_background": return `Replace the background with: ${job.background || p}. Keep the subject exactly as it is.${avoid}`;
     case "remove_object": return `Remove ${p || "the marked object"} from this image and fill the area so it looks natural. Change nothing else.${job.mask ? " The second image is a mask: remove only what is under the white area." : ""}`;
-    default: return `Edit this image: ${p}.${style ? " Style: " + style + "." : ""}${avoid}${job.mask ? " The second image is a mask: change only the area under the white part, keep everything else identical." : ""}`;
+    case "replace_object": return `In this image, replace the ${job.target || "marked object"} with ${p}. Match the lighting, perspective and style. Change nothing else.${job.mask ? " The second image is a mask: change only the area under the white part." : ""}`;
+    case "outpaint": return `This picture has new empty, blurred areas around the original. Extend the scene naturally into them${p ? ` (${p})` : ""}, matching perspective, lighting and style. Keep the original part exactly unchanged. Output the full larger picture.`;
+    default: return `Edit this image: ${p}.${style ? " Style: " + style + "." : ""}${words}${avoid}${job.mask ? " The second image is a mask: change only the area under the white part, keep everything else identical." : ""}`;
   }
 }
 
@@ -127,8 +142,9 @@ export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: A
   const parts: unknown[] = [{ text: instruction(job) }];
   if (job.source) parts.push(inline(job.source));
   if (job.mask) parts.push(inline(job.mask));
+  for (const r of job.references || []) parts.push(inline(r));
   const cfg: Record<string, unknown> = { responseModalities: ["TEXT", "IMAGE"] };
-  if (job.op === "generate") cfg.imageConfig = { aspectRatio: job.aspect };
+  if (job.op === "generate" || job.op === "outpaint") cfg.imageConfig = { aspectRatio: job.aspect };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
   let r: Response;
   try {
@@ -174,19 +190,56 @@ export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: A
 }
 
 /* ---------------- OpenAI ---------------- */
-export async function openai(job: ImageJob, base: string, key: string, net: Fetcher, signal: AbortSignal): Promise<MadeImage> {
-  if (job.op !== "generate") throw new ImageEngineError("Editing pictures needs a Gemini key here.", "unsupported");
-  const [a, b] = job.aspect.split(":").map(Number);
-  const size = a > b ? "1536x1024" : a < b ? "1024x1536" : "1024x1024";
-  let r: Response;
-  try {
-    r = await net(base.replace(/\/+$/, "") + "/images/generations", { method: "POST", signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model: "gpt-image-1", prompt: styledPrompt(job.prompt, job.style) + (job.negative ? `. Avoid: ${job.negative}` : ""), size, n: 1 }) });
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
-    throw new ImageEngineError("Couldn't reach OpenAI. Check your internet connection.", "network");
+function b64ToBytes(b64: string): Uint8Array {
+  const s = atob(b64);
+  const u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return u;
+}
+
+function bytesToB64(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** OpenAI wants masks as PNGs whose transparent pixels mark the area to change; ours are white-on-black. */
+async function alphaMask(maskUrl: string, w: number, h: number): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = maskUrl; });
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d")!;
+  x.drawImage(img, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const white = d.data[i] + d.data[i + 1] + d.data[i + 2] > 380;
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = 0;
+    d.data[i + 3] = white ? 0 : 255;
   }
+  x.putImageData(d, 0, 0);
+  return c.toDataURL("image/png");
+}
+
+/** multipart/form-data, sent as base64 (the app's network code turns it back into bytes) */
+function multipart(fields: Record<string, string>, files: { name: string; filename: string; dataUrl: string }[]): { body: string; type: string } {
+  const boundary = "zenvqo" + Math.random().toString(16).slice(2);
+  const enc = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  for (const [k, v] of Object.entries(fields)) chunks.push(enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
+  for (const f of files) {
+    const m = f.dataUrl.match(/^data:([^;]+);base64,(.*)$/)!;
+    chunks.push(enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${f.name}"; filename="${f.filename}"\r\nContent-Type: ${m[1]}\r\n\r\n`));
+    chunks.push(b64ToBytes(m[2]));
+    chunks.push(enc.encode("\r\n"));
+  }
+  chunks.push(enc.encode(`--${boundary}--\r\n`));
+  const total = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) { total.set(c, at); at += c.length; }
+  return { body: bytesToB64(total), type: `multipart/form-data; boundary=${boundary}` };
+}
+
+async function openaiResult(r: Response): Promise<MadeImage> {
   const j = await r.json().catch(() => ({})) as { data?: { b64_json?: string }[]; error?: { message?: string; code?: string } };
   if (!r.ok) {
     const msg = j.error?.message || "";
@@ -200,4 +253,30 @@ export async function openai(job: ImageJob, base: string, key: string, net: Fetc
   const dataUrl = `data:image/png;base64,${b64}`;
   const { width, height } = await measure(dataUrl);
   return { dataUrl, mime: "image/png", width, height, engine: "openai", model: "gpt-image-1", notes: [] };
+}
+
+export async function openai(job: ImageJob, base: string, key: string, net: Fetcher, signal: AbortSignal): Promise<MadeImage> {
+  const [a, b] = job.aspect.split(":").map(Number);
+  const size = a > b ? "1536x1024" : a < b ? "1024x1536" : "1024x1024";
+  const url = base.replace(/\/+$/, "");
+  const prompt = (job.op === "generate" ? styledPrompt(job.prompt, job.style) : instruction(job)) +
+    (job.op === "generate" && job.text ? ` The picture must show the text "${job.text}" exactly as written.` : "") + (job.negative ? `. Avoid: ${job.negative}` : "");
+  let r: Response;
+  try {
+    const inputs = [job.source, ...(job.references || [])].filter(Boolean) as string[];
+    if (!inputs.length) {
+      r = await net(url + "/images/generations", { method: "POST", signal, headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: "gpt-image-1", prompt, size, n: 1 }) });
+    } else {
+      const { width, height } = await measure(inputs[0]);
+      const files = inputs.map((d, i) => ({ name: "image[]", filename: `image${i}.png`, dataUrl: d }));
+      if (job.mask) files.push({ name: "mask", filename: "mask.png", dataUrl: await alphaMask(job.mask, width, height) });
+      const mp = multipart({ model: "gpt-image-1", prompt: prompt + (job.op === "generate" ? instruction({ ...job, prompt: "" }).replace(/^Generate an image: \.?/, " ") : ""), size: job.op === "generate" || job.op === "outpaint" ? size : "auto", n: "1" }, files);
+      r = await net(url + "/images/edits", { method: "POST", signal, headers: { "Content-Type": mp.type, Authorization: `Bearer ${key}`, "X-Zenvqo-Body-Base64": "1" }, body: mp.body });
+    }
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ImageEngineError("Couldn't reach OpenAI. Check your internet connection.", "network");
+  }
+  return openaiResult(r);
 }

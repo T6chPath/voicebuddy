@@ -66,17 +66,21 @@ final class NativeNet {
             c.setRequestMethod(m);
             c.setUseCaches(false);
             boolean binary = false;                                     // images: the page asks for the raw bytes
+            boolean bodyB64 = false;                                    // uploads: the page sends bytes as base64
             if (headersJson != null && !headersJson.isEmpty()) {
                 JSONObject h = new JSONObject(headersJson);
                 Iterator<String> keys = h.keys();
                 while (keys.hasNext()) {
                     String k = keys.next();
                     if ("X-Zenvqo-Binary".equalsIgnoreCase(k)) { binary = true; continue; }
+                    if ("X-Zenvqo-Body-Base64".equalsIgnoreCase(k)) { bodyB64 = true; continue; }
                     c.setRequestProperty(k, h.optString(k));
                 }
             }
             if ("POST".equals(m)) {
-                byte[] bytes = (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = bodyB64 && body != null
+                        ? android.util.Base64.decode(body, android.util.Base64.DEFAULT)
+                        : (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
                 c.setDoOutput(true);
                 c.setFixedLengthStreamingMode(bytes.length);
                 try (OutputStream os = c.getOutputStream()) {

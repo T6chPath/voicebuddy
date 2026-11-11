@@ -11,7 +11,8 @@
 import { createSSEParser } from "./sse";
 import { parseSpec } from "../plot/spec";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
-import { gemini, ImageEngineError, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { gemini, ImageEngineError, measure, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { blendUnder, composite, cutOut, drawText, fillArea, padFor, placeOn, upscale, type Side } from "../images/canvas";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 export const LOCAL_MODE = true;
@@ -91,7 +92,16 @@ function nativeFetch(bridge: NativeNet, url: string, init: RequestInit): Promise
 
 function net(url: string, init: RequestInit = {}): Promise<Response> {
   const bridge = typeof window !== "undefined" ? window.ZenvqoNative : undefined;
-  return bridge ? nativeFetch(bridge, url, init) : fetch(url, init);
+  if (bridge) return nativeFetch(bridge, url, init);
+  const h = (init.headers || {}) as Record<string, string>;
+  if (h["X-Zenvqo-Body-Base64"] && typeof init.body === "string") {          // browser: turn the base64 body back into bytes
+    const { ["X-Zenvqo-Body-Base64"]: _flag, ...rest } = h;
+    const b = atob(init.body);
+    const u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return fetch(url, { ...init, headers: rest, body: u });
+  }
+  return fetch(url, init);
 }
 
 /** Ready-made connections shown in Settings → Connection. */
@@ -260,15 +270,13 @@ export const api = {
   deleteFile: async (id: string) => { await del("files", id); },
   imageCaps: async (): Promise<ImageCaps> => {
     const e = imageEngines(loadSettings());
-    const editor = e.some((x) => x !== "pollinations");
-    const ops: ImageOp[] = e.includes("gemini")
-      ? ["generate", "edit", "variations", "style", "inpaint", "remove_object", "remove_background", "replace_background"]
-      : ["generate", "edit", "variations", "style", "remove_background", "replace_background"];
-    const label: Record<string, string> = { gemini: "Gemini (your key)", openai: "OpenAI (your key)", pollinations: "Free image service (Pollinations)" };
-    return { available: true, reason: null, ops, styles: Object.keys(STYLES), aspect_ratios: ASPECTS, formats: ["png", "jpeg"], max_n: 4, max_resolution: 1024,
+    // every operation works: keyed engines edit directly; otherwise the free service + on-phone tools do it
+    const ops: ImageOp[] = ["generate", "edit", "variations", "style", "inpaint", "remove_object", "replace_object",
+      "remove_background", "replace_background", "outpaint", "upscale"];
+    const label: Record<string, string> = { gemini: "Gemini (your key)", openai: "OpenAI (your key)", pollinations: "Free image service (Pollinations) + on-phone tools" };
+    return { available: true, reason: null, ops, styles: Object.keys(STYLES), aspect_ratios: ASPECTS, formats: ["png", "jpeg"], max_n: 4, max_resolution: 2048,
       providers: e.map((n) => ({ name: label[n], model: n === "gemini" ? "gemini-2.5-flash-image" : n === "openai" ? "gpt-image-1" : "flux",
-        ready: true, reason: null, ops: n === "gemini" ? ops : ["generate", "variations"] as ImageOp[], negative_prompt: false, seed: n === "pollinations" })),
-      ...(editor ? {} : {}) };
+        ready: true, reason: null, ops, negative_prompt: n !== "gemini", seed: n === "pollinations" })) };
   },
   ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
   voiceConfig: async () => ({ available: false, reason: "this app has no server", partials: false, max_seconds: 0 }),
@@ -628,14 +636,209 @@ function reimagine(prompt: string, plan: Plan): string {
     case "remove_object": return `${prompt}, without any ${plan.prompt}`;
     case "style": return prompt;                                    // style is applied by the style setting
     case "variations": return prompt;
+    case "replace_object": return `${prompt}, with ${plan.prompt}${plan.target ? ` instead of the ${plan.target}` : ""}`;
     default: return `${prompt}, ${plan.prompt}`;
   }
+}
+
+
+/** A short description of a picture from the chat's own AI (when it can see images), for re-drawing it with the
+ * free image service: image-to-image, references, and keeping the same character. */
+async function describeImage(dataUrl: string, modelId: string, s: UserSettings, focus: "all" | "subject" | "style", signal: AbortSignal): Promise<string | null> {
+  if (!modelId.startsWith("srv:") || !base(s)) return null;
+  const ask = focus === "style"
+    ? "Describe only the visual style of this picture (medium, colours, lighting, mood, rendering) in one sentence, as keywords for an image generator. No subject."
+    : focus === "subject"
+      ? "Describe the main character or object in this picture so an artist could draw exactly the same one again: species/person, face, hair, body, clothes, colours, distinctive marks. One dense sentence, no background."
+      : "Describe this picture for an image generator in one dense sentence: subject, appearance, setting, composition, colours, lighting, style.";
+  try {
+    const r = await net(base(s) + "/chat/completions", { method: "POST", signal, headers: headers(s), body: JSON.stringify({
+      model: modelId.replace(/^srv:/, ""), stream: false, temperature: 0.2, max_tokens: 200,
+      messages: [{ role: "user", content: [{ type: "text", text: ask }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+    if (!r.ok) return null;
+    const j = await r.json() as { choices?: { message?: { content?: string } }[] };
+    const t = (j.choices?.[0]?.message?.content || "").replace(/\s+/g, " ").trim().replace(/^["']|["']$/g, "");
+    return t.length > 8 ? t.slice(0, 600) : null;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    return null;
+  }
+}
+
+interface Pic { n: number; file: FileRow }
+interface ProduceCtx {
+  op: ImageOp; plan: Plan; job: ImageJob; source?: Pic; refs: Pic[];
+  s: UserSettings; modelId: string; signal: AbortSignal; notes: Set<string>;
+  progress: (f: number, t: string) => void;
+}
+
+function local(dataUrl: string, w: number, h: number): MadeImage {
+  return { dataUrl, mime: dataUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg", width: w, height: h, engine: "on-device", model: "canvas", notes: [] };
+}
+async function localImg(dataUrl: string): Promise<MadeImage> { const { width, height } = await measure(dataUrl); return local(dataUrl, width, height); }
+
+const NEEDS_EDITOR = "Changing your own photos this way needs an image editor: in Settings → Connection use a Google Gemini key with billing turned on " +
+  "(Google doesn't include image editing on free keys) or an OpenAI key. ";
+
+/** Make one picture for a request: a keyed engine (Gemini / OpenAI) first, then the free route — the free image
+ * service plus the on-phone tools in images/canvas.ts. */
+async function produce(c: ProduceCtx): Promise<MadeImage> {
+  const { op, plan, job, source, refs, s, modelId, signal, notes } = c;
+  const src = source?.file.dataUrl;
+  const free = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
+
+  // made on the phone, always
+  if (op === "upscale") {
+    if (!src) throw new ImageEngineError("There's no picture to enlarge.", "failed");
+    const want = Math.max(job.resolution >= 1536 ? job.resolution : 2048, 1024);
+    const u = await upscale(src, want);
+    notes.add("Enlarged on your phone with careful resampling and sharpening — it's bigger and crisper, but no new detail is invented.");
+    return local(u.dataUrl, u.w, u.h);
+  }
+  if (op === "remove_object" && src && job.mask && !imageEngines(s).some((e) => e !== "pollinations")) {
+    return localImg(await fillArea(src, job.mask));
+  }
+
+  // keyed engines
+  let lastErr: ImageEngineError | null = null;
+  for (const e of imageEngines(s)) {
+    if (e === "pollinations") break;
+    try {
+      if (e === "gemini" && quotaKnownEmpty(s.api_key || "")) { lastErr = new ImageEngineError("no quota", "quota"); continue; }
+      let j = job;
+      if (op === "outpaint" && src) { const p = await padFor(src, plan.aspect_ratio || null, (plan.side || "center") as Side); j = { ...job, source: p.padded, mask: p.mask }; }
+      return e === "gemini" ? await gemini(j, s.api_key || "", net, signal) : await openai(j, base(s), s.api_key || "", net, signal);
+    } catch (err) {
+      if ((err as Error).name === "AbortError") throw err;
+      const ie = err instanceof ImageEngineError ? err : new ImageEngineError("The image couldn't be made.", "failed");
+      if (e === "gemini" && ie.code === "quota") {
+        rememberNoQuota(s.api_key || "");
+        notes.add("Your Gemini key can't make images (Google offers its image model only with billing turned on), so the free route made this one.");
+      }
+      if (ie.code === "blocked") throw ie;
+      lastErr = ie;
+    }
+  }
+
+  // ---- free route ----
+  const made = source?.file.meta?.prompt as string | undefined;          // AI-made pictures carry their own description
+  const seedOf = (p?: Pic) => (plan.fresh ? job.seed : (p?.file.meta?.seed as number | undefined) ?? job.seed);
+  let described: string | null | undefined;
+  const scene = async () => {
+    if (made) return made;
+    if (described === undefined) { c.progress(0.05, "Looking at the picture…"); described = src ? await describeImage(src, modelId, s, "all", signal) : null; }
+    return described;
+  };
+  const srcAspect = source?.file.meta?.aspect_ratio as string | undefined || (source?.file.width && source.file.height ? nearestAspect(source.file.width, source.file.height) : job.aspect);
+  const redraw = async (prompt: string, extra: Partial<ImageJob> = {}) => {
+    const img = await free({ prompt, seed: seedOf(source), aspect: srcAspect, ...extra });
+    notes.add(made ? "The free image service can't edit a picture directly, so this is a new version drawn from the original description — small details can change."
+      : "This was redrawn from a description of your picture by the free image service, so it's a close new version, not an exact edit. A Gemini (billing on) or OpenAI key edits the photo itself.");
+    return img;
+  };
+  const needDesc = () => new ImageEngineError(NEEDS_EDITOR + "Or pick a chat model that can see pictures, and I'll redraw it from a description.", "unsupported");
+
+  switch (op) {
+    case "generate": {
+      let prompt = plan.prompt;
+      let seed = job.seed;
+      for (const r of refs) {
+        const isMade = !!r.file.meta?.prompt;
+        if (plan.refMode === "style") {
+          const st = await describeImage(r.file.dataUrl!, modelId, s, "style", signal) || (isMade ? `same art style as: ${r.file.meta!.prompt}` : null);
+          if (st) prompt += `, in this visual style: ${st}`;
+        } else {
+          const who = (isMade ? (r.file.meta!.subject as string | undefined) : undefined) || await describeImage(r.file.dataUrl!, modelId, s, "subject", signal) || (isMade ? (r.file.meta!.prompt as string) : null);
+          if (who) { prompt = `${prompt}. The main character/object, exactly as before: ${who}`; if (isMade && !plan.fresh) seed = r.file.meta!.seed as number ?? seed; }
+          else notes.add("I couldn't look at the reference picture (the current chat model can't see images), so it may not match exactly.");
+        }
+      }
+      if (refs.length) notes.add(plan.refMode === "style" ? "Made following the style of your reference picture." : "Kept the same character / object by describing it and reusing its settings — the free service can drift a little; a Gemini or OpenAI key follows references more exactly.");
+      if (plan.text) {
+        const img = await free({ prompt, seed, noText: true, text: undefined });
+        const out = await drawText(img.dataUrl, plan.text, plan.textLayout || "poster");
+        notes.add(`The words "${plan.text}" were set on the picture by the app, so the spelling is exact.`);
+        return { ...(await localImg(out)), engine: img.engine, model: img.model };
+      }
+      return free({ prompt, seed });
+    }
+    case "variations": {
+      const p = made || plan.prompt || await scene();
+      if (!p) throw needDesc();
+      return free({ prompt: p, aspect: src ? srcAspect : job.aspect });
+    }
+    case "style": case "edit": {
+      const p = await scene();
+      if (!p) throw needDesc();
+      return redraw(reimagine(p, plan));
+    }
+    case "remove_background": case "replace_background": {
+      if (!src) throw new ImageEngineError("There's no picture to change.", "failed");
+      c.progress(0.1, "Cutting out the subject…");
+      let cut = await cutOut(src);
+      if (!cut.uniform) {                                               // busy background: redraw the subject on white, then cut
+        const p = await scene();
+        if (!p) {
+          notes.add("The background is busy, so the cut-out edges may be rough. For a clean result use a Gemini (billing on) or OpenAI key.");
+        } else {
+          const white = await free({ prompt: `${p}, isolated subject centred on a plain pure white studio background, no shadows`, seed: seedOf(source), aspect: srcAspect, style: job.style });
+          cut = await cutOut(white.dataUrl);
+          notes.add("The subject was redrawn on a plain background and cut out, so small details can differ from the original.");
+        }
+      }
+      if (op === "remove_background") return localImg(cut.dataUrl);
+      const { width, height } = await measure(cut.dataUrl);
+      c.progress(0.5, "Making the new background…");
+      const bg = await free({ prompt: `${plan.background || plan.prompt}, background scenery, no people, no main subject`, aspect: nearestAspect(width, height) });
+      return { ...(await localImg(await composite(cut.dataUrl, bg.dataUrl, width, height))), engine: bg.engine, model: bg.model };
+    }
+    case "remove_object": {
+      if (src && job.mask) return localImg(await fillArea(src, job.mask));
+      if (made) return redraw(reimagine(made, plan));
+      throw new ImageEngineError("To remove something from your own photo, tap the picture, choose the brush, paint over what should go, and send — the app fills that area itself. " +
+        "(Or use a Gemini key with billing on, or an OpenAI key, to remove things just by describing them.)", "unsupported");
+    }
+    case "inpaint": case "replace_object": {
+      if (src && job.mask) {
+        const ctx = await scene();
+        const patch = await free({ prompt: `${plan.prompt}${ctx ? `, in a scene like: ${ctx}` : ""}`, aspect: srcAspect, seed: job.seed });
+        notes.add("The painted area was filled with newly drawn content and blended in on your phone.");
+        return { ...(await localImg(await blendUnder(src, patch.dataUrl, job.mask))), engine: patch.engine, model: patch.model };
+      }
+      const p = await scene();
+      if (!p) throw new ImageEngineError(NEEDS_EDITOR + "Or tap the picture, use the brush to paint the area, and describe what should go there.", "unsupported");
+      const swap = plan.target && new RegExp(`\\b${plan.target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p)
+        ? p.replace(new RegExp(`\\b${plan.target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"), plan.prompt) : reimagine(p, { ...plan, op: "edit", prompt: plan.target ? `with ${plan.prompt} instead of ${plan.target}` : plan.prompt });
+      return redraw(swap);
+    }
+    case "outpaint": {
+      if (!src) throw new ImageEngineError("There's no picture to expand.", "failed");
+      const pad = await padFor(src, plan.aspect_ratio || null, (plan.side || "center") as Side);
+      const p = await scene();
+      if (p) {
+        c.progress(0.2, "Drawing the wider scene…");
+        const wide = await free({ prompt: `${p}${plan.prompt ? `, ${plan.prompt}` : ""}, wide view, the scene continues`, aspect: nearestAspect(pad.w, pad.h), seed: seedOf(source) });
+        notes.add("The original picture is kept exactly; the new area around it was drawn by the free image service and blended in.");
+        return { ...(await localImg(await placeOn(wide.dataUrl, src, (plan.side || "center") as Side, pad.w, pad.h))), engine: wide.engine, model: wide.model };
+      }
+      notes.add("The new area continues the picture's colours softly. For real new scenery use a Gemini (billing on) or OpenAI key, or a chat model that can see pictures.");
+      return local(pad.padded, pad.w, pad.h);
+    }
+  }
+  throw lastErr || new ImageEngineError("The image couldn't be made.", "failed");
+}
+
+function nearestAspect(w: number, h: number): string {
+  let best = "1:1", d = Infinity;
+  for (const a of ASPECTS) { const [x, y] = a.split(":").map(Number); const e = Math.abs(Math.log((x / y) / (w / h))); if (e < d) { d = e; best = a; } }
+  return best;
 }
 
 const OP_DONE: Record<string, string> = {
   edit: "Here's the changed image", style: "Here it is in the new style", variations: "Here are some variations",
   remove_background: "Here it is without the background", replace_background: "Here it is with the new background",
   remove_object: "Here it is with that removed", inpaint: "Here's the image with the painted area changed",
+  replace_object: "Here it is with that replaced", outpaint: "Here's the expanded image", upscale: "Here's the larger version",
 };
 
 async function runImageTurn(cid: string, modelId: string, userMsg: Message | null, plan: Plan, opts: ImageOptions | undefined,
@@ -671,7 +874,17 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
     const seed0 = opts?.seed ?? plan.seed ?? Math.floor(Math.random() * 1e9);
     let mask: string | undefined;
     if (opts?.mask_id) mask = (await get<FileRow>("files", opts.mask_id))?.dataUrl;
-    const engines = imageEngines(s);
+    // pictures to follow (reference / same character)
+    const refs: Pic[] = [];
+    if (op === "generate" && plan.references?.length) {
+      const imgs = await conversationImages(cid);
+      for (const r of plan.references) {
+        const hit = r === "attached" && userMsg ? [...imgs].reverse().find((x) => x.msg.id === userMsg.id)
+          : r.startsWith("#") ? imgs.find((x) => x.n === +r.slice(1))
+          : r === "last-made" ? [...imgs].reverse().find((x) => x.file.generated) : imgs[imgs.length - 1];
+        if (hit && !refs.some((x) => x.file.id === hit.file.id)) refs.push(hit);
+      }
+    }
     const notes = new Set<string>();
     let made = 0;
     h.onTool?.({ name: tool, op, status: "running" });
@@ -679,51 +892,24 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
       if (signal.aborted) break;
       h.onProgress?.({ fraction: i / n, text: n > 1 ? `Making image ${i + 1} of ${n}…` : op === "generate" ? "Making your image…" : "Changing the image…" });
       const job: ImageJob = { op, prompt: plan.prompt, style, aspect, resolution: opts?.resolution ?? plan.resolution ?? 1024, seed: seed0 + i * 7919,
-        negative: opts?.negative_prompt ?? plan.negative_prompt, source: source?.file.dataUrl, mask, background: plan.background };
-      let img: MadeImage | null = null;
-      let lastErr: ImageEngineError | null = null;
-      for (const e of engines) {
-        try {
-          if (e === "gemini") {
-            if (quotaKnownEmpty(s.api_key || "")) { lastErr = new ImageEngineError("no quota", "quota"); continue; }
-            img = await gemini(job, s.api_key || "", net, signal);
-          } else if (e === "openai") {
-            if (op !== "generate") continue;
-            img = await openai(job, base(s), s.api_key || "", net, signal);
-          } else {
-            if (op !== "generate" && op !== "variations") {
-              // the free service can't edit pictures: re-imagine AI-made ones from their description
-              const prompt = source?.file.meta?.prompt;
-              if (!prompt) throw lastErr && lastErr.code !== "quota" ? lastErr : new ImageEngineError(
-                "Changing your own photos needs an image editor: in Settings → Connection use a Google Gemini key with billing turned on " +
-                "(Google doesn't include image editing on free keys). I can make a new picture from a description instead — just describe it.", "unsupported");
-              img = await pollinations({ ...job, op: "generate", prompt: reimagine(prompt, plan), seed: plan.fresh ? seed0 : source?.file.meta?.seed ?? seed0 },
-                net, signal, (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }));
-              notes.add("The free image service can't edit a picture directly, so this is a new version made from the original description — details can change.");
-            } else {
-              const prompt = op === "variations" ? source?.file.meta?.prompt || plan.prompt : plan.prompt;
-              if (!prompt) throw new ImageEngineError("Variations of your own photos need a Gemini key with billing turned on.", "unsupported");
-              img = await pollinations({ ...job, op: "generate", prompt }, net, signal, (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }));
-            }
-          }
-          break;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") throw err;
-          const ie = err instanceof ImageEngineError ? err : new ImageEngineError("The image couldn't be made.", "failed");
-          if (e === "gemini" && ie.code === "quota") {
-            rememberNoQuota(s.api_key || "");
-            if (op === "generate") notes.add("Your Gemini key can't make images (Google offers its image model only with billing turned on), so the free image service made this one.");
-          }
-          if (ie.code === "blocked" || ie.code === "unsupported") { lastErr = ie; break; }
-          lastErr = ie;
-        }
+        negative: opts?.negative_prompt ?? plan.negative_prompt, source: source?.file.dataUrl, mask, background: plan.background,
+        references: refs.map((r) => r.file.dataUrl!), refMode: plan.refMode, text: plan.text, target: plan.target };
+      let img: MadeImage = await produce({ op, plan, job, source, refs, s, modelId, signal, notes,
+        progress: (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }) });
+      // asked for a bigger picture than the engine gave: enlarge on the phone
+      if (op !== "upscale" && (opts?.resolution ?? plan.resolution) && job.resolution > Math.max(img.width, img.height) * 1.15) {
+        const u = await upscale(img.dataUrl, job.resolution);
+        img = { ...img, dataUrl: u.dataUrl, mime: "image/png", width: u.w, height: u.h };
+        notes.add(`The image service returned a smaller picture, so it was enlarged on your phone to ${u.w}×${u.h}.`);
       }
-      if (!img) throw lastErr || new ImageEngineError("The image couldn't be made.", "failed");
       img.notes.forEach((x) => notes.add(x));
       const id = uid("fil");
       const ext = img.mime === "image/png" ? "png" : img.mime === "image/webp" ? "webp" : "jpg";
-      const meta = { op, prompt: op === "generate" ? plan.prompt : (source?.file.meta?.prompt ? reimagine(source.file.meta.prompt, plan) : plan.prompt),
-        seed: job.seed, provider: img.engine, model: img.model, parent_id: source?.file.id ?? null, style, aspect_ratio: aspect, negative_prompt: job.negative };
+      const keep = op === "upscale" || op === "outpaint" || op === "remove_background";
+      const meta = { op, prompt: op === "generate" ? plan.prompt : source?.file.meta?.prompt ? (keep ? source.file.meta.prompt : reimagine(source.file.meta.prompt, plan)) : plan.prompt,
+        subject: (op === "generate" ? (refs[0]?.file.meta?.subject as string | undefined) : (source?.file.meta?.subject as string | undefined)) || (op === "generate" ? plan.prompt : undefined),
+        text: plan.text,
+        seed: job.seed, provider: img.engine, model: img.model, parent_id: source?.file.id ?? null, style, aspect_ratio: op === "outpaint" ? nearestAspect(img.width, img.height) : aspect, negative_prompt: job.negative };
       const f: FileRow = { id, name: `image-${id.slice(-6)}.${ext}`, mime: img.mime, size: Math.round(img.dataUrl.length * 0.75), kind: "image",
         dataUrl: img.dataUrl, generated: true, width: img.width, height: img.height, meta, created_at: now() };
       await put("files", f);

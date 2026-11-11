@@ -146,6 +146,34 @@ def images(page):
     assert "error" not in info and info["w"] >= 512 and info["red"] > 20, info
 
 
+def last_reply_done(page, what, timeout=180):
+    page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
+              'return a && a.getAttribute("aria-busy") === "false" && (!!a.querySelector("img") || !!a.querySelector(".msg-error")); })()', timeout, what)
+
+
+def image_tools(page):
+    """Exact words drawn by the app on a real picture, then enlarged on the phone."""
+    n0 = page.js('document.querySelectorAll("article.msg-assistant").length')
+    ask(page, 'Create a poster with the text "ZENVQO"')
+    page.wait(f'document.querySelectorAll("article.msg-assistant").length > {n0}', 30, "the poster reply")
+    try:
+        last_reply_done(page, "the poster")
+    except SystemExit:
+        shot("poster-failed")
+        print("last reply:", page.js('[...document.querySelectorAll("article.msg-assistant")].pop().innerText'))
+        raise
+    text = page.js('[...document.querySelectorAll("article.msg-assistant")].pop().innerText')
+    print("  poster:", text[:160].replace("\n", " "), flush=True)
+    shot("poster")
+    assert 'The words "ZENVQO"' in text, text
+    page.js('[...document.querySelectorAll("article.msg-assistant")].pop().querySelector("[aria-label=\\"Make larger\\"]").click()')
+    page.wait(f'document.querySelectorAll("article.msg-assistant").length > {n0 + 1}', 30, "the larger reply")
+    last_reply_done(page, "the larger picture", 90)
+    size = page.js('(() => { const i = [...document.querySelectorAll("article.msg-assistant")].pop().querySelector("img"); return i ? i.naturalWidth + "x" + i.naturalHeight : "none"; })()')
+    print("  enlarged:", size, flush=True)
+    assert size != "none" and max(int(x) for x in size.split("x")) == 2048, size
+
+
 def main():
     page = Page(page_socket())
     page.wait('!!document.querySelector("#composer-input")', 60, "the chat box")
@@ -193,6 +221,7 @@ def main():
     assert "a PDF with 1 page" in reply and "Zenvqo phone test" in reply, reply
     print("a real picture on this phone:")
     images(page)
+    image_tools(page)
     print("graphs on this phone:")
     plots(page)
     print("hard PDFs on this phone:")

@@ -286,6 +286,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     else if (action === "mask") setMasking(a);
     else if (action === "variations") await send(`Make variations of ${label}`, [], { op: "variations", source_id: a.id, n: imageOpts.n && imageOpts.n > 1 ? imageOpts.n : 3 });
     else if (action === "remove_background") await send(`Remove the background of ${label}`, [], { op: "remove_background", source_id: a.id, output_format: "png" });
+    else if (action === "outpaint") await send(`Expand ${label} to show more around it`, [], { op: "outpaint", source_id: a.id });
+    else if (action === "upscale") await send(`Make ${label} larger`, [], { op: "upscale", source_id: a.id, resolution: 2048 });
   }
 
   async function applyMask(a: Attachment, mask: Blob, instruction: string) {
