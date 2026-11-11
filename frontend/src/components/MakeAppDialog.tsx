@@ -5,7 +5,7 @@ import { Modal } from "./Dialogs";
 import { Icon } from "./Icon";
 
 // same colours and choice as the Android side (NativeApk.letterIcon), so the preview matches the real icon
-const COLOURS = ["#0A6E6A", "#1F4E8C", "#7A3E9D", "#B4441F", "#2E7D32", "#8C5A00", "#00796B", "#37474F"];
+const COLOURS = ["#0060E6", "#1F4E8C", "#7A3E9D", "#B4441F", "#2E7D32", "#8C5A00", "#00796B", "#37474F"];
 function javaHash(s: string) { let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0; return h; }
 const colourFor = (name: string) => COLOURS[Math.abs(javaHash(name)) % COLOURS.length];
 

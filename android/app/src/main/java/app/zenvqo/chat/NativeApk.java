@@ -250,7 +250,7 @@ final class NativeApk {
 
     /** The app name's first letter on a colour picked from the name. */
     private static byte[] letterIcon(String label) {
-        int[] colours = {0xFF0A6E6A, 0xFF1F4E8C, 0xFF7A3E9D, 0xFFB4441F, 0xFF2E7D32, 0xFF8C5A00, 0xFF00796B, 0xFF37474F};
+        int[] colours = {0xFF0060E6, 0xFF1F4E8C, 0xFF7A3E9D, 0xFFB4441F, 0xFF2E7D32, 0xFF8C5A00, 0xFF00796B, 0xFF37474F};
         int bg = colours[Math.abs(label.hashCode()) % colours.length];
         Bitmap out = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);

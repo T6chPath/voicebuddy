@@ -1,3 +1,4 @@
+import { Logo } from "./Brand";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { LOCAL_MODE } from "../api/client";
 import type { Conversation, User } from "../api/types";
@@ -51,6 +52,7 @@ export function Sidebar(p: Props) {
     <>
       <div className={`scrim${p.open ? " show" : ""}`} onClick={p.onClose} aria-hidden="true" />
       <nav id="sidebar" ref={ref} className={`sidebar${p.open ? " open" : ""}`} aria-label="Conversations">
+        <div className="side-brand" aria-hidden="true"><Logo /> zenvqo</div>
         <div className="side-top">
           <button type="button" className="btn primary wide" onClick={p.onNew}>
             <Icon name="plus" /> New chat
