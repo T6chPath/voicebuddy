@@ -1,9 +1,11 @@
 import { Eye } from "./Brand";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { Attachment, ImageOp, Message, ModelInfo } from "../api/types";
 import { fileSize, timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
 import { api } from "../api/client";
+import { extractFiles, projectName, webAppPage, zip } from "../lib/project";
+import { saveDataUrl } from "../lib/save";
 import { ImageGallery, ToolProgress, type ImageAction } from "./ImageViews";
 import { copyText, Markdown } from "./Markdown";
 import { PdfButton, PdfCard, PdfPending } from "./PdfViews";
@@ -30,6 +32,37 @@ interface Props {
 
 const serverHref = (a: Attachment, download = false) => `/api/files/${a.id}${download ? "?download=1" : ""}`;
 const noNumber = () => undefined;
+
+/** An answer with a multi-file project: the files at a glance, a .zip of all of them, and "Make app" for web projects. */
+function ProjectBar({ text }: { text: string }) {
+  const files = useMemo(() => extractFiles(text), [text]);
+  const [msg, setMsg] = useState("");
+  if (files.length < 2) return null;
+  const name = projectName(text, files);
+  const page = webAppPage(files);
+  async function download() {
+    const bytes = zip(files, name);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    try { setMsg(await saveDataUrl("data:application/zip;base64," + btoa(bin), `${name}.zip`)); }
+    catch (e) { setMsg((e as Error).message || "Couldn't save the project."); }
+  }
+  return (
+    <section className="project-bar" aria-label={`Project ${name}`}>
+      <div className="project-head">
+        <Icon name="layers" size={18} />
+        <div className="project-info"><strong>{name}</strong><span className="muted small-text">{files.length} files</span></div>
+      </div>
+      <ul className="project-files">{files.map((f) => <li key={f.path}><code>{f.path}</code></li>)}</ul>
+      <div className="project-actions">
+        <button type="button" className="btn small primary" onClick={download}><Icon name="download" size={16} /> Download project (.zip)</button>
+        {page && <button type="button" className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("zc-make-app", { detail: { html: page } }))}>
+          <Icon name="phone" size={16} /> Make app</button>}
+        {msg && <span className="muted small-text" role="status">{msg}</span>}
+      </div>
+    </section>
+  );
+}
 
 async function makeAppFromFile(id: string) {
   const html = await api.fileText(id);
@@ -75,6 +108,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
       {m.role === "assistant" && <NowSpeaking id={m.id} />}
       {m.role === "assistant" && streaming && request && wantsPdf(request) && <PdfPending text={m.content} request={request} />}
       {m.role === "assistant" && !streaming && m.content && <PdfCard id={m.id} text={m.content} request={request} />}
+      {m.role === "assistant" && !streaming && m.content.includes("```") && <ProjectBar text={m.content} />}
       {m.tool && m.tool.status === "running" && <ToolProgress t={m.tool} />}
       {m.role === "assistant" && m.attachments.some((a) => a.kind === "image" && fileHref(a)) && (
         <ImageGallery images={m.attachments.filter((a) => a.kind === "image" && fileHref(a))} href={fileHref} numberOf={numberOf} ops={imageOps}

@@ -109,10 +109,19 @@ function net(url: string, init: RequestInit = {}): Promise<Response> {
 export const PRESETS = [
   { id: "gemini", label: "Google Gemini — free key", url: "https://generativelanguage.googleapis.com/v1beta/openai", keyUrl: "https://aistudio.google.com/apikey", needsKey: true },
   { id: "groq", label: "Groq — free key", url: "https://api.groq.com/openai/v1", keyUrl: "https://console.groq.com/keys", needsKey: true },
+  { id: "openrouter", label: "OpenRouter — 500+ models, free key", url: "https://openrouter.ai/api/v1", keyUrl: "https://openrouter.ai/keys", needsKey: true },
+  { id: "deepseek", label: "DeepSeek V4 — big projects", url: "https://api.deepseek.com/v1", keyUrl: "https://platform.deepseek.com/api_keys", needsKey: true },
+  { id: "anthropic", label: "Claude (Anthropic)", url: "https://api.anthropic.com/v1", keyUrl: "https://platform.claude.com/settings/keys", needsKey: true },
+  { id: "openai", label: "OpenAI", url: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys", needsKey: true },
+  { id: "mistral", label: "Mistral (Codestral)", url: "https://api.mistral.ai/v1", keyUrl: "https://console.mistral.ai/api-keys", needsKey: true },
   { id: "laptop", label: "My laptop (llama-server)", url: "http://192.168.1.20:8080", keyUrl: "", needsKey: false },
   { id: "ollama", label: "Ollama", url: "http://192.168.1.20:11434", keyUrl: "", needsKey: false },
   { id: "custom", label: "Other OpenAI-compatible server", url: "", keyUrl: "", needsKey: false },
 ] as const;
+
+/** Hosted services with long context windows (hundreds of thousands of tokens): keep much more of the chat for big projects. */
+const LONG_CONTEXT = /generativelanguage\.googleapis\.com|api\.deepseek\.com|api\.anthropic\.com|openrouter\.ai|api\.openai\.com|api\.mistral\.ai/;
+function historyBudget(s: UserSettings): number { return LONG_CONTEXT.test(base(s)) ? 400_000 : 24_000; }
 
 /** The model can't know today's date by itself — tell it, in the user's own time zone. */
 export function nowContext(d = new Date()): string {
@@ -185,7 +194,15 @@ function base(s: UserSettings): string {
 
 const NOT_CHAT = /embed|imagen|veo|tts|audio|aqa|whisper|guard|lyria|image-generation|transcri|moderation|banana/i;
 function headers(s: UserSettings): Record<string, string> {
-  return { "Content-Type": "application/json", ...(s.api_key ? { Authorization: `Bearer ${s.api_key}` } : {}) };
+  const h: Record<string, string> = { "Content-Type": "application/json", ...(s.api_key ? { Authorization: `Bearer ${s.api_key}` } : {}) };
+  const b = base(s);
+  if (/api\.anthropic\.com/.test(b) && s.api_key) {                // Claude: its own key header (model list) + browser access
+    h["x-api-key"] = s.api_key;
+    h["anthropic-version"] = "2023-06-01";
+    h["anthropic-dangerous-direct-browser-access"] = "true";
+  }
+  if (/openrouter\.ai/.test(b)) h["X-Title"] = "zenvqo";
+  return h;
 }
 
 export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): Promise<ModelInfo[]> {
@@ -203,10 +220,19 @@ export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): 
   }
   if (!r.ok) throw new ApiError(r.status, `The server answered ${r.status} for /models.`);
   const j = await r.json().catch(() => ({}));
-  const items = (j.data || j.models || []) as { id?: string; name?: string; model?: string }[];
-  const ids = items.map((m) => (m.id || m.name || m.model || "").replace(/^models\//, "")).filter((id) => id && !NOT_CHAT.test(id));
+  const items = (j.data || j.models || []) as { id?: string; name?: string; model?: string; pricing?: { prompt?: string; completion?: string }; context_length?: number }[];
   const host = (() => { try { return new URL(b).host; } catch { return b; } })();
-  return ids.map((id) => ({ id: "srv:" + id, label: id.split("/").pop()!.replace(/\.gguf$/i, ""), vision: true, description: `on ${host}` }));
+  const router = /openrouter\.ai/.test(b);
+  const list = items.map((m) => {
+    const id = (m.id || m.name || m.model || "").replace(/^models\//, "");
+    const free = /:free$/.test(id) || id === "openrouter/free" || (router && m.pricing?.prompt === "0" && m.pricing?.completion === "0");
+    const ctx = m.context_length && m.context_length >= 100_000 ? ` · ${m.context_length >= 1_000_000 ? Math.round(m.context_length / 1_000_000) + "M" : Math.round(m.context_length / 1000) + "K"} context` : "";
+    // OpenRouter ids are "maker/model": keep the maker so 500 models stay tellable apart
+    const name = router ? id.replace(/:free$/, "") : id.split("/").pop()!.replace(/\.gguf$/i, "");
+    return { id, free, info: { id: "srv:" + id, label: name + (free ? " (free)" : ""), vision: true, description: `on ${host}${ctx}` } as ModelInfo };
+  }).filter((x) => x.id && !NOT_CHAT.test(x.id));
+  if (router) list.sort((a, b2) => (a.id === "openrouter/free" ? -1 : b2.id === "openrouter/free" ? 1 : 0) || Number(b2.free) - Number(a.free) || a.id.localeCompare(b2.id));
+  return list.map((x) => x.info);
 }
 
 let modelCache: ModelInfo[] | null = null;
@@ -399,7 +425,7 @@ export interface StreamHandlers {
 
 const BASE_SYSTEM = "You are zenvqo, a helpful assistant who explains things clearly. Use Markdown when it helps (lists, tables, fenced code with a language). " +
   "How to write answers: begin with the direct answer in one or two clear sentences, with no preamble such as “Great question” and without repeating the question. Then explain in short paragraphs of two to four sentences, one idea per paragraph, in simple everyday words; explain any technical term the first time you use it. Match the length to the question: a simple question gets a short, complete answer; a question that needs explaining gets a well-organised explanation. For longer explanations use ## headings for the main parts (for example what it is, how it works, an example, why it matters), **bold** the few key terms the reader should remember, numbered lists for steps and processes, bullet lists for features, causes or types, a table for comparisons, and a worked example or a real-life analogy when it makes the idea easier to understand. To highlight something, write a blockquote that starts with a bold label: > **Tip:** …, > **Note:** …, > **Important:** …, > **Example:** … ; end a longer explanation with > **In short:** and a one- or two-sentence summary. Use these sparingly — at most a few per answer. Never write one long wall of text, and don\"t pad the answer. Reply in the same language and style the user writes in (Hinglish if they write Hinglish). (When the user asks for a PDF, a picture or a graph, the instructions for those come first.) " +
-  "Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. The app can turn a web page into a real Android app (APK) on the phone: when the user wants an app, a tool, a game or a website, or asks to convert HTML into an APK, write the complete app as ONE self-contained HTML file (inline CSS and JavaScript, no external files, mobile-friendly, data kept in localStorage when it should be remembered) in a single ```html code block, with a <title> that names the app; then say in one short sentence to tap “Make app” under the code to build and install it. Never say you can't make APK files or Android apps. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. " +
+  "Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. For a large project (an app, a website, a game, a program with several files): start with a short plan and the file tree, then give EVERY file complete (no placeholders like '... rest of the code' or 'same as before'), each in its own code block with the file's path written on the line just before it as **`path/to/file.ext`**; finish with how to run it. The app shows the whole project as a .zip download (and web projects can become an Android app). Long answers are fine: if your reply is cut off, the app asks you to continue. When the user asks to change a project, give the complete new version of each changed file. The app can turn a web page into a real Android app (APK) on the phone: when the user wants an app, a tool, a game or a website, or asks to convert HTML into an APK, write the complete app as ONE self-contained HTML file (inline CSS and JavaScript, no external files, mobile-friendly, data kept in localStorage when it should be remembered) in a single ```html code block, with a <title> that names the app; then say in one short sentence to tap “Make app” under the code to build and install it. Never say you can't make APK files or Android apps. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. " +
   "When the user shares a photo or image, look at it carefully and explain everything in it: what it shows, all visible text (read it out exactly), objects, numbers, diagrams, charts, problems or questions written in it (solve them step by step), people's actions and expressions (never identify real people from their faces), and what it means — then answer the user's question about it. " +
   "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file. " +
   "When the user asks to plot, graph, draw or visualise a function, equation, curve or surface (2D or 3D), draw it: write a fenced code block with the language plot, one equation per line in plain maths notation (not LaTeX), for example ```plot\ny = sin(x)\ny = x^2/4\n```. Supported lines: y = f(x); x = f(y); any equation in x and y (x^2 + y^2 = 25); inequalities, shaded (y > x^2); polar r = f(theta); parametric x = f(t), y = g(t); points (2, 3); a domain at the end ({0 <= x <= 4}); 3D surfaces z = f(x, y); any equation in x, y, z (x^2 + y^2 + z^2 = 9); 3D curves x = f(t), y = g(t), z = h(t); parametric surfaces in u and v; options x: -5..5, y: …, z: …, t: 0..2pi, title: …; parameters with a slider a = 1 [0..5]. Use ^ for powers, sqrt, abs, ln, log (base 10), pi, e; implicit multiplication like 2x is fine. Choose ranges that show the interesting part. The app draws an interactive graph (zoom, trace, roots and turning points marked), so never say you can't draw graphs; after the block, briefly explain the key features (domain, intercepts, asymptotes, turning points, shape). " +
@@ -432,8 +458,8 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
         if (f.images) images.push(...f.images);
       }
     }
-    // chat history is kept to ~24k characters; attached documents don't count against it (they're kept below)
-    if (used + text.length - docChars > 24000 && out.length) break;
+    // chat history is kept to ~24k characters (400k on long-context services); attached documents don't count (kept below)
+    if (used + text.length - docChars > historyBudget(s) && out.length) break;
     used += text.length - docChars;
     out.push(images.length ? { role: r.role, content: [{ type: "text", text }, ...images.map((u) => ({ type: "image_url", image_url: { url: u } }))] } : { role: r.role, content: text });
   }
@@ -558,7 +584,38 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
   }
 }
 
-async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal): AsyncGenerator<string> {
+/** Big answers (whole projects) can run past a model's output limit: when the reply stops for that reason, ask the model
+ * to carry on from the exact spot, up to a few times, and join the parts into one reply. */
+const CONTINUE = "Your previous reply was cut off by the length limit. Continue exactly where it stopped: don't repeat anything, " +
+  "don't add an introduction, and if you stopped inside a code block, just continue the code (don't start a new code block).";
+async function* longStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, maxParts = 6): AsyncGenerator<string> {
+  let sofar = "";
+  for (let part = 0; part < maxParts; part++) {
+    const info: { finish?: string } = {};
+    const msgs = part === 0 ? messages : [...messages, { role: "assistant", content: sofar }, { role: "user", content: CONTINUE }];
+    // the start of a continuation is held back a moment: if the model reopened the code block it was in, drop that line
+    const insideCode = part > 0 && (sofar.match(/^```/gm) || []).length % 2 === 1;
+    let head = part > 0 ? "" : null as string | null;
+    const fix = (h: string) => (insideCode ? h.replace(/^\s*```[\w+#.-]*[ \t]*\n/, "") : h);
+    for await (const t of serverStream(model, msgs, s, signal, info)) {
+      if (head !== null) {
+        head += t;
+        if (head.length < 40 && !head.includes("\n")) continue;
+        const out = fix(head);
+        head = null;
+        sofar += out;
+        yield out;
+        continue;
+      }
+      sofar += t;
+      yield t;
+    }
+    if (head) { const out = fix(head); sofar += out; yield out; }
+    if (signal.aborted || info.finish !== "length") return;
+  }
+}
+
+async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, info: { finish?: string } = {}): AsyncGenerator<string> {
   const b = base(s);
   if (!b) throw new ApiError(400, "No model server set. Open Settings → Connection.", undefined, "config");
   let r: Response;
@@ -583,6 +640,8 @@ async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings
       if (d.error) throw new ApiError(502, d.error.message || "The model reported an error.");
       const t = d.choices?.[0]?.delta?.content;
       if (t) queue.push(t);
+      const fin = d.choices?.[0]?.finish_reason;
+      if (fin) info.finish = fin === "max_tokens" ? "length" : fin;
     } catch (e) { if (e instanceof ApiError) throw e; }
   });
   const reader = r.body.getReader();
@@ -1041,7 +1100,7 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
   const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };
   await put("messages", row);
   h.onMeta?.({ user_message: userMsg, assistant_message: { id: aid, model: modelId } });
-  const gen = modelId === "echo" ? echoStream(history, s.temperature, signal) : serverStream(modelId.replace(/^srv:/, ""), history, s, signal);
+  const gen = modelId === "echo" ? echoStream(history, s.temperature, signal) : longStream(modelId.replace(/^srv:/, ""), history, s, signal);
   let lastSave = Date.now();
   try {
     for await (const t of gen) {

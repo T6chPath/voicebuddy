@@ -53,6 +53,7 @@ export function ConfirmDialog({ open, title, body, confirmLabel, onConfirm, onCl
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, models, saveSettings, user } = useSession();
   const [draft, setDraft] = useState<UserSettings>(settings);
+  const [modelQuery, setModelQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -93,10 +94,17 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
         </fieldset>
         <fieldset>
           <legend>Chat</legend>
+          {models.length > 12 && (
+            <label className="field">
+              <span>Find a model</span>
+              <input type="search" value={modelQuery} placeholder="e.g. free, coder, claude, deepseek" onChange={(e) => setModelQuery(e.target.value)} />
+            </label>
+          )}
           <label className="field">
             <span>Default model</span>
             <select value={draft.default_model} onChange={(e) => set("default_model", e.target.value)}>
-              {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {models.filter((m) => !modelQuery.trim() || m.id === draft.default_model || modelQuery.trim().toLowerCase().split(/\s+/).every((w) => `${m.label} ${m.id} ${m.description || ""}`.toLowerCase().includes(w)))
+                .map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               {!models.some((m) => m.id === draft.default_model) && <option value={draft.default_model}>{draft.default_model.replace(/^srv:/, "")}</option>}
             </select>
           </label>
@@ -140,7 +148,8 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
 /** Standalone app: where the model lives. Talks straight to an OpenAI-compatible server (llama-server, Ollama…). */
 /** Prefer a fast, capable general chat model when the service lists many. */
 function pickModel(ms: ModelInfo[]): ModelInfo {
-  const prefs = [/gemini-2\.5-flash$/, /gemini-.*flash$/, /llama-3\.3-70b-versatile/, /gpt-oss-120b/, /llama/, /qwen/];
+  const prefs = [/gemini-2\.5-flash$/, /gemini-.*flash$/, /^srv:openrouter\/free$/, /deepseek-v4-flash/, /deepseek-chat/, /claude-sonnet/, /claude-/,
+    /codestral|devstral|mistral-large/, /gpt-5|gpt-4\.1|gpt-4o$/, /llama-3\.3-70b-versatile/, /gpt-oss-120b/, /llama/, /qwen/];
   for (const re of prefs) { const m = ms.find((x) => re.test(x.id) && !/lite|preview|exp|thinking/.test(x.id)); if (m) return m; }
   for (const re of prefs) { const m = ms.find((x) => re.test(x.id)); if (m) return m; }
   return ms[0];
@@ -173,7 +182,7 @@ function ConnectionFields({ draft, set }: { draft: UserSettings; set: <K extends
           ))}
         </div>
         {preset?.keyUrl && (
-          <small className="hint">Get a free key at <a href={preset.keyUrl} target="_blank" rel="noreferrer">{preset.keyUrl.replace("https://", "")}</a> (sign in, “Create API key”, copy it), then paste it below.</small>
+          <small className="hint">Get a{/free/.test(preset.label) ? " free" : "n"} key at <a href={preset.keyUrl} target="_blank" rel="noreferrer">{preset.keyUrl.replace("https://", "")}</a> (sign in, “Create API key”, copy it), then paste it below.</small>
         )}
       </div>
       <label className="field">

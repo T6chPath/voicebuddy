@@ -26,7 +26,7 @@ const LANGS: Record<string, unknown> = { bash, cpp, css, go, java, javascript, j
 for (const [name, lang] of Object.entries(LANGS)) hljs.registerLanguage(name, lang as never);
 // highlight.js's HTML/XML grammar asks for Unicode regexes but contains /<\!--/, which isn't valid in that mode
 // (it threw on every ```html block); the same grammar without the Unicode flag works fine
-hljs.registerLanguage("xml", (h) => ({ ...(xml as (h: unknown) => Record<string, unknown>)(h), unicodeRegex: false }) as never);
+hljs.registerLanguage("xml", (h) => ({ ...(xml as unknown as (h: unknown) => Record<string, unknown>)(h), unicodeRegex: false }) as never);
 const ALIAS: Record<string, string> = { js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript", py: "python",
   sh: "bash", shell: "bash", zsh: "bash", html: "xml", htm: "xml", yml: "yaml", md: "markdown", "c++": "cpp", c: "cpp", kt: "kotlin", rs: "rust" };
 

@@ -112,7 +112,7 @@ final class NativePDF {
     /** Fallback: a PDF the page drew itself (base64), written to Downloads/zenvqo like the engine's files. */
     @JavascriptInterface
     public void saveBytes(final String id, final String base64, final String fileName) {
-        final String name = fileName.matches("(?i).+\\.(pdf|png|jpe?g|webp)$") ? fileName : fileName + ".pdf";   // PDFs, graphs, pictures
+        final String name = fileName.matches("(?i).+\\.(pdf|png|jpe?g|webp|zip)$") ? fileName : fileName + ".pdf";   // PDFs, graphs, pictures, projects
         if (Build.VERSION.SDK_INT < 29) { fail(id, "Saving files needs Android 10 or newer.", null); return; }
         try {
             byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
@@ -187,7 +187,7 @@ final class NativePDF {
         ContentValues v = new ContentValues();
         v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
         String lower = name.toLowerCase(java.util.Locale.ROOT);
-        v.put(MediaStore.MediaColumns.MIME_TYPE, lower.endsWith(".png") ? "image/png" : lower.endsWith(".webp") ? "image/webp"
+        v.put(MediaStore.MediaColumns.MIME_TYPE, lower.endsWith(".zip") ? "application/zip" : lower.endsWith(".png") ? "image/png" : lower.endsWith(".webp") ? "image/webp"
                 : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg" : "application/pdf");
         v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/zenvqo");
         v.put(MediaStore.MediaColumns.IS_PENDING, 1);
