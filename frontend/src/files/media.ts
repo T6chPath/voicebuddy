@@ -58,7 +58,7 @@ export async function pictureToJpeg(file: Blob, maxSide = 2048): Promise<string 
 
 /** Picture bytes found inside a document → small JPEGs for the AI. */
 export async function bytesToJpeg(bytes: Uint8Array, mime: string, maxSide = 1600): Promise<string | null> {
-  return pictureToJpeg(new Blob([bytes], { type: mime }), maxSide);
+  return pictureToJpeg(new Blob([bytes as BlobPart], { type: mime }), maxSide);
 }
 
 export interface VideoInfo { frames: string[]; duration: number; width: number; height: number }
@@ -107,3 +107,32 @@ export async function audioLength(file: Blob): Promise<number> {
 }
 
 export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+/** An audio file (MP3, M4A, OGG, WAV, AAC…) → a compact 16 kHz mono WAV, base64, for models that can listen (Gemini).
+ * At most `maxSeconds` (≈32 KB per second). null if this device can't decode the format. */
+export async function audioToWav(file: Blob, maxSeconds = 600): Promise<{ base64: string; seconds: number; cut: boolean } | null> {
+  const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AC || typeof OfflineAudioContext === "undefined") return null;
+  const ctx = new AC();
+  let buf: AudioBuffer;
+  try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch { return null; } finally { ctx.close().catch(() => {}); }
+  const rate = 16000;
+  const seconds = buf.duration;
+  const keep = Math.min(seconds, maxSeconds);
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(keep * rate)), rate);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start(0, 0, keep);
+  const out = (await off.startRendering()).getChannelData(0);
+  const bytes = new Uint8Array(44 + out.length * 2);
+  const v = new DataView(bytes.buffer);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) bytes[o + i] = s.charCodeAt(i); };
+  w(0, "RIFF"); v.setUint32(4, 36 + out.length * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, out.length * 2, true);
+  for (let i = 0; i < out.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, out[i])) * 0x7fff, true);
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { base64: btoa(s), seconds, cut: seconds > keep + 0.5 };
+}

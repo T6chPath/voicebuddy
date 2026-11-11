@@ -116,3 +116,45 @@ def test_photos_go_to_a_model_that_can_see(browser):
     wait_reply(p, 3)
     assert svc.requests[-1]["model"] == "google/gemini-2.5-flash"          # the chat still has the photo in it
     assert not errors, errors
+
+
+def test_file_cards_preview_drop_and_audio(browser):
+    p, svc, errors = app(browser, model="srv:deepseek/deepseek-v4-flash")
+    p.locator("form.composer input[type=file]").set_input_files([str(FILES / x) for x in ["report.docx", "sales.xlsx", "red.jpg", "tone.mp3"]])
+    row = p.locator(".att-list.pending")
+    expect(row.locator(".fc-progress, progress")).to_have_count(0, timeout=30_000)
+    expect(row.locator(".file-card")).to_have_count(4)
+    expect(row.locator(".file-card", has_text="report.docx")).to_contain_text("Document")
+    expect(row.locator(".file-card", has_text="sales.xlsx")).to_contain_text("Spreadsheet")
+    expect(row.locator(".file-card", has_text="tone.mp3")).to_contain_text("Audio")
+    expect(row.locator(".fc-photo img")).to_be_visible()                                         # the photo as a thumbnail
+    p.get_by_role("button", name="Remove sales.xlsx").click()
+    expect(row.locator(".file-card")).to_have_count(3)
+    p.locator("#composer-input").fill("what's in these?")
+    p.get_by_role("button", name="Send message").click()
+    wait_reply(p, 1)
+    req = svc.requests[-1]
+    assert req["model"] == "google/gemini-2.5-flash", "a model that can see and hear"
+    parts = [x for x in req["messages"] if x["role"] == "user"][-1]["content"]
+    audio = [x for x in parts if x["type"] == "input_audio"]
+    assert len(audio) == 1 and audio[0]["input_audio"]["format"] == "wav"
+    wav = base64.b64decode(audio[0]["input_audio"]["data"])
+    assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE" and 55_000 < len(wav) < 75_000           # 2 s of 16 kHz mono
+    assert 'Audio "tone.mp3", 0:02 long' in parts[0]["text"]
+    # the sent file opens: what the AI read from it
+    user = p.locator("article.msg-user").last
+    user.get_by_role("button", name="Open report.docx").click()
+    dlg = p.get_by_role("dialog", name="report.docx")
+    expect(dlg).to_contain_text("Mango Farm Report")
+    expect(dlg).to_contain_text("Document")
+    dlg.get_by_role("button", name="Done").click()
+    # files dropped anywhere on the chat
+    data = base64.b64encode((FILES / "letter.rtf").read_bytes()).decode()
+    dt = p.evaluate_handle(f"""() => {{ const dt = new DataTransfer();
+      dt.items.add(new File([Uint8Array.from(atob("{data}"), c => c.charCodeAt(0))], "letter.rtf", {{ type: "application/rtf" }})); return dt; }}""")
+    p.dispatch_event("main.chat", "dragenter", {"dataTransfer": dt})
+    expect(p.locator(".drop-overlay")).to_be_visible()
+    p.dispatch_event("main.chat", "drop", {"dataTransfer": dt})
+    expect(p.locator(".drop-overlay")).to_have_count(0)
+    expect(p.locator(".att-list.pending .file-card")).to_contain_text("letter.rtf")
+    assert not errors, errors

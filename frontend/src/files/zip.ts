@@ -81,7 +81,7 @@ export async function inflateRaw(data: Uint8Array, expected = 0): Promise<Uint8A
   const D = (globalThis as unknown as { DecompressionStream?: DS }).DecompressionStream;
   if (D) {
     try {
-      const stream = new Blob([data]).stream().pipeThrough(new D("deflate-raw"));
+      const stream = new Blob([data as BlobPart]).stream().pipeThrough(new D("deflate-raw"));
       return new Uint8Array(await new Response(stream).arrayBuffer());
     } catch { /* fall through to the built-in inflater */ }
   }

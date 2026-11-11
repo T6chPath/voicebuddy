@@ -7,6 +7,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
 import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
+import { FilePreview, type PreviewTarget } from "./FilePreview";
 import { APK_REQUEST } from "../apk/apk";
 
 type IconName = string;
@@ -56,6 +57,14 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const [masking, setMasking] = useState<Attachment | null>(null);
   const [makeApp, setMakeApp] = useState<string | null>(null);         // "Make app": the page to turn into an APK
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);   // a sent file, opened
+  const [dropping, setDropping] = useState(false);                     // files dragged over the chat
+  const dragDepth = useRef(0);
+  useEffect(() => {
+    const on = (e: Event) => setPreview((e as CustomEvent<PreviewTarget>).detail);
+    window.addEventListener("zc-preview-file", on);
+    return () => window.removeEventListener("zc-preview-file", on);
+  }, []);
   useEffect(() => {
     const on = (e: Event) => { const h = (e as CustomEvent<{ html: string }>).detail?.html; if (h) setMakeApp(h); };
     window.addEventListener("zc-make-app", on);
@@ -337,7 +346,11 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   const current = models.find((m) => m.id === model);
   return (
-    <main className="chat" id="main" aria-label="Chat">
+    <main className="chat" id="main" aria-label="Chat"
+          onDragEnter={(e) => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth.current++; setDropping(true); } }}
+          onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDropping(false); }}
+          onDragOver={(e) => { if (dropping) e.preventDefault(); }}
+          onDrop={(e) => { dragDepth.current = 0; setDropping(false); if (e.dataTransfer.files.length) { e.preventDefault(); composer.current?.addFiles(e.dataTransfer.files); } }}>
       <header className="chat-head">
         <button type="button" className="icon-btn only-mobile" aria-label="Open conversations" aria-expanded={sidebarOpen}
                 aria-controls="sidebar" onClick={onOpenSidebar}>
@@ -414,6 +427,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction}
                               canPaint={!caps || caps.ops.includes("inpaint")} />}
       {makeApp !== null && <MakeAppDialog html={makeApp} onClose={() => setMakeApp(null)} />}
+      {preview && <FilePreview f={preview} onClose={() => setPreview(null)} />}
+      {dropping && <div className="drop-overlay" aria-hidden="true"><div><Icon name="clip" size={34} /><strong>Add anything</strong><span>Drop files here to add them to your message</span></div></div>}
       {masking && <MaskEditor a={masking} src={fileUrl(masking.id)} onCancel={() => setMasking(null)} onApply={(b, t) => applyMask(masking, b, t)} />}
       <div className="composer-wrap">
         <VoicePanel />

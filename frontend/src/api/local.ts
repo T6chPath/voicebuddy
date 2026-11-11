@@ -132,7 +132,7 @@ export function nowContext(d = new Date()): string {
 
 // ---------------- IndexedDB ----------------
 type StoreName = "conversations" | "messages" | "files";
-interface FileRow extends Attachment { text?: string; full?: string; dataUrl?: string; images?: string[]; pages?: number; created_at: number }
+interface FileRow extends Attachment { text?: string; full?: string; audio?: string; dataUrl?: string; images?: string[]; pages?: number; created_at: number }
 interface MsgRow extends Message { conversation_id: string }
 
 let dbp: Promise<IDBDatabase> | null = null;
@@ -319,7 +319,7 @@ export async function clearAllLocalData() {
 }
 
 // ---------------- files ----------------
-const MAX_BYTES = 10 * 1024 * 1024, MAX_PDF_BYTES = 50 * 1024 * 1024;
+const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
 /** "%PDF-" anywhere in the first 1 KB (some downloaded/emailed files have junk before it), or a .pdf name/type. */
 async function isPdf(file: File): Promise<boolean> {
@@ -431,8 +431,16 @@ export function uploadFile(file: File, onProgress: (frac: number) => void): { pr
         ? `(Video "${name}": ${m.clock(v.duration)} long, ${v.width}×${v.height}. ${v.frames.length} snapshots taken evenly from start to end are attached in order — describe and answer from them; you can't hear the sound.)`
         : `(Video "${name}"${v.duration ? `, ${m.clock(v.duration)} long` : ""}: this phone couldn't play its format, so no pictures from it could be taken.)`;
     } else if (how === "audio") {
-      const len = await (await media()).audioLength(file);
-      row.text = `(Audio file "${name}"${len ? `, ${(await media()).clock(len)} long` : ""}. The recording itself can't be played to you in this app — answer from its name and the user's message, and suggest using the mic in the message box to say what's in it.)`;
+      const m = await media();
+      onProgress(0.2);
+      const wav = await m.audioToWav(file);
+      if (wav) {
+        row.audio = wav.base64;
+        row.text = `(Audio "${name}", ${m.clock(wav.seconds)} long. The recording is attached — listen to it and answer from what is said or heard in it${wav.cut ? "; only the first 10 minutes are included" : ""}.)`;
+      } else {
+        const len = await m.audioLength(file);
+        row.text = `(Audio file "${name}"${len ? `, ${m.clock(len)} long` : ""}: this phone couldn't open its format, so the recording itself isn't included.)`;
+      }
     } else {
       const { readDocument, textRuns } = await import("../files/documents");
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -485,7 +493,8 @@ const BASE_SYSTEM = "You are zenvqo, a helpful assistant who explains things cle
   "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file. " +
   "When the user asks to plot, graph, draw or visualise a function, equation, curve or surface (2D or 3D), draw it: write a fenced code block with the language plot, one equation per line in plain maths notation (not LaTeX), for example ```plot\ny = sin(x)\ny = x^2/4\n```. Supported lines: y = f(x); x = f(y); any equation in x and y (x^2 + y^2 = 25); inequalities, shaded (y > x^2); polar r = f(theta); parametric x = f(t), y = g(t); points (2, 3); a domain at the end ({0 <= x <= 4}); 3D surfaces z = f(x, y); any equation in x, y, z (x^2 + y^2 + z^2 = 9); 3D curves x = f(t), y = g(t), z = h(t); parametric surfaces in u and v; options x: -5..5, y: …, z: …, t: 0..2pi, title: …; parameters with a slider a = 1 [0..5]. Use ^ for powers, sqrt, abs, ln, log (base 10), pi, e; implicit multiplication like 2x is fine. Choose ranges that show the interesting part. The app draws an interactive graph (zoom, trace, roots and turning points marked), so never say you can't draw graphs; after the block, briefly explain the key features (domain, intercepts, asymptotes, turning points, shape). " +
   "The app can also make pictures (photos, drawings, logos, posters, wallpapers): when the user wants a picture made and it hasn't been made yet, reply with one line [[image: a detailed English description of the picture]] followed by one short sentence; the app replaces that line with the picture. Never say you can't create images.";
-type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
+type Part = { type: string; text?: string; image_url?: { url: string }; input_audio?: { data: string; format: string } };
+type ChatMsg = { role: string; content: string | Part[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
   const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && !(m.role === "assistant" && !m.content));
@@ -497,6 +506,7 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
     let text = r.content;
     let docChars = 0;
     const images: string[] = [];
+    const sounds: string[] = [];
     for (const a of r.attachments) {
       const f = await get<FileRow>("files", a.id);
       if (!f) continue;
@@ -511,12 +521,14 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
       if (vision && r.role === "user") {
         if (f.dataUrl) images.push(f.dataUrl);
         if (f.images) images.push(...f.images);
+        if (f.audio) sounds.push(f.audio);
       }
     }
     // chat history is kept to ~24k characters (400k on long-context services); attached documents don't count (kept below)
     if (used + text.length - docChars > historyBudget(s) && out.length) break;
     used += text.length - docChars;
-    out.push(images.length ? { role: r.role, content: [{ type: "text", text }, ...images.map((u) => ({ type: "image_url", image_url: { url: u } }))] } : { role: r.role, content: text });
+    out.push(images.length || sounds.length ? { role: r.role, content: [{ type: "text", text }, ...images.map((u) => ({ type: "image_url", image_url: { url: u } })),
+      ...sounds.map((d) => ({ type: "input_audio", input_audio: { data: d, format: "wav" } }))] } : { role: r.role, content: text });
   }
   // documents attached earlier than the kept history still count: follow-up questions ("what does page 4 say?")
   let docs = "";
@@ -1153,10 +1165,15 @@ const TEXT_ONLY = /deepseek(?!.*vl)|codestral|devstral|mistral-large|ministral|m
 const VISION_PREF = [/gemini-2\.5-flash$/, /gemini-[\d.]+-flash(?!-lite)/, /gemini/, /claude-sonnet/, /claude/, /gpt-5|gpt-4\.1|gpt-4o/, /llama-4-maverick/, /llama-4/,
   /pixtral|mistral-(small|medium)/, /qwen[\d.]*-?vl|qwen.*vision/, /gemma-3/, /vision|vl\b/, /^openrouter\/free$/];
 export const canSee = (id: string) => !TEXT_ONLY.test(id);
-function visionModel(): string | null {
-  const ids = (modelCache || []).map((m) => m.id.replace(/^srv:/, "")).filter((id) => id !== "echo" && canSee(id) && !NOT_CHAT.test(id));
+/** Models that can listen to recordings (input_audio). */
+export const canHear = (id: string) => /gemini(?!.*(embed|image|tts))|gpt-4o(-mini)?-audio|gpt-audio|voxtral|omni/i.test(id);
+const HEAR_PREF = [/gemini-2\.5-flash$/, /gemini-[\d.]+-flash(?!-lite)/, /gemini/, /gpt-4o-mini-audio|gpt-4o-audio|gpt-audio/, /voxtral/, /omni/];
+function bestModelFor(need: { see: boolean; hear: boolean }): string | null {
+  const ids = (modelCache || []).map((m) => m.id.replace(/^srv:/, "")).filter((id) => id !== "echo" && !NOT_CHAT.test(id) &&
+    (!need.see || canSee(id)) && (!need.hear || canHear(id)));
   const free = ids.filter((id) => /:free$/.test(id));
-  for (const pool of [free, ids]) for (const re of VISION_PREF) { const hit = pool.find((id) => re.test(id)); if (hit) return hit; }
+  const prefs = need.hear ? HEAR_PREF : VISION_PREF;
+  for (const pool of [free, ids]) for (const re of prefs) { const hit = pool.find((id) => re.test(id)); if (hit) return hit; }
   return null;
 }
 
@@ -1164,14 +1181,25 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
   const s = loadSettings();
   const vision = modelId.startsWith("srv:");
   let history = await buildHistory(cid, s, vision);
-  // photos (or pictures from files and videos) with a model that can't see: use this service's best picture-reading model
-  const pics = history.some((m) => Array.isArray(m.content));
-  if (vision && pics && !canSee(modelId.replace(/^srv:/, ""))) {
+  // photos (or pictures from files/videos) or recordings the chosen model can't take: use this service's best model that can
+  const parts = history.flatMap((m) => (Array.isArray(m.content) ? m.content : []));
+  const need = { see: parts.some((p) => p.type === "image_url"), hear: parts.some((p) => p.type === "input_audio") };
+  const fits = (id: string) => (!need.see || canSee(id)) && (!need.hear || canHear(id));
+  if (vision && (need.see || need.hear) && !fits(modelId.replace(/^srv:/, ""))) {
     if (!modelCache) await api.models().catch(() => null);
-    const alt = visionModel();
+    const alt = bestModelFor(need);
     if (alt) modelId = "srv:" + alt;
-    else history = history.map((m) => Array.isArray(m.content) ? { role: m.role, content: (m.content.find((p) => p.type === "text")?.text || "") +
-      "\n\n(The user attached pictures, but the AI model in use can't see images. Answer from the text, and tell the user once that for photos they can pick Google Gemini, OpenRouter or Claude in Settings → Connection.)" } : m);
+    else {
+      const cur = modelId.replace(/^srv:/, "");
+      const drop = (p: Part) => (p.type === "image_url" && !canSee(cur)) || (p.type === "input_audio" && !canHear(cur));
+      const missing = [!canSee(cur) && need.see ? "pictures" : "", !canHear(cur) && need.hear ? "recordings" : ""].filter(Boolean).join(" and ");
+      history = history.map((m) => {
+        if (!Array.isArray(m.content) || !m.content.some(drop)) return m;
+        const kept = m.content.filter((p) => !drop(p));
+        const note = `\n\n(The user attached ${missing}, but the AI model in use can't take them. Answer from the text, and tell the user once that Google Gemini (in Settings → Connection) can see photos and hear recordings.)`;
+        return { role: m.role, content: kept.length > 1 ? kept.map((p, i) => (i === 0 ? { ...p, text: (p.text || "") + note } : p)) : (kept[0]?.text || "") + note };
+      });
+    }
   }
   const aid = uid("msg");
   const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };

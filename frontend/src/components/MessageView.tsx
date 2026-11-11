@@ -1,8 +1,9 @@
 import { Eye } from "./Brand";
 import { memo, useMemo, useState } from "react";
 import type { Attachment, ImageOp, Message, ModelInfo } from "../api/types";
-import { fileSize, timeLabel } from "../lib/format";
+import { timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
+import { FileCard } from "./FileCard";
 import { api } from "../api/client";
 import { extractFiles, projectName, webAppPage, zip } from "../lib/project";
 import { saveDataUrl } from "../lib/save";
@@ -88,12 +89,12 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
         ) : null;
       })()}
       {m.attachments.some((a) => !(a.kind === "image" && fileHref(a))) && (
-        <ul className="att-list" aria-label="Attachments">
+        <ul className="att-list fc-row" aria-label="Attachments">
           {m.attachments.filter((a) => !(a.kind === "image" && fileHref(a))).map((a) => {
-            const href = fileHref(a);
-            const inner = <><Icon name="file" size={14} /> {a.name} <span className="muted">{fileSize(a.size)}</span></>;
             const page = /\.x?html?$/i.test(a.name);
-            return <li key={a.id}>{href ? <a className="chip" href={href} target="_blank" rel="noopener">{inner}</a> : <span className="chip">{inner}</span>}
+            return <li key={a.id} className="chip fc-li">
+              <FileCard name={a.name} mime={a.mime} kind={a.kind} size={a.size}
+                        onOpen={() => window.dispatchEvent(new CustomEvent("zc-preview-file", { detail: { id: a.id, name: a.name, mime: a.mime, kind: a.kind, size: a.size, href: fileHref(a) } }))} />
               {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id)} aria-label={`Make an Android app from ${a.name}`}>
                 <Icon name="phone" size={14} /> Make app</button>}</li>;
           })}

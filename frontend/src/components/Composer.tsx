@@ -1,13 +1,14 @@
 import { forwardRef, type ReactNode, useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { api, ApiError, LOCAL_MODE, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
-import { fileSize, isMac } from "../lib/format";
+import { isMac } from "../lib/format";
 import { CameraDialog } from "./CameraViews";
+import { FileCard } from "./FileCard";
 import { dictation, type DictState } from "../voice/dictation";
 import { Icon } from "./Icon";
 
 const MAX_CHARS = 32000;
-const MAX_FILES = 5;
+const MAX_FILES = LOCAL_MODE ? 10 : 5;
 const MAX_MB = LOCAL_MODE ? 500 : 50;
 // the phone app reads every kind of file itself (documents, videos, any picture); the server version keeps its list
 const SERVER_ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.yaml,.yml,.toml,.xml,.log,.java,.kt,.c,.cpp,.h,.go,.rs,.sh,.pdf,image/png,image/jpeg,image/webp,image/gif";
@@ -17,7 +18,7 @@ interface Pending { key: string; file: File; progress: number; uploaded?: Upload
 
 export interface MenuItem { key: string; icon: string; label: string; hint?: string; ariaLabel?: string; on?: boolean; disabled?: boolean; onSelect: () => void }
 
-export interface ComposerHandle { focus: () => void; setText: (t: string) => void }
+export interface ComposerHandle { focus: () => void; setText: (t: string) => void; addFiles: (f: FileList | File[]) => void }
 
 export type Uploader = (file: File, onProgress: (frac: number) => void) => { promise: Promise<UploadedFile>; abort: () => void };
 
@@ -59,7 +60,7 @@ export function defaultQuestion(files: { kind: string }[]): string {
   return "Explain these files.";
 }
 
-function Thumb({ file }: { file: File }) {
+export function Thumb({ file }: { file: File }) {
   const [url, setUrl] = useState("");
   useEffect(() => { const u = URL.createObjectURL(file); setUrl(u); return () => URL.revokeObjectURL(u); }, [file]);
   return url ? <img className="chip-thumb" src={url} alt="" /> : null;
@@ -128,7 +129,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const input = useRef<HTMLInputElement>(null);
   const hintId = useId();
 
-  useImperativeHandle(ref, () => ({ focus: () => ta.current?.focus(), setText: (t) => { setText(t); ta.current?.focus(); } }), []);
+  useImperativeHandle(ref, () => ({ focus: () => ta.current?.focus(), setText: (t) => { setText(t); ta.current?.focus(); },
+    addFiles: (f) => addFilesRef.current(f) }), []);
 
   useEffect(() => {                                   // auto-grow up to ~40% of the viewport
     const el = ta.current;
@@ -137,6 +139,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.4) + "px";
   }, [text]);
 
+  const addFilesRef = useRef<(f: FileList | File[]) => void>(() => {});
   const addFiles = useCallback((list: FileList | File[]) => {
     const incoming = Array.from(list);
     setFiles((cur) => {
@@ -157,6 +160,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       return [...cur, ...next];
     });
   }, []);
+  addFilesRef.current = addFiles;
 
   function remove(p: Pending) {
     p.abort?.();
@@ -214,17 +218,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       {camera && <CameraDialog onPhoto={(f) => addFiles([f])} onClose={() => { setCamera(false); ta.current?.focus(); }} />}
       {banner}
       {files.length > 0 && (
-        <ul className="att-list pending" aria-label="Files to send">
+        <ul className="att-list pending fc-row" aria-label="Files to send">
           {files.map((p) => (
-            <li key={p.key} className={`chip${p.error ? " chip-error" : ""}`}>
-              {p.file.type.startsWith("image/") && !p.error ? <Thumb file={p.file} /> : <Icon name="file" size={14} />}
-              <span className="chip-name">{p.file.name}</span>
-              {p.error ? <span className="chip-status" role="alert">{p.error}</span>
-                : p.uploaded ? <span className="muted">{fileSize(p.uploaded.size)}{p.uploaded.truncated ? " · truncated" : ""}</span>
-                : <progress max={1} value={p.progress} aria-label={`Uploading ${p.file.name}`} />}
-              <button type="button" className="icon-btn small" aria-label={`Remove ${p.file.name}`} onClick={() => remove(p)}>
-                <Icon name="close" size={14} />
-              </button>
+            <li key={p.key} className={`chip fc-li${p.error ? " chip-error" : ""}`}>
+              <FileCard name={p.file.name} mime={p.file.type} size={p.uploaded?.size ?? p.file.size}
+                        kind={p.uploaded?.kind || (p.file.type.startsWith("image/") ? "image" : "")}
+                        picture={p.file.type.startsWith("image/") && !p.error ? p.file : null}
+                        progress={p.uploaded || p.error ? null : p.progress} error={p.error}
+                        note={p.uploaded?.truncated ? "Long file — the start is used" : undefined} onRemove={() => remove(p)} />
             </li>
           ))}
         </ul>
@@ -254,12 +255,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             <Icon name="plus" size={20} />
           </button>
           <div id={menuId} ref={menuEl} role="menu" aria-label="Add to your message" className="plus-menu" hidden={!menuOpen} onKeyDown={menuKeys}>
-            {[
+            {([
               { key: "camera", icon: "camera", label: "Camera", hint: "Take a photo", ariaLabel: "Take a photo", disabled: files.length >= MAX_FILES, onSelect: () => setCamera(true) },
               { key: "files", icon: "clip", label: "Photos & files", hint: LOCAL_MODE ? "Photos, PDFs, Word, Excel, PowerPoint, videos, any file" : "Images, PDFs, code, text", ariaLabel: "Attach files", disabled: files.length >= MAX_FILES,
                 onSelect: () => input.current?.click() },
               ...menu,
-            ].map((it) => (
+            ] as MenuItem[]).map((it) => (
               <button key={it.key} type="button" role="menuitem" className={`plus-item${it.on ? " on" : ""}`} aria-label={it.ariaLabel}
                       disabled={it.disabled} onClick={() => { closeMenu(false); it.onSelect(); }}>
                 <span className="pi-ico" aria-hidden="true"><Icon name={it.icon} size={20} /></span>
