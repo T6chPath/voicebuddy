@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode, useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { api, ApiError, uploadFile } from "../api/client";
+import { api, ApiError, LOCAL_MODE, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
 import { fileSize, isMac } from "../lib/format";
 import { CameraDialog } from "./CameraViews";
@@ -8,8 +8,10 @@ import { Icon } from "./Icon";
 
 const MAX_CHARS = 32000;
 const MAX_FILES = 5;
-const MAX_MB = 50;
-const ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.yaml,.yml,.toml,.xml,.log,.java,.kt,.c,.cpp,.h,.go,.rs,.sh,.pdf,image/png,image/jpeg,image/webp,image/gif";
+const MAX_MB = LOCAL_MODE ? 500 : 50;
+// the phone app reads every kind of file itself (documents, videos, any picture); the server version keeps its list
+const SERVER_ACCEPT = ".txt,.md,.csv,.tsv,.json,.py,.js,.ts,.tsx,.jsx,.html,.css,.sql,.yaml,.yml,.toml,.xml,.log,.java,.kt,.c,.cpp,.h,.go,.rs,.sh,.pdf,image/png,image/jpeg,image/webp,image/gif";
+const ACCEPT = LOCAL_MODE ? "" : SERVER_ACCEPT;
 
 interface Pending { key: string; file: File; progress: number; uploaded?: UploadedFile; error?: string; abort?: () => void }
 
@@ -254,7 +256,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           <div id={menuId} ref={menuEl} role="menu" aria-label="Add to your message" className="plus-menu" hidden={!menuOpen} onKeyDown={menuKeys}>
             {[
               { key: "camera", icon: "camera", label: "Camera", hint: "Take a photo", ariaLabel: "Take a photo", disabled: files.length >= MAX_FILES, onSelect: () => setCamera(true) },
-              { key: "files", icon: "clip", label: "Photos & files", hint: "Images, PDFs, code, text", ariaLabel: "Attach files", disabled: files.length >= MAX_FILES,
+              { key: "files", icon: "clip", label: "Photos & files", hint: LOCAL_MODE ? "Photos, PDFs, Word, Excel, PowerPoint, videos, any file" : "Images, PDFs, code, text", ariaLabel: "Attach files", disabled: files.length >= MAX_FILES,
                 onSelect: () => input.current?.click() },
               ...menu,
             ].map((it) => (

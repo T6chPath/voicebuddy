@@ -229,7 +229,7 @@ export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): 
     const ctx = m.context_length && m.context_length >= 100_000 ? ` · ${m.context_length >= 1_000_000 ? Math.round(m.context_length / 1_000_000) + "M" : Math.round(m.context_length / 1000) + "K"} context` : "";
     // OpenRouter ids are "maker/model": keep the maker so 500 models stay tellable apart
     const name = router ? id.replace(/:free$/, "") : id.split("/").pop()!.replace(/\.gguf$/i, "");
-    return { id, free, info: { id: "srv:" + id, label: name + (free ? " (free)" : ""), vision: true, description: `on ${host}${ctx}` } as ModelInfo };
+    return { id, free, info: { id: "srv:" + id, label: name + (free ? " (free)" : ""), vision: canSee(id), description: `on ${host}${ctx}` } as ModelInfo };
   }).filter((x) => x.id && !NOT_CHAT.test(x.id));
   if (router) list.sort((a, b2) => (a.id === "openrouter/free" ? -1 : b2.id === "openrouter/free" ? 1 : 0) || Number(b2.free) - Number(a.free) || a.id.localeCompare(b2.id));
   return list.map((x) => x.info);
@@ -319,7 +319,6 @@ export async function clearAllLocalData() {
 }
 
 // ---------------- files ----------------
-const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|py|js|ts|tsx|jsx|html|css|sql|ya?ml|toml|xml|log|java|kt|c|cpp|h|go|rs|sh)$/i;
 const MAX_BYTES = 10 * 1024 * 1024, MAX_PDF_BYTES = 50 * 1024 * 1024;
 
 /** "%PDF-" anywhere in the first 1 KB (some downloaded/emailed files have junk before it), or a .pdf name/type. */
@@ -331,20 +330,34 @@ async function isPdf(file: File): Promise<boolean> {
   return false;
 }
 
-async function sniff(file: File): Promise<{ kind: Attachment["kind"]; mime: string }> {
-  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+type How = "image" | "convert" | "pdf" | "video" | "audio" | "html" | "doc";
+/** What a file is, from its first bytes (then its name): every kind of file is accepted. */
+async function sniff(file: File): Promise<{ how: How; mime: string }> {
+  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const starts = (...b: number[]) => b.every((x, i) => head[i] === x);
-  if (starts(0x89, 0x50, 0x4e, 0x47)) return { kind: "image", mime: "image/png" };
-  if (starts(0xff, 0xd8, 0xff)) return { kind: "image", mime: "image/jpeg" };
-  if (starts(0x47, 0x49, 0x46, 0x38)) return { kind: "image", mime: "image/gif" };
-  if (starts(0x52, 0x49, 0x46, 0x46) && head[8] === 0x57 && head[9] === 0x45) return { kind: "image", mime: "image/webp" };
-  if (await isPdf(file)) return { kind: "pdf", mime: "application/pdf" };
-  if (TEXT_EXT.test(file.name) || !/\.[a-z0-9]+$/i.test(file.name)) {
-    const sample = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
-    if (sample.includes(0)) throw new ApiError(415, "This looks like a binary file, not text.");
-    return { kind: "text", mime: "text/plain" };
+  const ascii = (from: number, n: number) => String.fromCharCode(...head.subarray(from, from + n));
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || "").toLowerCase();
+  if (starts(0x89, 0x50, 0x4e, 0x47)) return { how: "image", mime: "image/png" };
+  if (starts(0xff, 0xd8, 0xff)) return { how: "image", mime: "image/jpeg" };
+  if (starts(0x47, 0x49, 0x46, 0x38)) return { how: "image", mime: "image/gif" };
+  if (starts(0x52, 0x49, 0x46, 0x46) && ascii(8, 4) === "WEBP") return { how: "image", mime: "image/webp" };
+  if (await isPdf(file)) return { how: "pdf", mime: "application/pdf" };
+  if (ascii(4, 4) === "ftyp") {                                      // ISO media: HEIC/AVIF photos, MP4/MOV video, M4A audio
+    const brand = ascii(8, 4).toLowerCase();
+    if (/^(heic|heix|hevc|hevx|heim|heis|mif1|msf1|avif|avis)$/.test(brand)) return { how: "convert", mime: brand.startsWith("avi") ? "image/avif" : "image/heic" };
+    if (/^m4a|^m4b|^m4p/.test(brand) || /^(m4a|m4b|aac)$/.test(ext)) return { how: "audio", mime: "audio/mp4" };
+    return { how: "video", mime: ext === "mov" ? "video/quicktime" : "video/mp4" };
   }
-  throw new ApiError(415, "Unsupported file type. Use PDF, text, code, CSV/JSON or PNG/JPEG/WebP/GIF images.");
+  if (starts(0x42, 0x4d) && /^(bmp|dib)$/.test(ext)) return { how: "convert", mime: "image/bmp" };
+  if (starts(0x49, 0x49, 0x2a, 0x00) || starts(0x4d, 0x4d, 0x00, 0x2a)) return { how: "convert", mime: "image/tiff" };
+  if (/^(heic|heif|avif|bmp|tiff?|ico|jxl|jp2|svg)$/.test(ext) || (file.type.startsWith("image/") && !/^(png|jpe?g|gif|webp)$/.test(ext)))
+    return { how: "convert", mime: file.type || (ext === "svg" ? "image/svg+xml" : "image/" + ext) };
+  if (starts(0x1a, 0x45, 0xdf, 0xa3)) return ext === "mka" ? { how: "audio", mime: "audio/webm" } : { how: "video", mime: "video/webm" };
+  if (file.type.startsWith("video/") || /^(mp4|m4v|mov|webm|mkv|3gp|3g2|avi|wmv|flv|mpe?g|ts)$/.test(ext)) return { how: "video", mime: file.type || "video/" + ext };
+  if (starts(0x49, 0x44, 0x33) || starts(0x4f, 0x67, 0x67, 0x53) || starts(0x66, 0x4c, 0x61, 0x43) || (starts(0x52, 0x49, 0x46, 0x46) && ascii(8, 4) === "WAVE") ||
+      file.type.startsWith("audio/") || /^(mp3|wav|ogg|oga|opus|aac|flac|amr|wma|m4a)$/.test(ext)) return { how: "audio", mime: file.type || "audio/" + ext };
+  if (/^(html?|xhtml)$/.test(ext)) return { how: "html", mime: "text/html" };
+  return { how: "doc", mime: file.type || "application/octet-stream" };
 }
 
 /** Photos straight from a phone camera are often 4000 px / 5 MB: send at most 2048 px (sharp enough to read text). */
@@ -370,20 +383,26 @@ async function imageDataUrl(file: File, mime: string): Promise<string> {
   }
 }
 
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024, MAX_DOC_BYTES = 60 * 1024 * 1024;
+const DOC_CHARS = 150_000;
+
 export function uploadFile(file: File, onProgress: (frac: number) => void): { promise: Promise<UploadedFile>; abort: () => void } {
   const promise = (async () => {
     if (file.size === 0) throw new ApiError(400, "The file is empty.");
-    const { kind, mime } = await sniff(file);
-    if (file.size > (kind === "pdf" ? MAX_PDF_BYTES : MAX_BYTES)) throw new ApiError(413, `File is larger than ${kind === "pdf" ? 50 : 10} MB.`);
+    const { how, mime } = await sniff(file);
+    const limit = how === "video" ? MAX_VIDEO_BYTES : how === "pdf" ? MAX_PDF_BYTES : how === "image" || how === "convert" ? 40 * 1024 * 1024 : MAX_DOC_BYTES;
+    if (file.size > limit) throw new ApiError(413, `File is larger than ${Math.round(limit / 1048576)} MB.`);
     const name = file.name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").slice(0, 120) || "file";
+    const kind: Attachment["kind"] = how === "image" || how === "convert" ? "image" : how === "pdf" ? "pdf" : "text";
     const row: FileRow = { id: uid("fil"), name, mime, size: file.size, kind, created_at: now() };
     let truncated = false;
-    if (kind === "text") {
+    const media = () => import("../files/media");
+    if (how === "html") {
       const t = await file.text();
       row.text = t.slice(0, 60000);
       truncated = t.length > 60000;
-      if (truncated && /\.x?html?$/i.test(name)) row.full = t;         // whole web pages are kept for "Make app"
-    } else if (kind === "pdf") {
+      if (truncated) row.full = t;                                    // whole web pages are kept for "Make app"
+    } else if (how === "pdf") {
       const { readPdf } = await import("../pdf/read");
       let doc;
       try {
@@ -396,13 +415,49 @@ export function uploadFile(file: File, onProgress: (frac: number) => void): { pr
       row.images = doc.images;
       row.pages = doc.pages;
       truncated = doc.truncated;
-    } else {
+    } else if (how === "image") {
       row.dataUrl = await imageDataUrl(file, mime);
+    } else if (how === "convert") {
+      const jpeg = await (await media()).pictureToJpeg(file);
+      if (!jpeg) throw new ApiError(415, `This phone can't open ${name.split(".").pop()?.toUpperCase() || "this"} pictures. Share it as a JPEG or PNG instead.`);
+      row.dataUrl = jpeg;
+      row.mime = "image/jpeg";
+    } else if (how === "video") {
+      const m = await media();
+      onProgress(0.2);
+      const v = await m.videoFrames(file);
+      row.images = v.frames;
+      row.text = v.frames.length
+        ? `(Video "${name}": ${m.clock(v.duration)} long, ${v.width}×${v.height}. ${v.frames.length} snapshots taken evenly from start to end are attached in order — describe and answer from them; you can't hear the sound.)`
+        : `(Video "${name}"${v.duration ? `, ${m.clock(v.duration)} long` : ""}: this phone couldn't play its format, so no pictures from it could be taken.)`;
+    } else if (how === "audio") {
+      const len = await (await media()).audioLength(file);
+      row.text = `(Audio file "${name}"${len ? `, ${(await media()).clock(len)} long` : ""}. The recording itself can't be played to you in this app — answer from its name and the user's message, and suggest using the mic in the message box to say what's in it.)`;
+    } else {
+      const { readDocument, textRuns } = await import("../files/documents");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      onProgress(0.3);
+      let doc;
+      try { doc = await readDocument(name, bytes); } catch { doc = null; }
+      if (doc) {
+        const body = doc.format === "text" ? doc.text : `(${doc.format})\n\n${doc.text || "(no text in this file)"}`;
+        row.text = body.slice(0, doc.format === "text" ? 60000 : DOC_CHARS);
+        truncated = body.length > row.text.length;
+        if (doc.images.length) {
+          const m = await media();
+          const imgs: string[] = [];
+          for (const im of doc.images) { const j = await m.bytesToJpeg(im.bytes, im.mime); if (j) imgs.push(j); }
+          if (imgs.length) { row.images = imgs; row.text += `\n\n(${imgs.length} picture${imgs.length > 1 ? "s" : ""} from this file are attached.)`; }
+        }
+      } else {
+        const runs = textRuns(bytes).slice(0, 20000);
+        row.text = `(File "${name}", ${(file.size / 1024).toFixed(0)} KB, type ${mime}. It isn't a document format the app can open, so here is the readable text found inside it${runs ? "" : " — none"}.)\n\n${runs}`;
+      }
     }
     await put("files", row);
     if (row.dataUrl) pictures.set(row.id, row.dataUrl);
     onProgress(1);
-    return { id: row.id, name, mime, size: file.size, kind, chars: row.text?.length ?? 0, truncated };
+    return { id: row.id, name, mime: row.mime, size: file.size, kind, chars: row.text?.length ?? 0, truncated };
   })();
   return { promise, abort: () => {} };
 }
@@ -1092,10 +1147,32 @@ async function imagePlan(cid: string, text: string, atts: Attachment[], opts?: I
     lastReplyHasImage: !!lastAssistant?.attachments.some((a) => a.kind === "image" && a.generated) });
 }
 
+/** Models known to read text only (no pictures). Anything else is assumed able to see. */
+const TEXT_ONLY = /deepseek(?!.*vl)|codestral|devstral|mistral-large|ministral|magistral|qwen3-coder|qwen-?2\.5-coder|qwq|gpt-oss|gpt-3\.5|llama-3\.[13]\b|llama3[.-]?[13]\b|llama-3-|mixtral|phi-[34](?!.*(vision|multimodal))|kimi-k2(?!.*vision)|nemotron(?!.*vl)|command-r|\bo[13]-mini|compound|allam|sonar/i;
+/** The best picture-reading models, first match wins (free ones first on OpenRouter). */
+const VISION_PREF = [/gemini-2\.5-flash$/, /gemini-[\d.]+-flash(?!-lite)/, /gemini/, /claude-sonnet/, /claude/, /gpt-5|gpt-4\.1|gpt-4o/, /llama-4-maverick/, /llama-4/,
+  /pixtral|mistral-(small|medium)/, /qwen[\d.]*-?vl|qwen.*vision/, /gemma-3/, /vision|vl\b/, /^openrouter\/free$/];
+export const canSee = (id: string) => !TEXT_ONLY.test(id);
+function visionModel(): string | null {
+  const ids = (modelCache || []).map((m) => m.id.replace(/^srv:/, "")).filter((id) => id !== "echo" && canSee(id) && !NOT_CHAT.test(id));
+  const free = ids.filter((id) => /:free$/.test(id));
+  for (const pool of [free, ids]) for (const re of VISION_PREF) { const hit = pool.find((id) => re.test(id)); if (hit) return hit; }
+  return null;
+}
+
 async function runTurn(cid: string, modelId: string, userMsg: Message | null, h: StreamHandlers, signal: AbortSignal) {
   const s = loadSettings();
   const vision = modelId.startsWith("srv:");
-  const history = await buildHistory(cid, s, vision);
+  let history = await buildHistory(cid, s, vision);
+  // photos (or pictures from files and videos) with a model that can't see: use this service's best picture-reading model
+  const pics = history.some((m) => Array.isArray(m.content));
+  if (vision && pics && !canSee(modelId.replace(/^srv:/, ""))) {
+    if (!modelCache) await api.models().catch(() => null);
+    const alt = visionModel();
+    if (alt) modelId = "srv:" + alt;
+    else history = history.map((m) => Array.isArray(m.content) ? { role: m.role, content: (m.content.find((p) => p.type === "text")?.text || "") +
+      "\n\n(The user attached pictures, but the AI model in use can't see images. Answer from the text, and tell the user once that for photos they can pick Google Gemini, OpenRouter or Claude in Settings → Connection.)" } : m);
+  }
   const aid = uid("msg");
   const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };
   await put("messages", row);
