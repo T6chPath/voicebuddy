@@ -456,7 +456,6 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                       <span>Editing <strong>image #{numberOf(target.id)}</strong> — describe the change</span>
                       <button type="button" className="icon-btn small" aria-label="Stop editing this image" onClick={() => setTarget(null)}><Icon name="close" size={14} /></button>
                     </div>) : undefined} />
-        <p className="disclaimer">AI replies can be wrong. Check important information.</p>
       </div>
     </main>
   );

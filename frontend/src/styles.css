@@ -694,3 +694,5 @@ button.fc-body:hover { background: var(--bg-soft); }
 .file-preview .fc-tile { width: 32px; height: 32px; border-radius: 9px; }
 .fp-text { max-height: 55dvh; overflow: auto; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--bg-soft); white-space: pre-wrap;
   overflow-wrap: anywhere; font: .85em/1.55 var(--mono); color: var(--text); }
+/* no note under the message box: a little breathing room instead */
+.composer-wrap { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }

@@ -261,7 +261,6 @@ function LocalChat({ conversationId, navigate, onOpenSidebar, sidebarOpen }: {
       <div className="composer-wrap">
         <Composer ref={composer} busy={busy} sendOnEnter={s.send_on_enter} onSend={send} onStop={() => abort.current?.abort()}
                   upload={readLocal} discard={(f) => pending.delete(f.id)} accept={ACCEPT_LOCAL} />
-        <p className="disclaimer">AI replies can be wrong. Check important information.</p>
       </div>
     </main>
   );
