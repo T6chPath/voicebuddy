@@ -83,6 +83,8 @@ function hookPurify() {
 
 export function renderMarkdown(src: string): string {
   hookPurify();
+  // the model's request for a picture ([[image: …]]) is for the app, not the reader — also while it's still arriving
+  src = src.replace(/\[\[\s*image\s*:[^\]]*\]\]/gi, "").replace(/\[\[\s*i?m?a?g?e?\s*:?[^\]\n]*\]?$/i, (m) => (/^\[\[\s*(i|$)/i.test(m) ? "" : m));
   const { text, blocks } = extractMath(src);
   const html = marked.parse(text, { async: false }) as string;
   return restoreMath(DOMPurify.sanitize(html, {

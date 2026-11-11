@@ -108,7 +108,7 @@ def test_works_offline_without_login_and_persists(app):
 
 
 def test_connects_to_llama_server_directly(app, llama):
-    app.get_by_role("button", name="Settings").click()
+    app.get_by_role("button", name="Settings", exact=True).click()
     dlg = app.get_by_role("dialog", name="Settings")
     dlg.get_by_label("Server address").fill(llama.replace("http://", ""))       # scheme optional
     dlg.get_by_role("button", name="Test connection").click()
@@ -131,7 +131,7 @@ def test_connects_to_llama_server_directly(app, llama):
 
 
 def test_unreachable_server_and_file_attach(app, tmp_path):
-    app.get_by_role("button", name="Settings").click()
+    app.get_by_role("button", name="Settings", exact=True).click()
     dlg = app.get_by_role("dialog", name="Settings")
     dlg.get_by_label("Server address").fill("http://127.0.0.1:9")
     dlg.get_by_role("button", name="Test connection").click()
@@ -179,7 +179,7 @@ def test_demo_is_honest_and_knows_the_date(app):
 
 
 def test_gemini_preset_keeps_api_path(app, llama):
-    app.get_by_role("button", name="Settings").click()
+    app.get_by_role("button", name="Settings", exact=True).click()
     dlg = app.get_by_role("dialog", name="Settings")
     dlg.get_by_role("button", name="Google Gemini — free key").click()
     expect(dlg.get_by_label("Server address")).to_have_value("https://generativelanguage.googleapis.com/v1beta/openai")
@@ -219,7 +219,7 @@ def test_android_native_bridge_is_used(browser):
     pg.errors = []
     pg.on("pageerror", lambda e: pg.errors.append(str(e)))
     pg.goto(HTML.as_uri())
-    pg.get_by_role("button", name="Settings").click()
+    pg.get_by_role("button", name="Settings", exact=True).click()
     dlg = pg.get_by_role("dialog", name="Settings")
     dlg.get_by_role("button", name="Google Gemini — free key").click()
     dlg.get_by_label("API key").fill("AIza-test")

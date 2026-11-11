@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export interface Toast { id: number; kind: "info" | "success" | "error"; text: string; action?: { label: string; run: () => void } }
 interface Ctx { push: (t: Omit<Toast, "id">, ms?: number) => void; dismiss: (id: number) => void }
@@ -15,6 +15,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => dismiss(id), ms);
   }, [dismiss]);
   const value = useMemo(() => ({ push, dismiss }), [push, dismiss]);
+  useEffect(() => {                                   // toasts from code outside React (e.g. "Saved to Downloads")
+    const on = (e: Event) => { const d = (e as CustomEvent).detail as Omit<Toast, "id">; if (d?.text) push(d); };
+    window.addEventListener("zc-toast", on);
+    return () => window.removeEventListener("zc-toast", on);
+  }, [push]);
   return (
     <ToastCtx.Provider value={value}>
       {children}

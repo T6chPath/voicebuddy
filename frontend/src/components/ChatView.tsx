@@ -89,7 +89,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     let live = true;
     api.imageCaps().then((c) => live && setCaps(c)).catch(() => live && setCaps(null));
     return () => { live = false; };
-  }, []);
+  }, [settings.server_url, settings.api_key]);                // the phone app's engines follow Settings → Connection
   useEffect(() => { setTarget(null); setMasking(null); setViewing(null); }, [conversationId]);
 
   const numbers = (() => {
@@ -366,7 +366,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                          request={m.role === "assistant" ? [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content : undefined}
                          showTime={settings.show_timestamps} onRegenerate={regenerate}
                          onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
-                         fileHref={(a, d) => fileUrl(a.id, d) || null} />
+                         fileHref={(a, d) => fileUrl(a.id, d) || null} imageOps={caps?.ops} />
           ))}
         </div>
       </div>
@@ -377,7 +377,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
         </button>
       )}
       <div className="sr-only" aria-live="polite" role="status">{announce}</div>
-      {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction} />}
+      {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction}
+                              canPaint={!caps || caps.ops.includes("inpaint")} />}
       {masking && <MaskEditor a={masking} src={fileUrl(masking.id)} onCancel={() => setMasking(null)} onApply={(b, t) => applyMask(masking, b, t)} />}
       <div className="composer-wrap">
         <VoicePanel />

@@ -65,11 +65,13 @@ final class NativeNet {
             c.setReadTimeout(120000);
             c.setRequestMethod(m);
             c.setUseCaches(false);
+            boolean binary = false;                                     // images: the page asks for the raw bytes
             if (headersJson != null && !headersJson.isEmpty()) {
                 JSONObject h = new JSONObject(headersJson);
                 Iterator<String> keys = h.keys();
                 while (keys.hasNext()) {
                     String k = keys.next();
+                    if ("X-Zenvqo-Binary".equalsIgnoreCase(k)) { binary = true; continue; }
                     c.setRequestProperty(k, h.optString(k));
                 }
             }
@@ -82,9 +84,21 @@ final class NativeNet {
                 }
             }
             int status = c.getResponseCode();
-            send(id, "head", "{\"status\":" + status + "}");
+            String type = c.getContentType();
+            send(id, "head", "{\"status\":" + status + ",\"type\":" + quote(type == null ? "" : type) + "}");
             InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
-            if (in != null) {
+            if (in != null && binary && status < 400) {
+                byte[] buf = new byte[49152];                               // base64 chunks of 64 KB
+                int n;
+                try {
+                    while ((n = readFully(in, buf)) > 0) {
+                        if (cancelled.containsKey(id)) break;
+                        send(id, "data64", android.util.Base64.encodeToString(buf, 0, n, android.util.Base64.NO_WRAP));
+                    }
+                } finally {
+                    in.close();
+                }
+            } else if (in != null) {
                 try (Reader r = new InputStreamReader(in, StandardCharsets.UTF_8)) {
                     char[] buf = new char[4096];
                     int n;
@@ -105,6 +119,12 @@ final class NativeNet {
             cancelled.remove(id);
             if (c != null) c.disconnect();
         }
+    }
+
+    private static int readFully(InputStream in, byte[] buf) throws java.io.IOException {
+        int total = 0, n;
+        while (total < buf.length && (n = in.read(buf, total, buf.length - total)) > 0) total += n;
+        return total;
     }
 
     private void send(String id, String kind, String data) {

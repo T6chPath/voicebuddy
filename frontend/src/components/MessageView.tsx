@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import type { Attachment, Message, ModelInfo } from "../api/types";
+import type { Attachment, ImageOp, Message, ModelInfo } from "../api/types";
 import { fileSize, timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
 import { ImageGallery, ToolProgress, type ImageAction } from "./ImageViews";
@@ -22,13 +22,15 @@ interface Props {
   numberOf?: (id: string) => number | undefined;
   /** the user message this reply answers (titles PDFs) */
   request?: string;
+  /** what the image engines can do */
+  imageOps?: ImageOp[];
 }
 
 const serverHref = (a: Attachment, download = false) => `/api/files/${a.id}${download ? "?download=1" : ""}`;
 const noNumber = () => undefined;
 
 export const MessageView = memo(function MessageView({ m, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
-  onImageAction, imageActions = false, numberOf = noNumber, request }: Props) {
+  onImageAction, imageActions = false, numberOf = noNumber, request, imageOps }: Props) {
   const [copied, setCopied] = useState(false);
   const streaming = m.status === "streaming";
   const label = m.role === "user" ? "You" : models.find((x) => x.id === m.model)?.label || "Assistant";
@@ -41,7 +43,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
       {(() => {
         const imgs = m.attachments.filter((a) => a.kind === "image" && fileHref(a));
         return imgs.length > 0 && m.role === "user" ? (
-          <ImageGallery images={imgs} href={fileHref} numberOf={numberOf} onAction={onImageAction} actions={imageActions} />
+          <ImageGallery images={imgs} href={fileHref} numberOf={numberOf} onAction={onImageAction} actions={imageActions} ops={imageOps} />
         ) : null;
       })()}
       {m.attachments.some((a) => !(a.kind === "image" && fileHref(a))) && (
@@ -64,7 +66,7 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
       {m.role === "assistant" && !streaming && m.content && <PdfCard id={m.id} text={m.content} request={request} />}
       {m.tool && m.tool.status === "running" && <ToolProgress t={m.tool} />}
       {m.role === "assistant" && m.attachments.some((a) => a.kind === "image" && fileHref(a)) && (
-        <ImageGallery images={m.attachments.filter((a) => a.kind === "image" && fileHref(a))} href={fileHref} numberOf={numberOf}
+        <ImageGallery images={m.attachments.filter((a) => a.kind === "image" && fileHref(a))} href={fileHref} numberOf={numberOf} ops={imageOps}
                       onAction={onImageAction} actions={imageActions && !streaming} />
       )}
       {m.status === "error" && (

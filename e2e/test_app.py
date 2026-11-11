@@ -176,7 +176,7 @@ def test_conversation_management_and_search(page):
 
 def test_settings_theme_temperature_and_keyboard(page):
     signup(page)
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     dlg = page.get_by_role("dialog", name="Settings")
     expect(dlg).to_be_visible()
     dlg.get_by_text("Dark", exact=True).click()

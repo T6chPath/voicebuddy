@@ -120,6 +120,32 @@ def plots(page):
         assert ok, prompt
 
 
+def images(page):
+    """A real picture from the free image service, downloaded through the app's own network code (binary)."""
+    ask(page, "Generate an image of a single red apple on a plain white plate, studio photo")
+    t0 = time.time()
+    try:
+        page.wait('(() => { const a = [...document.querySelectorAll("article.msg-assistant")].pop(); '
+                  'return a && a.getAttribute("aria-busy") === "false" && (!!a.querySelector("img") || !!a.querySelector(".msg-error")); })()', 180, "the image")
+    except SystemExit:
+        shot("image-failed")
+        print("last reply:", page.js('[...document.querySelectorAll("article.msg-assistant")].pop().innerText'))
+        raise
+    info = json.loads(page.js("""(async () => {
+      const a = [...document.querySelectorAll("article.msg-assistant")].pop();
+      const img = a.querySelector("img");
+      if (!img) return JSON.stringify({ error: a.innerText });
+      await img.decode().catch(() => {});
+      const c = document.createElement("canvas"); c.width = 64; c.height = 64; const g = c.getContext("2d");
+      g.drawImage(img, 0, 0, 64, 64); const d = g.getImageData(0, 0, 64, 64).data; let red = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 140 && d[i + 1] < 90 && d[i + 2] < 90) red++;
+      return JSON.stringify({ w: img.naturalWidth, h: img.naturalHeight, red, bytes: img.src.length, text: a.innerText.slice(0, 120) });
+    })()"""))
+    print(f"  image after {time.time() - t0:.0f}s:", info, flush=True)
+    shot("image")
+    assert "error" not in info and info["w"] >= 512 and info["red"] > 20, info
+
+
 def main():
     page = Page(page_socket())
     page.wait('!!document.querySelector("#composer-input")', 60, "the chat box")
@@ -165,6 +191,8 @@ def main():
     print("reply:", reply[:400])
     shot("pdf-read")
     assert "a PDF with 1 page" in reply and "Zenvqo phone test" in reply, reply
+    print("a real picture on this phone:")
+    images(page)
     print("graphs on this phone:")
     plots(page)
     print("hard PDFs on this phone:")

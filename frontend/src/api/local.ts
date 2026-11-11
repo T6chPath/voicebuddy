@@ -10,6 +10,8 @@
  */
 import { createSSEParser } from "./sse";
 import { parseSpec } from "../plot/spec";
+import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
+import { gemini, ImageEngineError, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
 export const LOCAL_MODE = true;
@@ -50,11 +52,18 @@ function nativeFetch(bridge: NativeNet, url: string, init: RequestInit): Promise
       const p = pending.get(rid);
       if (!p) return;
       if (kind === "head") {
-        const head = JSON.parse(data) as { status: number };
+        const head = JSON.parse(data) as { status: number; type?: string };
         p.started = true;
         const body = new ReadableStream<Uint8Array>({ start: (c) => { p.ctl = c; } });
-        p.resolve(new Response(body, { status: head.status >= 200 && head.status <= 599 ? head.status : 502 }));
+        p.resolve(new Response(body, { status: head.status >= 200 && head.status <= 599 ? head.status : 502,
+          headers: head.type ? { "Content-Type": head.type } : {} }));
       } else if (kind === "data") p.ctl?.enqueue(enc.encode(data));
+      else if (kind === "data64") {                                 // binary (images): base64 chunks
+        const b = atob(data);
+        const u = new Uint8Array(b.length);
+        for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+        p.ctl?.enqueue(u);
+      }
       else if (kind === "end") { p.ctl?.close(); pending.delete(rid); }
       else if (kind === "error") {
         if (p.started) p.ctl?.error(new TypeError(data || "network error"));
@@ -249,8 +258,18 @@ export const api = {
     await del("conversations", id);
   },
   deleteFile: async (id: string) => { await del("files", id); },
-  imageCaps: async (): Promise<ImageCaps> => ({ available: false, ops: [], styles: [], aspect_ratios: [], formats: [], max_n: 1, max_resolution: 512, providers: [],
-    reason: "Image generation runs on the zenvqo server app (it needs an image model and keeps API keys off your device). Open the server app in your browser to make images." }),
+  imageCaps: async (): Promise<ImageCaps> => {
+    const e = imageEngines(loadSettings());
+    const editor = e.some((x) => x !== "pollinations");
+    const ops: ImageOp[] = e.includes("gemini")
+      ? ["generate", "edit", "variations", "style", "inpaint", "remove_object", "remove_background", "replace_background"]
+      : ["generate", "edit", "variations", "style", "remove_background", "replace_background"];
+    const label: Record<string, string> = { gemini: "Gemini (your key)", openai: "OpenAI (your key)", pollinations: "Free image service (Pollinations)" };
+    return { available: true, reason: null, ops, styles: Object.keys(STYLES), aspect_ratios: ASPECTS, formats: ["png", "jpeg"], max_n: 4, max_resolution: 1024,
+      providers: e.map((n) => ({ name: label[n], model: n === "gemini" ? "gemini-2.5-flash-image" : n === "openai" ? "gpt-image-1" : "flux",
+        ready: true, reason: null, ops: n === "gemini" ? ops : ["generate", "variations"] as ImageOp[], negative_prompt: false, seed: n === "pollinations" })),
+      ...(editor ? {} : {}) };
+  },
   ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
   voiceConfig: async () => ({ available: false, reason: "this app has no server", partials: false, max_seconds: 0 }),
   transcribe: async (_wav: Blob, _lang: string): Promise<{ text: string; lang: string; confidence: string; engine: string; ms: number }> => { throw new ApiError(400, "No server speech recognition in the standalone app."); },
@@ -367,7 +386,8 @@ export interface StreamHandlers {
 const BASE_SYSTEM = "You are zenvqo, a helpful assistant. Use Markdown when it helps (lists, tables, fenced code with a language). Write mathematics in LaTeX: inline as $...$ and displayed equations as $$...$$ on their own lines. When the user asks for a PDF (quiz, notes, paragraph, worksheet…), write the complete content as a well-structured Markdown document that starts with a # title — the app turns your reply into a PDF file automatically, so never say you can't create PDFs. " +
   "When the user shares a photo or image, look at it carefully and explain everything in it: what it shows, all visible text (read it out exactly), objects, numbers, diagrams, charts, problems or questions written in it (solve them step by step), people's actions and expressions (never identify real people from their faces), and what it means — then answer the user's question about it. " +
   "When files are attached (<attached_file>), including PDFs, answer from their content: quote it where useful, mention the page (\"Page 3\") for PDFs, and say plainly when the answer isn't in the file. " +
-  "When the user asks to plot, graph, draw or visualise a function, equation, curve or surface (2D or 3D), draw it: write a fenced code block with the language plot, one equation per line in plain maths notation (not LaTeX), for example ```plot\ny = sin(x)\ny = x^2/4\n```. Supported lines: y = f(x); x = f(y); any equation in x and y (x^2 + y^2 = 25); inequalities, shaded (y > x^2); polar r = f(theta); parametric x = f(t), y = g(t); points (2, 3); a domain at the end ({0 <= x <= 4}); 3D surfaces z = f(x, y); any equation in x, y, z (x^2 + y^2 + z^2 = 9); 3D curves x = f(t), y = g(t), z = h(t); parametric surfaces in u and v; options x: -5..5, y: …, z: …, t: 0..2pi, title: …; parameters with a slider a = 1 [0..5]. Use ^ for powers, sqrt, abs, ln, log (base 10), pi, e; implicit multiplication like 2x is fine. Choose ranges that show the interesting part. The app draws an interactive graph (zoom, trace, roots and turning points marked), so never say you can't draw graphs; after the block, briefly explain the key features (domain, intercepts, asymptotes, turning points, shape).";
+  "When the user asks to plot, graph, draw or visualise a function, equation, curve or surface (2D or 3D), draw it: write a fenced code block with the language plot, one equation per line in plain maths notation (not LaTeX), for example ```plot\ny = sin(x)\ny = x^2/4\n```. Supported lines: y = f(x); x = f(y); any equation in x and y (x^2 + y^2 = 25); inequalities, shaded (y > x^2); polar r = f(theta); parametric x = f(t), y = g(t); points (2, 3); a domain at the end ({0 <= x <= 4}); 3D surfaces z = f(x, y); any equation in x, y, z (x^2 + y^2 + z^2 = 9); 3D curves x = f(t), y = g(t), z = h(t); parametric surfaces in u and v; options x: -5..5, y: …, z: …, t: 0..2pi, title: …; parameters with a slider a = 1 [0..5]. Use ^ for powers, sqrt, abs, ln, log (base 10), pi, e; implicit multiplication like 2x is fine. Choose ranges that show the interesting part. The app draws an interactive graph (zoom, trace, roots and turning points marked), so never say you can't draw graphs; after the block, briefly explain the key features (domain, intercepts, asymptotes, turning points, shape). " +
+  "The app can also make pictures (photos, drawings, logos, posters, wallpapers): when the user wants a picture made and it hasn't been made yet, reply with one line [[image: a detailed English description of the picture]] followed by one short sentence; the app replaces that line with the picture. Never say you can't create images.";
 type ChatMsg = { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
 
 async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
@@ -387,7 +407,11 @@ async function buildHistory(cid: string, s: UserSettings, vision: boolean): Prom
         text += `\n\n<attached_file name="${f.name.replace(/"/g, "'")}"${f.pages ? ` pages="${f.pages}"` : ""}>\n${f.text}\n</attached_file>`;
         docChars += f.text.length;
       }
-      if (vision) {
+      if (f.generated) {                                   // pictures the app made: the model gets their description
+        text += `\n[You made an image here: ${f.meta?.prompt || "a picture"}]`;
+        continue;
+      }
+      if (vision && r.role === "user") {
         if (f.dataUrl) images.push(f.dataUrl);
         if (f.images) images.push(...f.images);
       }
@@ -563,6 +587,209 @@ async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings
   }
 }
 
+
+// ---------------- images ----------------
+/** Which engines to use, best first. A Gemini/OpenAI key from Settings → Connection is tried first; the free
+ * Pollinations service always comes last, so pictures work without any key (and in the offline demo, given internet). */
+export function imageEngines(s: UserSettings): ("gemini" | "openai" | "pollinations")[] {
+  const b = base(s);
+  const out: ("gemini" | "openai" | "pollinations")[] = [];
+  if (s.api_key && /generativelanguage\.googleapis\.com/.test(b)) out.push("gemini");
+  if (s.api_key && /api\.openai\.com/.test(b)) out.push("openai");
+  out.push("pollinations");
+  return out;
+}
+
+/** Gemini keys that turned out to have no image quota are remembered for a while, so we don't ask again every time. */
+const NO_QUOTA_KEY = "zc.images.noquota";
+function quotaKnownEmpty(key: string): boolean {
+  try { const v = JSON.parse(localStorage.getItem(NO_QUOTA_KEY) || "{}"); return v.k === key.slice(-8) && Date.now() - v.t < 6 * 3600_000; } catch { return false; }
+}
+function rememberNoQuota(key: string) { try { localStorage.setItem(NO_QUOTA_KEY, JSON.stringify({ k: key.slice(-8), t: Date.now() })); } catch { /* private */ } }
+
+/** All images in a conversation, numbered the way the chat shows them (#1, #2, …). */
+async function conversationImages(cid: string): Promise<{ n: number; file: FileRow; msg: MsgRow }[]> {
+  const out: { n: number; file: FileRow; msg: MsgRow }[] = [];
+  for (const m of await messagesOf(cid)) {
+    for (const a of m.attachments) {
+      if (a.kind !== "image") continue;
+      const f = await get<FileRow>("files", a.id);
+      if (f?.dataUrl) out.push({ n: out.length + 1, file: f, msg: m });
+    }
+  }
+  return out;
+}
+
+/** "remove the background" without an image editor: re-imagine an AI-made picture from its own description. */
+function reimagine(prompt: string, plan: Plan): string {
+  switch (plan.op) {
+    case "remove_background": return `${prompt}, isolated subject on a plain pure white background`;
+    case "replace_background": return `${prompt}, with the background replaced by ${plan.background || plan.prompt}`;
+    case "remove_object": return `${prompt}, without any ${plan.prompt}`;
+    case "style": return prompt;                                    // style is applied by the style setting
+    case "variations": return prompt;
+    default: return `${prompt}, ${plan.prompt}`;
+  }
+}
+
+const OP_DONE: Record<string, string> = {
+  edit: "Here's the changed image", style: "Here it is in the new style", variations: "Here are some variations",
+  remove_background: "Here it is without the background", replace_background: "Here it is with the new background",
+  remove_object: "Here it is with that removed", inpaint: "Here's the image with the painted area changed",
+};
+
+async function runImageTurn(cid: string, modelId: string, userMsg: Message | null, plan: Plan, opts: ImageOptions | undefined,
+                            h: StreamHandlers, signal: AbortSignal, row?: MsgRow) {
+  const s = loadSettings();
+  const own = !row;
+  if (!row) {
+    row = { id: uid("msg"), conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };
+    await put("messages", row);
+    h.onMeta?.({ user_message: userMsg, assistant_message: { id: row.id, model: modelId } });
+  }
+  const say = async (t: string) => { row!.content += t; h.onDelta(t); };
+  const op = (opts?.op || plan.op) as ImageOp;
+  const tool = op === "generate" ? "generate_image" : "edit_image";
+  try {
+    if (plan.clarify) { await say(plan.clarify); row.status = "complete"; h.onDone?.({ status: "complete", title: await titleIfNew(cid) }); return; }
+    // the picture to change, when changing one
+    let source: { n: number; file: FileRow } | undefined;
+    if (op !== "generate") {
+      const imgs = await conversationImages(cid);
+      if (opts?.source_id) source = imgs.find((x) => x.file.id === opts.source_id);
+      else if (plan.image_ref.startsWith("#")) source = imgs.find((x) => x.n === +plan.image_ref.slice(1));
+      else if (plan.image_ref === "attached" && userMsg) source = [...imgs].reverse().find((x) => x.msg.id === userMsg.id);
+      source = source || imgs[imgs.length - 1];
+      if (!source) { await say("There's no picture in this chat to change yet. Attach a photo or ask me to create one first."); row.status = "complete"; h.onDone?.({ status: "complete", title: await titleIfNew(cid) }); return; }
+    }
+    const blocked = safetyCheck(`${plan.prompt} ${plan.background || ""}`, !!source && !source.file.generated);
+    if (blocked) { h.onTool?.({ name: tool, op, status: "failed", code: "blocked" }); await say(blocked); row.status = "complete"; h.onDone?.({ status: "complete", title: await titleIfNew(cid) }); return; }
+
+    const n = Math.max(1, Math.min(4, opts?.n ?? plan.n ?? (op === "variations" ? 3 : 1)));
+    const style = opts?.style ?? plan.style ?? (op === "style" ? undefined : source?.file.meta?.style);
+    const aspect = opts?.aspect_ratio ?? plan.aspect_ratio ?? source?.file.meta?.aspect_ratio ?? "1:1";
+    const seed0 = opts?.seed ?? plan.seed ?? Math.floor(Math.random() * 1e9);
+    let mask: string | undefined;
+    if (opts?.mask_id) mask = (await get<FileRow>("files", opts.mask_id))?.dataUrl;
+    const engines = imageEngines(s);
+    const notes = new Set<string>();
+    let made = 0;
+    h.onTool?.({ name: tool, op, status: "running" });
+    for (let i = 0; i < n; i++) {
+      if (signal.aborted) break;
+      h.onProgress?.({ fraction: i / n, text: n > 1 ? `Making image ${i + 1} of ${n}…` : op === "generate" ? "Making your image…" : "Changing the image…" });
+      const job: ImageJob = { op, prompt: plan.prompt, style, aspect, resolution: opts?.resolution ?? plan.resolution ?? 1024, seed: seed0 + i * 7919,
+        negative: opts?.negative_prompt ?? plan.negative_prompt, source: source?.file.dataUrl, mask, background: plan.background };
+      let img: MadeImage | null = null;
+      let lastErr: ImageEngineError | null = null;
+      for (const e of engines) {
+        try {
+          if (e === "gemini") {
+            if (quotaKnownEmpty(s.api_key || "")) { lastErr = new ImageEngineError("no quota", "quota"); continue; }
+            img = await gemini(job, s.api_key || "", net, signal);
+          } else if (e === "openai") {
+            if (op !== "generate") continue;
+            img = await openai(job, base(s), s.api_key || "", net, signal);
+          } else {
+            if (op !== "generate" && op !== "variations") {
+              // the free service can't edit pictures: re-imagine AI-made ones from their description
+              const prompt = source?.file.meta?.prompt;
+              if (!prompt) throw lastErr && lastErr.code !== "quota" ? lastErr : new ImageEngineError(
+                "Changing your own photos needs an image editor: in Settings → Connection use a Google Gemini key with billing turned on " +
+                "(Google doesn't include image editing on free keys). I can make a new picture from a description instead — just describe it.", "unsupported");
+              img = await pollinations({ ...job, op: "generate", prompt: reimagine(prompt, plan), seed: plan.fresh ? seed0 : source?.file.meta?.seed ?? seed0 },
+                net, signal, (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }));
+              notes.add("The free image service can't edit a picture directly, so this is a new version made from the original description — details can change.");
+            } else {
+              const prompt = op === "variations" ? source?.file.meta?.prompt || plan.prompt : plan.prompt;
+              if (!prompt) throw new ImageEngineError("Variations of your own photos need a Gemini key with billing turned on.", "unsupported");
+              img = await pollinations({ ...job, op: "generate", prompt }, net, signal, (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }));
+            }
+          }
+          break;
+        } catch (err) {
+          if ((err as Error).name === "AbortError") throw err;
+          const ie = err instanceof ImageEngineError ? err : new ImageEngineError("The image couldn't be made.", "failed");
+          if (e === "gemini" && ie.code === "quota") {
+            rememberNoQuota(s.api_key || "");
+            if (op === "generate") notes.add("Your Gemini key can't make images (Google offers its image model only with billing turned on), so the free image service made this one.");
+          }
+          if (ie.code === "blocked" || ie.code === "unsupported") { lastErr = ie; break; }
+          lastErr = ie;
+        }
+      }
+      if (!img) throw lastErr || new ImageEngineError("The image couldn't be made.", "failed");
+      img.notes.forEach((x) => notes.add(x));
+      const id = uid("fil");
+      const ext = img.mime === "image/png" ? "png" : img.mime === "image/webp" ? "webp" : "jpg";
+      const meta = { op, prompt: op === "generate" ? plan.prompt : (source?.file.meta?.prompt ? reimagine(source.file.meta.prompt, plan) : plan.prompt),
+        seed: job.seed, provider: img.engine, model: img.model, parent_id: source?.file.id ?? null, style, aspect_ratio: aspect, negative_prompt: job.negative };
+      const f: FileRow = { id, name: `image-${id.slice(-6)}.${ext}`, mime: img.mime, size: Math.round(img.dataUrl.length * 0.75), kind: "image",
+        dataUrl: img.dataUrl, generated: true, width: img.width, height: img.height, meta, created_at: now() };
+      await put("files", f);
+      pictures.set(id, img.dataUrl);
+      const att: Attachment = { id, name: f.name, mime: f.mime, size: f.size, kind: "image", generated: true, width: img.width, height: img.height, meta };
+      row.attachments.push(att);
+      await put("messages", row);
+      h.onImage?.(att);
+      made++;
+    }
+    if (signal.aborted && !made) { row.status = "stopped"; return; }
+    h.onTool?.({ name: tool, op, status: "done" });
+    h.onProgress?.({ fraction: 1, text: "" });
+    const what = op === "generate" ? `Here ${made > 1 ? `are ${made} images` : "is your image"} of **${plan.prompt.replace(/\*/g, "")}**.`
+      : `${OP_DONE[op] || "Here's the changed image"}${source ? ` (from image #${source.n})` : ""}.`;
+    await say(what + (notes.size ? "\n\n" + [...notes].map((x) => `_${x}_`).join("\n\n") : ""));
+    row.status = "complete";
+    h.onDone?.({ status: "complete", title: await titleIfNew(cid) });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") { row.status = row.attachments.length ? "complete" : "stopped"; return; }
+    h.onTool?.({ name: tool, op, status: "failed" });
+    const msg = e instanceof ImageEngineError ? e.message : "The image couldn't be made.";
+    if (e instanceof ImageEngineError && (e.code === "blocked" || e.code === "unsupported")) {
+      await say(msg);                                                   // an answer, not a failure
+      row.status = "complete";
+      h.onDone?.({ status: "complete", title: await titleIfNew(cid) });
+    } else {
+      if (!(e instanceof ImageEngineError)) console.error("image failed:", e);
+      row.status = "error";
+      row.error = msg;
+      h.onError?.(new ApiError(502, msg, undefined, "image_failed"));
+    }
+  } finally {
+    if (own) {
+      await put("messages", row);
+      const c = await get<Conversation>("conversations", cid);
+      if (c) await put("conversations", { ...c, updated_at: now() });
+    }
+  }
+}
+
+async function titleIfNew(cid: string): Promise<string | null> {
+  const c = await get<Conversation>("conversations", cid);
+  if (!c || c.title !== "New chat") return null;
+  const first = (await messagesOf(cid)).find((m) => m.role === "user");
+  if (!first) return null;
+  const w = first.content.split(/\s+/).join(" ");
+  const title = w.length > 60 ? w.slice(0, 60).replace(/\s+\S*$/, "") + "…" : w;
+  await put("conversations", { ...c, title, updated_at: now() });
+  return title;
+}
+
+/** Should this message make or change a picture? */
+async function imagePlan(cid: string, text: string, atts: Attachment[], opts?: ImageOptions): Promise<Plan | null> {
+  const msgs = await messagesOf(cid);
+  const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
+  const hasImages = msgs.some((m) => m.attachments.some((a) => a.kind === "image")) || atts.some((a) => a.kind === "image");
+  if (opts?.op) {
+    const auto = detect(text, { attachedImage: atts.some((a) => a.kind === "image"), hasImages, lastReplyHasImage: true });
+    const prompt = opts.op === "generate" ? (auto?.op === "generate" ? auto.prompt : text.trim()) : (auto?.prompt || text.trim());
+    return { ...(auto || {}), op: opts.op, prompt, image_ref: opts.source_id ? "id" : auto?.image_ref || "latest", clarify: undefined, background: auto?.background || (opts.op === "replace_background" ? text.trim() : undefined) };
+  }
+  return detect(text, { attachedImage: atts.some((a) => a.kind === "image"), hasImages,
+    lastReplyHasImage: !!lastAssistant?.attachments.some((a) => a.kind === "image" && a.generated) });
+}
+
 async function runTurn(cid: string, modelId: string, userMsg: Message | null, h: StreamHandlers, signal: AbortSignal) {
   const s = loadSettings();
   const vision = modelId.startsWith("srv:");
@@ -580,6 +807,15 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
       if (Date.now() - lastSave > 1000) { await put("messages", row); lastSave = Date.now(); }   // survive a closed tab
     }
     if (signal.aborted) { row.status = "stopped"; return; }
+    // the model asked for a picture: [[image: …]]
+    const mk = MARKER.exec(row.content);
+    if (mk) {
+      row.content = row.content.replace(MARKER, "").replace(/\n{3,}/g, "\n\n").trim() + "\n\n";
+      const prompt = mk[1].trim();
+      const plan: Plan = { op: "generate", prompt, image_ref: "latest", ...(() => { const d = detect(`generate an image of ${prompt}`, { attachedImage: false, hasImages: false, lastReplyHasImage: false }); return d ? { style: d.style, aspect_ratio: d.aspect_ratio } : {}; })() };
+      await runImageTurn(cid, modelId, userMsg, plan, undefined, h, signal, row);
+      return;
+    }
     row.status = "complete";
     const c = await get<Conversation>("conversations", cid);
     let title: string | null = null;
@@ -613,14 +849,17 @@ export async function sendMessage(cid: string, body: { content: string; model?: 
   for (const id of body.file_ids) {
     const f = await get<FileRow>("files", id);
     if (!f) throw new ApiError(400, "An attached file was not found. Remove it and try again.");
-    if ((f.kind === "image" || (f.kind === "pdf" && f.images?.length)) && model === "echo")
-      throw new ApiError(400, "The offline demo can't see pictures. To have photos explained, open Settings → Connection, choose Google Gemini — free key, and save.");
-    atts.push({ id: f.id, name: f.name, mime: f.mime, size: f.size, kind: f.kind });
+    atts.push({ id: f.id, name: f.name, mime: f.mime, size: f.size, kind: f.kind, ...(f.images?.length ? { _pictures: true } : {}) } as Attachment);
   }
+  const plan = await imagePlan(cid, body.content, atts, body.image);
+  if (!plan && model === "echo" && atts.some((a) => a.kind === "image" || (a as { _pictures?: boolean })._pictures))
+    throw new ApiError(400, "The offline demo can't see pictures. To have photos explained, open Settings → Connection, choose Google Gemini — free key, and save.");
+  for (const a of atts) delete (a as { _pictures?: boolean })._pictures;
   if (model !== c.model) await put("conversations", { ...c, model });
   const um: MsgRow = { id: uid("msg"), conversation_id: cid, role: "user", content: body.content, model: null, status: "complete", error: null, attachments: atts, created_at: now() };
   await put("messages", um);
-  await runTurn(cid, model, strip(um), h, signal);
+  if (plan) await runImageTurn(cid, model, strip(um), plan, body.image, h, signal);
+  else await runTurn(cid, model, strip(um), h, signal);
 }
 
 export async function regenerate(cid: string, h: StreamHandlers, signal: AbortSignal) {
@@ -629,7 +868,10 @@ export async function regenerate(cid: string, h: StreamHandlers, signal: AbortSi
   const rows = await messagesOf(cid);
   while (rows.length && rows[rows.length - 1].role === "assistant") await del("messages", rows.pop()!.id);
   if (!rows.length) throw new ApiError(400, "Nothing to regenerate.");
-  await runTurn(cid, c.model, null, h, signal);
+  const last = rows[rows.length - 1];
+  const plan = last.role === "user" ? await imagePlan(cid, last.content, last.attachments) : null;
+  if (plan) await runImageTurn(cid, c.model, null, { ...plan, seed: undefined, fresh: true }, undefined, h, signal);   // a new picture
+  else await runTurn(cid, c.model, null, h, signal);
 }
 
 export async function request<T>(): Promise<T> { throw new ApiError(400, "not available in the standalone app"); }

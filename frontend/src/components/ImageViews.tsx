@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import type { Attachment, ImageCaps, ImageOp, ImageOptions, ToolState } from "../api/types";
 import { Icon } from "./Icon";
+import { saveDataUrl } from "../lib/save";
+
+/** Download button: in the Android app a data: link can't be downloaded, so the picture is saved through the app. */
+function onDownload(e: { preventDefault(): void }, src: string, name: string) {
+  if (!src.startsWith("data:") || !(window as unknown as { ZenvqoPDF?: { saveBytes?: unknown } }).ZenvqoPDF?.saveBytes) return;
+  e.preventDefault();
+  saveDataUrl(src, name).then((m) => window.dispatchEvent(new CustomEvent("zc-toast", { detail: { kind: "info", text: m } })),
+    (err: Error) => window.dispatchEvent(new CustomEvent("zc-toast", { detail: { kind: "error", text: err.message } })));
+}
 
 export type ImageAction = "edit" | "mask" | "variations" | "remove_background" | "open";
 export const OP_LABEL: Record<ImageOp, string> = {
@@ -11,13 +20,16 @@ export const OP_LABEL: Record<ImageOp, string> = {
 
 /* ---------------- images inside a message ---------------- */
 
-export function ImageGallery({ images, href, numberOf, onAction, actions }: {
+export function ImageGallery({ images, href, numberOf, onAction, actions, ops }: {
   images: Attachment[];
   href: (a: Attachment, download?: boolean) => string | null;
   numberOf: (id: string) => number | undefined;
   onAction?: (action: ImageAction, a: Attachment) => void;
   actions: boolean;
+  /** what the image engines can do (hides e.g. "paint an area" where nothing can do it) */
+  ops?: ImageOp[];
 }) {
+  const can = (op: ImageOp) => !ops || ops.includes(op);
   return (
     <ul className={`img-grid n${Math.min(images.length, 4)}`} aria-label="Images">
       {images.map((a) => {
@@ -35,10 +47,11 @@ export function ImageGallery({ images, href, numberOf, onAction, actions }: {
             ) : <span className="chip"><Icon name="image" size={14} /> {a.name}</span>}
             {src && (
               <div className="img-actions" role="group" aria-label={`Actions for ${n ? "image #" + n : a.name}`}>
-                <a className="icon-btn small" href={href(a, true) || src} download={a.name} title="Download" aria-label="Download"><Icon name="download" size={16} /></a>
+                <a className="icon-btn small" href={href(a, true) || src} download={a.name} title="Download" aria-label="Download"
+                   onClick={(e) => onDownload(e, href(a, true) || src, a.name)}><Icon name="download" size={16} /></a>
                 {actions && onAction && <>
                   <button type="button" className="icon-btn small" title="Edit with a message" aria-label="Edit with a message" onClick={() => onAction("edit", a)}><Icon name="wand" size={16} /></button>
-                  <button type="button" className="icon-btn small" title="Paint an area to change" aria-label="Paint an area to change" onClick={() => onAction("mask", a)}><Icon name="brush" size={16} /></button>
+                  {can("inpaint") && <button type="button" className="icon-btn small" title="Paint an area to change" aria-label="Paint an area to change" onClick={() => onAction("mask", a)}><Icon name="brush" size={16} /></button>}
                   <button type="button" className="icon-btn small" title="Variations" aria-label="Make variations" onClick={() => onAction("variations", a)}><Icon name="layers" size={16} /></button>
                   <button type="button" className="icon-btn small" title="Remove background" aria-label="Remove background" onClick={() => onAction("remove_background", a)}><Icon name="scissors" size={16} /></button>
                 </>}
@@ -67,8 +80,8 @@ export function ToolProgress({ t }: { t: ToolState }) {
 
 /* ---------------- full-size viewer ---------------- */
 
-export function Lightbox({ a, src, download, onClose, onAction }: {
-  a: Attachment; src: string; download: string; onClose: () => void; onAction: (x: ImageAction, a: Attachment) => void;
+export function Lightbox({ a, src, download, onClose, onAction, canPaint = true }: {
+  a: Attachment; src: string; download: string; onClose: () => void; onAction: (x: ImageAction, a: Attachment) => void; canPaint?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const d = ref.current; if (d && !d.open) d.showModal?.(); }, []);
@@ -84,8 +97,8 @@ export function Lightbox({ a, src, download, onClose, onAction }: {
             {m?.seed != null ? ` · seed ${m.seed}` : ""}{m?.style && m.style !== "none" ? ` · ${m.style}` : ""}
           </p>
         </div>
-        <a className="btn" href={download} download={a.name}><Icon name="download" size={16} /> Download</a>
-        <button type="button" className="btn" onClick={() => { onClose(); onAction("mask", a); }}><Icon name="brush" size={16} /> Paint to edit</button>
+        <a className="btn" href={download || src} download={a.name} onClick={(e) => onDownload(e, download || src, a.name)}><Icon name="download" size={16} /> Download</a>
+        {canPaint && <button type="button" className="btn" onClick={() => { onClose(); onAction("mask", a); }}><Icon name="brush" size={16} /> Paint to edit</button>}
         <button type="button" className="btn primary" onClick={onClose} autoFocus>Close</button>
       </div>
     </dialog>

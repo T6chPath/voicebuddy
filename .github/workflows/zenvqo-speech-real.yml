@@ -68,14 +68,17 @@ jobs:
           python -m pytest e2e/test_speech_ui.py -v -s 2>&1 | tee "$ZC_REAL_OUT/speech-ui.log"
           test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/speech-ui.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
       - name: All browser tests
+        env:
+          ZC_REAL_NETWORK: "1"          # also makes a real picture with the free image service
         run: |
-          python -m pytest e2e -q 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"
+          python -m pytest e2e -q -rA 2>&1 | tee "$ZC_REAL_OUT/e2e-all.log"
           test ${PIPESTATUS[0]} -eq 0 || { grep -E "^(E |FAILED|ERROR)" "$ZC_REAL_OUT/e2e-all.log" | head -60 | sed 's/^/::error ::/'; exit 1; }
       - name: Package
         if: always()
         run: |
           mkdir -p real-out
           cp e2e/screenshots/speech-*.png real-out/ 2>/dev/null || true
+          cp e2e/screenshots/real-free-image* real-out/ 2>/dev/null || true
           echo "run ${{ github.run_id }} at $(date -u)" > real-out/run.txt
           (cd real-out && zip -qr ../zenvqo-speech-real.zip .)
       - uses: actions/upload-artifact@v4
