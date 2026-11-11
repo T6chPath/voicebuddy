@@ -118,7 +118,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     seed: job.seed % 2147483647, taesd: TAESD.file };
   if (o.threads) args.threads = o.threads;
   if (src) {
-    const strength = o.strength ?? (job.mask ? 0.92 : job.op === "style" ? 0.7 : job.op === "variations" ? 0.55 : 0.6);
+    const strength = o.strength ?? (job.mask ? 0.92 : job.op === "style" ? 0.75 : job.op === "variations" ? 0.6 : 0.75);
     args.init = await fitTo(src, w, h);
     args.strength = strength;
     args.steps = Math.max(2, Math.ceil(base / strength));            // the engine only runs steps × strength of them

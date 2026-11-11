@@ -118,7 +118,7 @@ def test_your_photo_is_really_edited_on_the_phone(browser, tmp_path):
     reply = send_with_photo(p, photo_file(tmp_path), "turn this into anime style", 1)
     expect(reply.locator("img").first).to_be_visible()
     a = calls(p)[0]
-    assert a["init"].startswith("data:image/png;base64,") and abs(a["strength"] - 0.7) < 1e-6 and a["steps"] >= 2
+    assert a["init"].startswith("data:image/png;base64,") and abs(a["strength"] - 0.75) < 1e-6 and a["steps"] >= 2
     assert "anime" in a["prompt"]
     expect(reply).to_contain_text("Changed on your phone")
     assert not polli.calls
