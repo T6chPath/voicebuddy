@@ -89,7 +89,11 @@ jobs:
           t0=$(date +%s)
           $S -m $M --taesd $T -p "a red apple on a white plate, studio photo" -W 512 -H 512 --steps 2 --cfg-scale 1 --sampling-method euler_a -s 7 -t $(nproc) --mmap -o check/apple.png 2>&1 | tail -5
           t1=$(date +%s)
-          $S -m $M --taesd $T -p "a green apple on a white plate, studio photo" -i check/apple.png --strength 0.6 --steps 3 --cfg-scale 1 -s 8 -t $(nproc) --mmap -o check/apple-green.png 2>&1 | tail -3
+          for st in 0.6 0.7 0.8 0.9; do
+            steps=$(python3 -c "import math; print(max(2, math.ceil(2 / $st)))")
+            $S -m $M --taesd $T -p "the apple green, a apple on a plate, studio photo" -i check/apple.png --strength $st --steps $steps --cfg-scale 1 -s 8 -t $(nproc) --mmap -o check/apple-green-$st.png 2>&1 | tail -1
+          done
+          cp check/apple-green-0.8.png check/apple-green.png
           python3 - <<'PY'
           from PIL import Image, ImageDraw
           m = Image.new("L", (512, 512), 0); ImageDraw.Draw(m).ellipse((150, 150, 362, 362), fill=255); m.save("check/mask.png")
@@ -116,7 +120,10 @@ jobs:
           def share(path, test):
               im = Image.open(path).convert("RGB").resize((64, 64)); px = [im.getpixel((x, y)) for y in range(64) for x in range(64)]
               return sum(1 for p in px if test(*p)) / len(px)
-          for f in ("check/apple.png", "check/apple-green.png", "check/inpaint.png"): grid(f)
+          for f in ("check/apple.png", "check/apple-green-0.6.png", "check/apple-green-0.7.png", "check/apple-green-0.8.png", "check/apple-green-0.9.png", "check/inpaint.png"): grid(f)
+          for st in ("0.6", "0.7", "0.8", "0.9"):
+              print("strength", st, "green", round(share(f"check/apple-green-{st}.png", lambda r, g, b: g > r + 25 and g > b + 25), 3),
+                    "red", round(share(f"check/apple-green-{st}.png", lambda r, g, b: r > g + 50 and r > b + 50), 3))
           red = share("check/apple.png", lambda r, g, b: r > g + 50 and r > b + 50)
           green = share("check/apple-green.png", lambda r, g, b: g > r + 25 and g > b + 25)
           blue = share("check/inpaint.png", lambda r, g, b: b > r + 25 and b > g + 10)
