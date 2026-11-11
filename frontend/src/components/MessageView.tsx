@@ -3,6 +3,7 @@ import { memo, useState } from "react";
 import type { Attachment, ImageOp, Message, ModelInfo } from "../api/types";
 import { fileSize, timeLabel } from "../lib/format";
 import { Icon } from "./Icon";
+import { api } from "../api/client";
 import { ImageGallery, ToolProgress, type ImageAction } from "./ImageViews";
 import { copyText, Markdown } from "./Markdown";
 import { PdfButton, PdfCard, PdfPending } from "./PdfViews";
@@ -30,6 +31,11 @@ interface Props {
 const serverHref = (a: Attachment, download = false) => `/api/files/${a.id}${download ? "?download=1" : ""}`;
 const noNumber = () => undefined;
 
+async function makeAppFromFile(id: string) {
+  const html = await api.fileText(id);
+  if (html) window.dispatchEvent(new CustomEvent("zc-make-app", { detail: { html } }));
+}
+
 export const MessageView = memo(function MessageView({ m, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
   onImageAction, imageActions = false, numberOf = noNumber, request, imageOps }: Props) {
   const [copied, setCopied] = useState(false);
@@ -53,7 +59,10 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
           {m.attachments.filter((a) => !(a.kind === "image" && fileHref(a))).map((a) => {
             const href = fileHref(a);
             const inner = <><Icon name="file" size={14} /> {a.name} <span className="muted">{fileSize(a.size)}</span></>;
-            return <li key={a.id}>{href ? <a className="chip" href={href} target="_blank" rel="noopener">{inner}</a> : <span className="chip">{inner}</span>}</li>;
+            const page = /\.x?html?$/i.test(a.name);
+            return <li key={a.id}>{href ? <a className="chip" href={href} target="_blank" rel="noopener">{inner}</a> : <span className="chip">{inner}</span>}
+              {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id)} aria-label={`Make an Android app from ${a.name}`}>
+                <Icon name="phone" size={14} /> Make app</button>}</li>;
           })}
         </ul>
       )}

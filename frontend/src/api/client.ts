@@ -63,6 +63,11 @@ export async function request<T>(method: string, path: string, body?: unknown, s
 }
 
 export const api = {
+  /** the text of an uploaded file (e.g. an .html page to turn into an app), or null */
+  fileText: async (id: string): Promise<string | null> => {
+    const r = await fetch(fileUrl(id), { headers: HEADERS, credentials: "same-origin" }).catch(() => null);
+    return r && r.ok ? r.text() : null;
+  },
   me: () => request<User>("GET", "/api/auth/me"),
   login: (email: string, password: string) => request<User>("POST", "/api/auth/login", { email, password }),
   register: (email: string, name: string, password: string) => request<User>("POST", "/api/auth/register", { email, name, password }),

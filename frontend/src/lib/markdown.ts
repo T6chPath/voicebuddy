@@ -24,6 +24,9 @@ import { calloutKind } from "./callout";
 
 const LANGS: Record<string, unknown> = { bash, cpp, css, go, java, javascript, json, kotlin, markdown, python, rust, sql, typescript, xml, yaml };
 for (const [name, lang] of Object.entries(LANGS)) hljs.registerLanguage(name, lang as never);
+// highlight.js's HTML/XML grammar asks for Unicode regexes but contains /<\!--/, which isn't valid in that mode
+// (it threw on every ```html block); the same grammar without the Unicode flag works fine
+hljs.registerLanguage("xml", (h) => ({ ...(xml as (h: unknown) => Record<string, unknown>)(h), unicodeRegex: false }) as never);
 const ALIAS: Record<string, string> = { js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript", py: "python",
   sh: "bash", shell: "bash", zsh: "bash", html: "xml", htm: "xml", yml: "yaml", md: "markdown", "c++": "cpp", c: "cpp", kt: "kotlin", rs: "rust" };
 
@@ -40,14 +43,20 @@ marked.use({
       }
       const name = ALIAS[raw] || raw;
       let html: string;
+      let lit = "";
       if (name && hljs.getLanguage(name)) {
-        html = hljs.highlight(text, { language: name, ignoreIllegals: true }).value;
+        try { lit = hljs.highlight(text, { language: name, ignoreIllegals: true }).value; } catch { lit = ""; }
+      }
+      if (lit) {
+        html = lit;
       } else {
         html = escapeHtml(text);
       }
       const label = escapeHtml(raw || "text");
-      return `<div class="code-block"><div class="code-head"><span class="code-lang">${label}</span>` +
-        `<button type="button" class="code-copy" data-copy aria-label="Copy ${label} code">Copy</button></div>` +
+      // a web page the AI wrote: offer to turn it into an Android app
+      const app = (name === "xml" && /^(html?|xhtml)$/.test(raw)) || raw === "html" ? `<button type="button" class="code-copy code-app" data-make-app aria-label="Make an Android app from this page">Make app</button>` : "";
+      return `<div class="code-block"><div class="code-head"><span class="code-lang">${label}</span><span class="code-tools">${app}` +
+        `<button type="button" class="code-copy" data-copy aria-label="Copy ${label} code">Copy</button></span></div>` +
         `<pre><code class="hljs language-${escapeHtml(name || "plaintext")}">${html}</code></pre></div>`;
     },
     blockquote({ tokens }: Tokens.Blockquote) {
@@ -108,7 +117,7 @@ export function renderMarkdown(src: string): string {
   const html = marked.parse(text, { async: false }) as string;
   return restoreMath(DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
-    ADD_ATTR: ["target", "data-copy", "data-plot", "aria-label", "tabindex", "role"],
+    ADD_ATTR: ["target", "data-copy", "data-make-app", "data-plot", "aria-label", "tabindex", "role"],
     ADD_TAGS: ["aside"],
     FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
     FORBID_ATTR: ["onerror", "onload", "onclick"],

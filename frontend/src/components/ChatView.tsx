@@ -6,6 +6,8 @@ import { useToasts } from "../state/toasts";
 import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
 import { Eye } from "./Brand";
+import { MakeAppDialog } from "./MakeAppDialog";
+import { APK_REQUEST } from "../apk/apk";
 
 type IconName = string;
 import { changedOpts, DEFAULT_IMAGE_OPTS, type ImageAction, ImageSettings, Lightbox, MaskEditor } from "./ImageViews";
@@ -53,6 +55,12 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [target, setTarget] = useState<Attachment | null>(null);
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const [masking, setMasking] = useState<Attachment | null>(null);
+  const [makeApp, setMakeApp] = useState<string | null>(null);         // "Make app": the page to turn into an APK
+  useEffect(() => {
+    const on = (e: Event) => { const h = (e as CustomEvent<{ html: string }>).detail?.html; if (h) setMakeApp(h); };
+    window.addEventListener("zc-make-app", on);
+    return () => window.removeEventListener("zc-make-app", on);
+  }, []);
   const imagesOn = !!caps?.available;
   const liveReplies = useRef(new Set<string>());          // replies streamed in this session (auto-speak only these)
 
@@ -217,8 +225,24 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   const placeholder = (): Message => ({ id: "pending-a-" + Date.now(), role: "assistant", content: "", model, status: "streaming", error: null, attachments: [], created_at: Date.now() / 1000 });
 
+  /** The web page the user means: an attached .html file, else the newest page in this chat (a file or an html block). */
+  async function pageForApp(files: UploadedFile[]): Promise<string | null> {
+    for (const f of files) if (/\.x?html?$/i.test(f.name)) { const t = await api.fileText(f.id); if (t) return t; }
+    for (const m of [...messages].reverse()) {
+      const blocks = [...m.content.matchAll(/```(?:html?|xhtml)\s*\n([\s\S]*?)```/gi)].map((x) => x[1]);
+      if (blocks.length) return blocks[blocks.length - 1];
+      for (const a of [...m.attachments].reverse()) if (/\.x?html?$/i.test(a.name)) { const t = await api.fileText(a.id); if (t) return t; }
+    }
+    return null;
+  }
+
   async function send(text: string, files: UploadedFile[], override?: ImageOptions): Promise<boolean> {
     if (busy) return false;
+    // "convert this html to an apk": with a page attached (or one earlier in the chat), open the app maker directly
+    if (APK_REQUEST.test(text) && (files.length || /\b(this|it|that|these|isko|iska|ise|html|page|file|website|site|code)\b/i.test(text))) {
+      const page = await pageForApp(files);
+      if (page) { setMakeApp(page); return true; }
+    }
     speech.stop();                                         // a new question interrupts the current answer
     if (speech.settings.autoSpeak) speech.unlock();        // inside the tap: lets phones play the reply
     const image: ImageOptions | undefined = imagesOn
@@ -389,6 +413,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       <div className="sr-only" aria-live="polite" role="status">{announce}</div>
       {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction}
                               canPaint={!caps || caps.ops.includes("inpaint")} />}
+      {makeApp !== null && <MakeAppDialog html={makeApp} onClose={() => setMakeApp(null)} />}
       {masking && <MaskEditor a={masking} src={fileUrl(masking.id)} onCancel={() => setMasking(null)} onApply={(b, t) => applyMask(masking, b, t)} />}
       <div className="composer-wrap">
         <VoicePanel />

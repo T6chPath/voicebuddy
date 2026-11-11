@@ -543,3 +543,19 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 @media (forced-colors: active) { .callout { border: 1px solid CanvasText; } .callout-label::before { display: none; } }
 /* touch screens: the copy button sits above the formula, not on it */
 @media (hover: none) { .md .math-display { padding-top: 34px; } .md .math-copy { opacity: 1; } }
+
+/* ---------------- Make app (web page → APK) ---------------- */
+.code-tools { display: inline-flex; gap: 6px; }
+.code-app { border-color: color-mix(in srgb, var(--marigold) 60%, transparent) !important; color: #ffd772 !important; }
+.chip-action { margin-left: 6px; cursor: pointer; border: 0; background: var(--accent-soft); color: var(--accent); font-weight: 600; padding: 4px 10px; }
+.msg-user .chip-action { background: color-mix(in srgb, var(--user-ink) 22%, transparent); color: inherit; }
+.make-app { display: grid; gap: 4px; }
+.app-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 0 14px; margin: 0 0 6px; border-radius: 18px;
+  background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 22%, var(--bg-soft)), var(--bg-soft)); }
+.app-icon { width: 72px; height: 72px; border-radius: 20px; display: grid; place-items: center; color: #fff; font: 700 38px/1 var(--font);
+  background-size: cover; background-position: center; box-shadow: 0 6px 18px rgba(15, 38, 35, .22); }
+.app-icon-name { font-size: .9em; font-weight: 500; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.make-app-lede { margin: 0 0 10px; }
+.icon-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.make-app-done { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 6px; }
+.make-app-done svg { color: var(--ok); flex: none; margin-top: 3px; }
