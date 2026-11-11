@@ -59,7 +59,7 @@ class Gemini:
 
 def app(browser, settings, ai=None, polli=None, gem=None):
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    ctx.add_init_script(f"localStorage.setItem('zc.local.settings', {json.dumps(json.dumps(settings))});")
+    ctx.add_init_script(f"localStorage.setItem('zc.local.settings', {json.dumps(json.dumps(settings))}); window.__zcPolliGap = 0;")
     polli = polli or Pollinations()
     ctx.route("https://image.pollinations.ai/**", polli.handle)
     if gem:

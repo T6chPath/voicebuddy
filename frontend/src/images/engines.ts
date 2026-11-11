@@ -68,6 +68,13 @@ function sniffMime(b: Uint8Array): string | null {
 /* ---------------- free: Pollinations ---------------- */
 export const POLLINATIONS = "https://image.pollinations.ai/prompt/";
 
+let lastPolli = 0;
+/** Minimum time between requests to the free service (tests set window.__zcPolliGap). */
+const polliGap = (): number => {
+  const g = typeof window !== "undefined" ? (window as unknown as { __zcPolliGap?: number }).__zcPolliGap : undefined;
+  return typeof g === "number" ? g : 15000;
+};
+
 export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSignal, progress: Progress): Promise<MadeImage> {
   const [w, h] = sizeFor(job.aspect, Math.min(job.resolution, 1024), 64);
   let prompt = styledPrompt(job.prompt, job.style);
@@ -76,7 +83,12 @@ export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSig
   if (job.negative) prompt += `. Avoid: ${job.negative}`;
   const q = new URLSearchParams({ width: String(w), height: String(h), seed: String(job.seed), model: "flux", nologo: "true", safe: "true", referrer: "zenvqo" });
   const url = POLLINATIONS + encodeURIComponent(prompt.slice(0, 1500)) + "?" + q.toString();
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const tries = 4;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    // anonymous use allows about one picture every 15 s: space requests out instead of being turned away
+    const gap = polliGap() - (Date.now() - lastPolli);
+    for (let s = Math.ceil(gap / 1000); s > 0; s--) { progress(0.05, `Waiting for the free image service — ${s} s…`); await sleep(1000, signal); }
+    lastPolli = Date.now();
     let r: Response;
     try {
       r = await net(url, { headers: { Accept: "image/*", "X-Zenvqo-Binary": "1" }, signal });
@@ -84,10 +96,11 @@ export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSig
       if ((e as Error).name === "AbortError") throw e;
       throw new ImageEngineError("Couldn't reach the free image service. Check your internet connection.", "network");
     }
-    if (r.status === 429 || r.status === 503 || r.status === 502) {
-      // the anonymous tier allows about one image per 15 seconds
-      const wait = Math.min(30, Number(r.headers.get("retry-after")) || 16);
-      if (attempt === 2) throw new ImageEngineError("The free image service is busy. Wait a minute and try again.", "rate_limited", wait);
+    if (r.status === 429 || r.status === 503 || r.status === 502 || r.status === 402) {
+      // busy, or (402) the anonymous tier's limit for now: wait and try again
+      const wait = Math.min(30, Number(r.headers.get("retry-after")) || (r.status === 402 ? 20 : 16));
+      lastPolli = Date.now();
+      if (attempt === tries - 1) throw new ImageEngineError("The free image service is busy. Wait a minute and try again.", "rate_limited", wait);
       for (let s = wait; s > 0; s--) { progress(0.05, `The free image service is busy — trying again in ${s} s…`); await sleep(1000, signal); }
       continue;
     }
