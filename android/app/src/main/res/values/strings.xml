@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">zenvqo</string>
     <string name="no_app_for_link">No app can open this link.</string>
+    <string name="share_label">zenvqo</string>
 </resources>

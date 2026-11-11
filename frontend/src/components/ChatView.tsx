@@ -7,6 +7,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
 import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
+import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
 import { APK_REQUEST } from "../apk/apk";
 
@@ -57,6 +58,18 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const [masking, setMasking] = useState<Attachment | null>(null);
   const [makeApp, setMakeApp] = useState<string | null>(null);         // "Make app": the page to turn into an APK
+  // shared from WhatsApp, Gallery, Files… (Android share menu): into the message box of a new chat, like ChatGPT
+  const convRef = useRef(conversationId);
+  convRef.current = conversationId;
+  const applyShared = () => {
+    const q = takeShared();
+    if (!q) return;
+    if (q.files.length) composer.current?.addFiles(q.files);
+    if (q.text) composer.current?.setText(q.text);
+    composer.current?.focus();
+  };
+  useEffect(() => listenForShares(() => { if (convRef.current) navigate("/"); else applyShared(); }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!conversationId) applyShared(); }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [preview, setPreview] = useState<PreviewTarget | null>(null);   // a sent file, opened
   const [dropping, setDropping] = useState(false);                     // files dragged over the chat
   const dragDepth = useRef(0);

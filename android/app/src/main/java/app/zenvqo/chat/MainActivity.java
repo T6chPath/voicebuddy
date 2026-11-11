@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     private NativeASR ears;
     private NativePDF pdf;
     private NativeImageGen images;
+    private NativeShare share;
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingCamera;
 
@@ -74,6 +75,8 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
         web.addJavascriptInterface(new NativeAssets(this), "ZenvqoAssets");   // data files the PDF reader needs
         web.addJavascriptInterface(new NativeApk(this, web), "ZenvqoApk");       // "Make app": web pages → installable APKs
+        share = new NativeShare(this, web);
+        web.addJavascriptInterface(share, "ZenvqoShare");     // "Share → zenvqo" from WhatsApp, Gallery, Files…
         images = new NativeImageGen(this, web);
         web.addJavascriptInterface(images, "ZenvqoImageGen");  // pictures made on the phone itself (stable-diffusion.cpp)
 
@@ -132,6 +135,14 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else web.loadUrl(START_URL);
+        share.take(getIntent());                            // opened from another app's Share menu
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {             // shared to zenvqo while it was already open
+        super.onNewIntent(intent);
+        setIntent(intent);
+        share.take(intent);
     }
 
     /** Edge-to-edge on Android 11+: we draw behind the system bars ourselves and pad the WebView by the bar and keyboard
