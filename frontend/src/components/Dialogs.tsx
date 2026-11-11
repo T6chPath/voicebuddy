@@ -4,6 +4,7 @@ import type { ModelInfo, UserSettings } from "../api/types";
 import { isMac } from "../lib/format";
 import { useSession } from "../state/session";
 import { Icon } from "./Icon";
+import { DevicePicturesPanel } from "./DevicePictures";
 import { VoiceSettingsPanel } from "./SpeechViews";
 import { VoiceInputPanel } from "./VoiceViews";
 
@@ -112,6 +113,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           </label>
           <label className="check"><input type="checkbox" checked={draft.send_on_enter} onChange={(e) => set("send_on_enter", e.target.checked)} /> Enter sends the message (otherwise {mod}+Enter)</label>
         </fieldset>
+        {LOCAL_MODE && <DevicePicturesPanel draft={draft} set={set} />}
         <VoiceSettingsPanel />
         <VoiceInputPanel />
         <details>

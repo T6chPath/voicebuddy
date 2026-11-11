@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
     private NativeTTS speech;
     private NativeASR ears;
     private NativePDF pdf;
+    private NativeImageGen images;
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingCamera;
 
@@ -72,6 +73,8 @@ public class MainActivity extends Activity {
         pdf = new NativePDF(this, web);
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
         web.addJavascriptInterface(new NativeAssets(this), "ZenvqoAssets");   // data files the PDF reader needs
+        images = new NativeImageGen(this, web);
+        web.addJavascriptInterface(images, "ZenvqoImageGen");  // pictures made on the phone itself (stable-diffusion.cpp)
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -209,6 +212,7 @@ public class MainActivity extends Activity {
         if (net != null) net.shutdown();
         if (speech != null) speech.shutdown();
         if (ears != null) ears.shutdown();
+        if (images != null) images.shutdown();
         web.destroy();
         super.onDestroy();
     }

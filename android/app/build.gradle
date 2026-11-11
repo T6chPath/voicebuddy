@@ -38,6 +38,15 @@ android {
         }
     }
 
+    // The on-phone picture engine (android/native/build-image-engine.sh → src/main/jniLibs) is a program the app runs,
+    // so it must be unpacked at install time. Phones get arm64 only; test emulators (-PwithX86) also get x86_64.
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+            if (!project.hasProperty("withX86")) excludes += ["lib/x86_64/**", "lib/x86/**"]
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

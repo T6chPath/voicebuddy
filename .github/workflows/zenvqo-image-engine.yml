@@ -1,0 +1,155 @@
+# The on-phone picture maker: builds stable-diffusion.cpp for Android (arm64 phones, x86_64 test emulators),
+# makes the phone-sized SD-Turbo model (q4_0) and checks it really draws, then publishes both on the
+# "zenvqo-image-engine" release. The APK builds take the engine from there; the app downloads the model from there.
+name: zenvqo picture engine and model
+
+on:
+  push:
+    paths:
+      - "android/native/**"
+      - ".github/workflows/zenvqo-image-engine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get install -y -q ninja-build
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: engine-out
+          key: image-engine-${{ matrix.abi }}-${{ hashFiles('android/native/build-image-engine.sh') }}
+      - name: Build stable-diffusion.cpp for ${{ matrix.abi }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash android/native/build-image-engine.sh ${{ matrix.abi }} engine-out/${{ matrix.abi }}
+      - name: Pack
+        run: |
+          ls -la engine-out/${{ matrix.abi }}
+          tar czf image-engine-${{ matrix.abi }}.tar.gz -C engine-out/${{ matrix.abi }} .
+          ls -la image-engine-${{ matrix.abi }}.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-engine-${{ matrix.abi }}
+          path: image-engine-${{ matrix.abi }}.tar.gz
+
+  model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get install -y -q ninja-build
+          pip install -q pillow
+      - uses: actions/cache@v4
+        id: host
+        with:
+          path: host-sd
+          key: host-sdcpp-${{ hashFiles('android/native/build-image-engine.sh') }}
+      - name: Build stable-diffusion.cpp for this computer (to make and test the model)
+        if: steps.host.outputs.cache-hit != 'true'
+        run: |
+          COMMIT=$(grep -oP '^SD_COMMIT=\K[0-9a-f]+' android/native/build-image-engine.sh)
+          git init -q sd && cd sd
+          git remote add origin https://github.com/leejet/stable-diffusion.cpp
+          git fetch -q --depth 1 origin $COMMIT && git checkout -q FETCH_HEAD
+          git submodule update -q --init --depth 1 ggml
+          cmake -S . -B b -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DSD_WEBP=OFF -DSD_WEBM=OFF
+          cmake --build b --target sd-cli -j$(nproc)
+          mkdir -p ../host-sd && cp b/bin/sd-cli ../host-sd/
+      - uses: actions/cache@v4
+        id: models
+        with:
+          path: models
+          key: sd-turbo-q4_0-v1
+      - name: Make the phone-sized model
+        if: steps.models.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models && cd models
+          curl -sSfL -o sd_turbo-f16.gguf https://huggingface.co/Green-Sky/SD-Turbo-GGUF/resolve/main/sd_turbo-f16.gguf
+          ../host-sd/sd-cli -M convert -m sd_turbo-f16.gguf -o sd_turbo-q4_0.gguf --type q4_0
+          rm sd_turbo-f16.gguf
+          curl -sSfL -o taesd.safetensors https://huggingface.co/madebyollin/taesd/resolve/main/diffusion_pytorch_model.safetensors
+          ls -la
+      - name: Check it really draws (text → picture, picture → picture, painted area)
+        run: |
+          mkdir -p check
+          S=host-sd/sd-cli; M=models/sd_turbo-q4_0.gguf; T=models/taesd.safetensors
+          t0=$(date +%s)
+          $S -m $M --taesd $T -p "a red apple on a white plate, studio photo" -W 512 -H 512 --steps 2 --cfg-scale 1 --sampling-method euler_a -s 7 -t $(nproc) --mmap -o check/apple.png 2>&1 | tail -5
+          t1=$(date +%s)
+          $S -m $M --taesd $T -p "a green apple on a white plate, studio photo" -i check/apple.png --strength 0.6 --steps 3 --cfg-scale 1 -s 8 -t $(nproc) --mmap -o check/apple-green.png 2>&1 | tail -3
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          m = Image.new("L", (512, 512), 0); ImageDraw.Draw(m).ellipse((150, 150, 362, 362), fill=255); m.save("check/mask.png")
+          PY
+          $S -m $M --taesd $T -p "a blue ceramic cup" -i check/apple.png --mask check/mask.png --strength 0.9 --steps 4 --cfg-scale 1 -s 9 -t $(nproc) --mmap -o check/inpaint.png 2>&1 | tail -3
+          t2=$(date +%s)
+          python3 - <<'PY'
+          from PIL import Image
+          def share(path, test):
+              im = Image.open(path).convert("RGB").resize((64, 64)); px = list(im.getdata())
+              return sum(1 for p in px if test(*p)) / len(px)
+          red = share("check/apple.png", lambda r, g, b: r > 130 and g < 90 and b < 90)
+          green = share("check/apple-green.png", lambda r, g, b: g > 110 and r < 150 and b < 110)
+          blue = share("check/inpaint.png", lambda r, g, b: b > 120 and r < 110)
+          print(f"red {red:.2f}  green {green:.2f}  blue {blue:.2f}")
+          assert Image.open("check/apple.png").size == (512, 512)
+          assert red > 0.05, "no red apple"
+          assert green > 0.05, "picture → picture didn't turn it green"
+          assert blue > 0.03, "the painted area didn't change"
+          PY
+          echo "text→picture: $((t1-t0)) s, two edits: $((t2-t1)) s on $(nproc) cores" | tee check/timings.txt
+          sha256sum models/* | tee check/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picture-check
+          path: check
+      - name: Publish the model
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-image-engine
+          name: zenvqo picture engine and model
+          body: |
+            Files the zenvqo chat app uses to make pictures on the phone itself, without the internet.
+            - image-engine-*.tar.gz: stable-diffusion.cpp (MIT licence) built for Android.
+            - sd_turbo-q4_0.gguf: SD-Turbo by Stability AI, made smaller for phones. Powered by Stability AI —
+              Stability AI Community License: https://stability.ai/community-license-agreement
+            - taesd.safetensors: Tiny AutoEncoder by Ollin Boer Bohan (MIT licence), for fast decoding.
+          prerelease: true
+          make_latest: false
+          files: |
+            models/sd_turbo-q4_0.gguf
+            models/taesd.safetensors
+            check/apple.png
+            check/apple-green.png
+            check/inpaint.png
+            check/timings.txt
+            check/sha256.txt
+
+  publish-engine:
+    needs: [engine, model]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-engine-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zenvqo-image-engine
+          prerelease: true
+          make_latest: false
+          files: image-engine-*.tar.gz

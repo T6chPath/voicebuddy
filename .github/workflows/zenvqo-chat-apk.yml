@@ -27,6 +27,11 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Add the on-phone picture engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash android/native/fetch-image-engine.sh arm64-v8a
+
       - name: Build debug APK
         working-directory: android
         run: |

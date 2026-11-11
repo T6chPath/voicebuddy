@@ -12,7 +12,7 @@ permissions:
 jobs:
   phone:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -29,11 +29,16 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Add the on-phone picture engine (x86_64, for the emulator)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash android/native/fetch-image-engine.sh x86_64
+
       - name: Build debug APK
         working-directory: android
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          gradle assembleDebug --console=plain -q
+          gradle assembleDebug --console=plain -q -PwithX86
           cp app/build/outputs/apk/debug/app-debug.apk ../zenvqo-chat.apk
 
       - name: Tools
@@ -54,6 +59,9 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
+          ram-size: 4096M
+          disk-size: 8000M
+          cores: 4
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back emulated -camera-front none
           script: bash e2e/android/run_pdf_test.sh zenvqo-chat.apk phone-out
 

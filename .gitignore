@@ -7,3 +7,5 @@ backend/data/
 data/
 .env
 e2e/screenshots/
+android/app/src/main/jniLibs/
+android/app/src/main/image-engine-*.version

@@ -69,6 +69,10 @@ export interface UserSettings {
   /** standalone app only: OpenAI-compatible server to talk to directly */
   server_url?: string;
   api_key?: string;
+  /** standalone app: where pictures are made — "auto" (keyed service, else this phone, else free online), "device", "online" */
+  image_engine?: "auto" | "device" | "online";
+  device_model?: string;
+  device_quality?: "fast" | "balanced" | "best";
 }
 
 export interface UploadedFile extends Attachment { chars: number; truncated: boolean }

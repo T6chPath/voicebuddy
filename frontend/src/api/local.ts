@@ -12,6 +12,7 @@ import { createSSEParser } from "./sse";
 import { parseSpec } from "../plot/spec";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
 import { gemini, ImageEngineError, measure, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { device, deviceModel, type DeviceModel } from "../images/device";
 import { blendUnder, composite, cutOut, drawText, fillArea, padFor, placeOn, upscale, type Side } from "../images/canvas";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
@@ -275,8 +276,11 @@ export const api = {
       "remove_background", "replace_background", "outpaint", "upscale"];
     const label: Record<string, string> = { gemini: "Gemini (your key)", openai: "OpenAI (your key)", pollinations: "Free image service (Pollinations) + on-phone tools" };
     return { available: true, reason: null, ops, styles: Object.keys(STYLES), aspect_ratios: ASPECTS, formats: ["png", "jpeg"], max_n: 4, max_resolution: 2048,
-      providers: e.map((n) => ({ name: label[n], model: n === "gemini" ? "gemini-2.5-flash-image" : n === "openai" ? "gpt-image-1" : "flux",
-        ready: true, reason: null, ops, negative_prompt: n !== "gemini", seed: n === "pollinations" })) };
+      providers: [
+        ...(() => { const st = loadSettings(); const d = st.image_engine === "online" ? null : deviceModel(st.device_model);
+          return d ? [{ name: "This phone (no internet)", model: d.label, ready: true, reason: null, ops, negative_prompt: false, seed: true }] : []; })(),
+        ...e.map((n) => ({ name: label[n], model: n === "gemini" ? "gemini-2.5-flash-image" : n === "openai" ? "gpt-image-1" : "flux",
+          ready: true, reason: null, ops, negative_prompt: n !== "gemini", seed: n === "pollinations" }))] };
   },
   ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
   voiceConfig: async () => ({ available: false, reason: "this app has no server", partials: false, max_seconds: 0 }),
@@ -685,7 +689,23 @@ const NEEDS_EDITOR = "Changing your own photos this way needs an image editor: i
 async function produce(c: ProduceCtx): Promise<MadeImage> {
   const { op, plan, job, source, refs, s, modelId, signal, notes } = c;
   const src = source?.file.dataUrl;
-  const free = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
+  // the picture maker for the free route: this phone (once its model is downloaded), else the free online service
+  const dev: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model);
+  const onPhone = (j: Partial<ImageJob>) => device({ ...job, ...j } as ImageJob, { model: dev!, quality: s.device_quality }, signal, c.progress);
+  const online = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
+  const free = async (j: Partial<ImageJob>): Promise<MadeImage> => {
+    if (!dev) {
+      if (s.image_engine === "device") throw new ImageEngineError("Pictures are set to be made only on this phone, but the picture model isn't downloaded yet. " +
+        "Open Settings → Pictures on this phone and tap Download.", "unsupported");
+      return online(j);
+    }
+    try { return await onPhone({ ...j, op: "generate", source: undefined, mask: undefined }); }
+    catch (err) {
+      if ((err as Error).name === "AbortError" || s.image_engine === "device") throw err;
+      notes.add("Making it on your phone didn't work this time, so the free online service made it.");
+      return online(j);
+    }
+  };
 
   // made on the phone, always
   if (op === "upscale") {
@@ -699,9 +719,9 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
     return localImg(await fillArea(src, job.mask));
   }
 
-  // keyed engines
+  // keyed engines (not when pictures should be made only on this phone)
   let lastErr: ImageEngineError | null = null;
-  for (const e of imageEngines(s)) {
+  for (const e of s.image_engine === "device" ? [] : imageEngines(s)) {
     if (e === "pollinations") break;
     try {
       if (e === "gemini" && quotaKnownEmpty(s.api_key || "")) { lastErr = new ImageEngineError("no quota", "quota"); continue; }
@@ -736,6 +756,28 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
       : "This was redrawn from a description of your picture by the free image service, so it's a close new version, not an exact edit. A Gemini (billing on) or OpenAI key edits the photo itself.");
     return img;
   };
+  // the phone's engine edits the picture itself (image-to-image, painted areas, expanding)
+  if (dev && src) {
+    const keep = async (made2: MadeImage) => { notes.add("Changed on your phone."); return made2; };
+    const what = async (extra = "") => [made || (await scene()) || "", extra].filter(Boolean).join(", ");
+    switch (op) {
+      case "style": case "edit": {
+        const base0 = made || (await scene()) || "";
+        return keep(await onPhone({ op, source: src, mask: job.mask, prompt: op === "edit" ? mergeEdit(base0, plan.prompt) : base0 || plan.prompt, style: job.style }));
+      }
+      case "variations":
+        return keep(await onPhone({ op, source: src, prompt: (await what()) || plan.prompt || "the same picture" }));
+      case "inpaint": case "replace_object":
+        if (job.mask) return keep(await onPhone({ op, source: src, mask: job.mask, prompt: plan.prompt }));
+        break;
+      case "outpaint": {
+        const pad = await padFor(src, plan.aspect_ratio || null, (plan.side || "center") as Side);
+        const wide = await onPhone({ op: "inpaint", source: pad.padded, mask: pad.mask, prompt: await what(plan.prompt ? plan.prompt : "wide view, the scene continues") });
+        const big = await upscale(wide.dataUrl, Math.max(pad.w, pad.h));
+        return keep({ ...(await localImg(await placeOn(big.dataUrl, src, (plan.side || "center") as Side, pad.w, pad.h))), engine: wide.engine, model: wide.model });
+      }
+    }
+  }
   const needDesc = () => new ImageEngineError(NEEDS_EDITOR + "Or pick a chat model that can see pictures, and I'll redraw it from a description.", "unsupported");
 
   switch (op) {
@@ -826,6 +868,17 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
     }
   }
   throw lastErr || new ImageEngineError("The image couldn't be made.", "failed");
+}
+
+const COLOURS = /\b(red|green|blue|yellow|orange|purple|violet|pink|black|white|grey|gray|brown|golden|gold|silver|teal|cyan|magenta)\b/gi;
+/** The description for an image-to-image change: the change first (it matters most), and colours the change replaces
+ * taken out of the old description ("a red apple…" + "the apple green" → "the apple green, a apple…"). */
+export function mergeEdit(base: string, change: string): string {
+  const c = change.trim();
+  if (!base) return c;
+  const b = COLOURS.test(c) ? base.replace(COLOURS, "").replace(/\s{2,}/g, " ").replace(/\s+,/g, ",") : base;
+  COLOURS.lastIndex = 0;
+  return `${c}, ${b.trim()}`;
 }
 
 function nearestAspect(w: number, h: number): string {
