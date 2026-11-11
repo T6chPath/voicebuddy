@@ -28,6 +28,7 @@ const P: Record<string, string> = {
   expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   outpaint: "M8 8h8v8H8zM2 5V2h3M22 5V2h-3M2 19v3h3M22 19v3h-3",
   upscale: "M4 20L20 4M13 4h7v7M4 13v7h7",
+  wave: "M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4",
   share: "M18 8a3 3 0 1 0-2.8-4M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
   phone: "M7 2h10v20H7zM11 18h2",
   code: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",

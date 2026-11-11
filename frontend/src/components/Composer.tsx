@@ -3,6 +3,7 @@ import { api, ApiError, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
 import { fileSize, isMac } from "../lib/format";
 import { CameraDialog } from "./CameraViews";
+import { dictation, type DictState } from "../voice/dictation";
 import { Icon } from "./Icon";
 
 const MAX_CHARS = 32000;
@@ -36,11 +37,16 @@ interface Props {
   menu?: MenuItem[];
   /** small mode tags next to "+" (e.g. "Image") */
   chips?: ReactNode;
+  /** show the dictation mic (speech → text in the box) */
+  dictate?: boolean;
   /** shown above the input (e.g. "Editing image #3") */
   banner?: ReactNode;
   /** popover anchored to the composer */
   popover?: ReactNode;
 }
+
+function joinWords(a: string, b: string): string { return !b ? a : !a ? b : /\s$/.test(a) ? a + b : a + " " + b; }
+function clock(start: number): string { const s = Math.max(0, Math.floor((Date.now() - start) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 
 const serverDiscard = (f: UploadedFile) => { api.deleteFile(f.id).catch(() => {}); };
 
@@ -59,7 +65,34 @@ function Thumb({ file }: { file: File }) {
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   { busy, sendOnEnter, onSend, onStop, upload = uploadFile, discard = serverDiscard, accept = ACCEPT, placeholder = "Message zenvqo…",
-    tools, trailing, menu = [], chips, banner, popover }, ref) {
+    tools, trailing, menu = [], chips, banner, popover, dictate = true }, ref) {
+  // ---- dictation: the mic records, the words appear in the box, ✓ keeps them, ✕ throws them away ----
+  const [d, setD] = useState<DictState>(dictation.state);
+  const before = useRef("");
+  const [, tick] = useState(0);
+  useEffect(() => dictation.subscribe(setD), []);
+  const recording = d.phase === "starting" || d.phase === "recording" || d.phase === "finishing";
+  useEffect(() => {
+    if (!recording) return;
+    const t = window.setInterval(() => tick((n) => n + 1), 500);
+    return () => window.clearInterval(t);
+  }, [recording]);
+  useEffect(() => { if (recording) setText(joinWords(before.current, joinWords(d.text, d.partial))); }, [recording, d.text, d.partial]);
+  useEffect(() => () => { if (dictation.active) dictation.cancel(); }, []);
+  async function startDictation() {
+    before.current = text.trim();
+    await dictation.start();
+  }
+  async function finishDictation() {
+    const words = await dictation.finish();
+    setText(joinWords(before.current, words));
+    ta.current?.focus();
+  }
+  function cancelDictation() {
+    dictation.cancel();
+    setText(before.current);
+    ta.current?.focus();
+  }
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
   const plus = useRef<HTMLButtonElement>(null);
@@ -197,8 +230,21 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       <div className="composer-text">
         <label htmlFor="composer-input" className="sr-only">Message</label>
         <textarea id="composer-input" ref={ta} rows={1} value={text} placeholder={files.length ? "Ask about it — or just send" : placeholder} onChange={(e) => setText(e.target.value)}
-                  onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"} />
+                  onKeyDown={onKeyDown} onPaste={onPaste} aria-describedby={hintId} aria-invalid={over} enterKeyHint={sendOnEnter ? "send" : "enter"}
+                  readOnly={recording} />
       </div>
+      {recording ? (
+        <div className="composer-tools dictation" role="group" aria-label="Recording your message">
+          <button type="button" className="icon-btn" aria-label="Cancel recording" title="Cancel" onClick={cancelDictation}><Icon name="close" /></button>
+          <div className={`dict-wave${d.phase === "finishing" ? " finishing" : ""}`} aria-hidden="true">
+            {d.levels.map((v, i) => <i key={i} style={{ height: `${Math.round(8 + v * 92)}%` }} />)}
+          </div>
+          <span className="dict-time" aria-live="off">{d.phase === "finishing" ? (d.engine === "server" ? "Writing…" : "…") : clock(d.startedAt)}</span>
+          <span className="sr-only" role="status">{d.phase === "starting" ? "Starting the microphone" : d.phase === "finishing" ? "Turning your speech into text" : "Recording — speak now"}</span>
+          <button type="button" className="dict-done" aria-label="Done — put the words in the message" title="Done" onClick={() => void finishDictation()}
+                  disabled={d.phase !== "recording"}><Icon name="check" /></button>
+        </div>
+      ) : (
       <div className="composer-tools">
         <div className="plus-wrap">
           <button type="button" ref={plus} className={`plus-btn${menuOpen ? " open" : ""}`} aria-label="Add photos, files and more" title="Add"
@@ -225,6 +271,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         <input ref={input} type="file" multiple accept={accept} hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
         <span className="spacer" />
         {tools}
+        {dictate && (
+          <button type="button" className="icon-btn" aria-label="Dictate" title="Dictate — speak, then tap ✓" onClick={() => void startDictation()}
+                  disabled={busy}>
+            <Icon name="mic" />
+          </button>
+        )}
         {trailing}
         {busy ? (
           <button type="button" className="send-btn stop" onClick={onStop} aria-label="Stop generating">
@@ -236,6 +288,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
         )}
       </div>
+      )}
+      {d.phase === "error" && <p className="form-error dict-error" role="alert">{d.error}
+        <button type="button" className="btn-link" onClick={() => dictation.dismiss()}>OK</button></p>}
       <p id={hintId} className={`composer-hint${over ? " over" : ""}`}>
         {over ? `${text.length.toLocaleString()} / ${MAX_CHARS.toLocaleString()} characters — shorten your message`
           : sendOnEnter ? "Enter to send · Shift+Enter for a new line" : `${isMac() ? "⌘" : "Ctrl"}+Enter to send`}

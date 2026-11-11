@@ -600,3 +600,18 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .mode-chip button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .composer-tools .icon-btn { border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) { .plus-menu { animation: none; } .plus-btn { transition: none; } }
+
+/* ---------------- dictation (mic → words in the box) ---------------- */
+.composer-tools.dictation { gap: 8px; }
+.dict-wave { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; overflow: hidden;
+  -webkit-mask: linear-gradient(to right, transparent, #000 18%); mask: linear-gradient(to right, transparent, #000 18%); }
+.dict-wave i { display: block; flex: none; width: 3px; min-height: 3px; border-radius: 2px; background: var(--text); transition: height .08s linear; }
+.dict-wave.finishing i { opacity: .35; }
+.dict-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9em; min-width: 3.2em; text-align: right; }
+.dict-done { width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; flex: none;
+  background: var(--text); color: var(--bg); transition: transform .12s; }
+.dict-done:active:not(:disabled) { transform: scale(.92); }
+.dict-done:disabled { opacity: .5; cursor: default; }
+.composer textarea[readonly] { color: var(--text-soft); }
+.dict-error { margin: 6px 10px 2px; font-size: .9em; display: flex; gap: 8px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .dict-wave i { transition: none; } }

@@ -87,7 +87,7 @@ def test_plus_menu_in_the_message_box(browser):
     ai = FakeAI("ok")
     p, errors = open_app(browser, ai)
     plus = p.get_by_role("button", name="Add photos, files and more")
-    expect(p.get_by_role("button", name="Start voice conversation")).to_be_visible()          # the mic stays outside
+    expect(p.get_by_role("button", name="Dictate")).to_be_visible()                            # the mic stays outside
     expect(p.get_by_role("menu")).to_be_hidden()
     plus.click()
     menu = p.get_by_role("menu", name="Add to your message")

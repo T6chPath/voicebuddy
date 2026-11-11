@@ -94,7 +94,8 @@ def test_hands_free_voice_turn(mic_browser, voice_server):
     ctx, p = signed_in(mic_browser, voice_server, "voice1")
     ws_frames = []
     p.on("websocket", lambda ws: ws.on("framesent", lambda f: ws_frames.append(f)))
-    p.get_by_role("button", name="Start voice conversation").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Start voice conversation").click()
     panel = p.get_by_role("region", name="Voice conversation")
     expect(panel).to_be_visible()
     expect(p.locator(".rec-dot")).to_have_text("Mic on", timeout=10_000)                 # recording is visible
@@ -125,7 +126,8 @@ def test_hands_free_voice_turn(mic_browser, voice_server):
 @fake_only
 def test_push_to_talk_mute_and_interrupt(mic_browser, voice_server):
     ctx, p = signed_in(mic_browser, voice_server, "voice2")
-    p.get_by_role("button", name="Start voice conversation").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Start voice conversation").click()
     panel = p.get_by_role("region", name="Voice conversation")
     panel.get_by_text("Push-to-talk").click()
     expect(panel.get_by_text("Hold the mic button and talk")).to_be_visible()
@@ -156,7 +158,8 @@ def test_microphone_denied(pw, voice_server):
     ctx, p = signed_in(b, voice_server, "voice3", grant=False)
     # what the browser raises when the user clicks "Block" (headless Chromium can't show the prompt itself)
     p.evaluate("() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError')); }")
-    p.get_by_role("button", name="Start voice conversation").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Start voice conversation").click()
     expect(p.get_by_role("alert")).to_contain_text("Microphone permission was denied", timeout=10_000)
     p.get_by_role("button", name="End voice").click()
     b.close()
@@ -194,7 +197,8 @@ def test_android_app_voice_loop(browser):
     errors = []
     p.on("pageerror", lambda e: errors.append(str(e)))
     p.goto(html.as_uri())
-    p.get_by_role("button", name="Start voice conversation").click()
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name="Start voice conversation").click()
     panel = p.get_by_role("region", name="Voice conversation")
     expect(p.locator("article.msg-user").first).to_contain_text("AI kya hai", timeout=10_000)   # on-device recognition
     expect(p.locator("article.msg-assistant").first).to_contain_text("offline demo", timeout=10_000)

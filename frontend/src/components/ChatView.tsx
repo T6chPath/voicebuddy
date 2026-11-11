@@ -419,17 +419,16 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
         <VoicePanel />
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onSend={(t, f) => send(t, f)} onStop={stop}
                   placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…" : undefined}
-                  trailing={
-                    <button type="button" className="icon-btn" aria-label="Start voice conversation" title="Talk (voice mode)"
-                            onClick={() => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); }}>
-                      <Icon name="mic" />
-                    </button>}
-                  menu={imagesOn ? [
+                  menu={[
+                    { key: "voice", icon: "wave", label: "Voice conversation", hint: "Talk and listen, hands-free", ariaLabel: "Start voice conversation",
+                      onSelect: () => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); } },
+                    ...(imagesOn ? [
                     { key: "image", icon: "image", label: "Create image", hint: "Your next message makes a picture", on: imageOpts.op === "generate",
                       onSelect: () => { setImageOpts((o) => ({ ...o, op: o.op === "generate" ? undefined : "generate" })); composer.current?.focus(); } },
                     { key: "image-settings", icon: "sliders", label: "Image settings", hint: "Style, shape, size, how many", ariaLabel: "Image settings",
                       on: Object.keys(changedOpts({ ...imageOpts, op: undefined })).length > 0, onSelect: () => setShowImageSettings(true) },
-                  ] : []}
+                  ] : []),
+                  ]}
                   chips={imageOpts.op === "generate" ? (
                     <span className="mode-chip" role="status">
                       <Icon name="image" size={15} /><span>Image</span><span className="sr-only"> — your next message will create an image</span>
