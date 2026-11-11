@@ -50,6 +50,7 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit --pretty false > tsc.log || { sed 's/^/::error ::/' tsc.log; exit 1; }
           node scripts/build-offline.mjs
+          node scripts/build-standalone.mjs   # the phone app page the standalone browser tests open
           node --import tsx --test src/api/*.test.ts src/lib/*.test.ts src/pdf/*.test.ts src/plot/*.test.ts src/images/*.test.ts
 
       - name: Download models
