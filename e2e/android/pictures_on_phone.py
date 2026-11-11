@@ -63,7 +63,7 @@ def main():
     # --- download the model in Settings, like a user ---
     page.js('document.querySelector("[aria-label=\\"Open conversations\\"]")?.click()')
     time.sleep(1)
-    assert click_text(page, "button", "Settings"), "no Settings button"
+    assert page.js('(() => { const b = [...document.querySelectorAll("[aria-label=\\"Settings\\"]")].find(e => e.offsetParent); if (b) b.click(); return !!b; })()'), "no Settings button"
     page.wait('!!document.querySelector("fieldset.device-pictures li button")', 20, "the pictures settings")
     page.js('document.querySelector("fieldset.device-pictures").scrollIntoView()')
     page.js('document.querySelector("fieldset.device-pictures li button").click()')
