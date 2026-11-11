@@ -47,7 +47,7 @@ window.ZenvqoImageGen = {
   cancel() {},
 };
 """
-MODEL = {"sd_turbo-q4_0.gguf": 1250 * 1048576, "taesd.safetensors": 10 * 1048576}
+MODEL = {"sd_turbo-q4_0.gguf": 1700 * 1048576, "taesd.safetensors": 10 * 1048576}
 
 
 def phone(browser, settings, files=None, fail=False):

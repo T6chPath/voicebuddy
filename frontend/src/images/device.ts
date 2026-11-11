@@ -20,8 +20,8 @@ export interface DeviceInfo {
 const RELEASE = "https://github.com/T6chPath/voicebuddy/releases/download/zenvqo-image-engine/";
 export interface DeviceModel { id: string; file: string; label: string; url: string; mb: number; minRamMB: number; note: string }
 export const DEVICE_MODELS: DeviceModel[] = [
-  { id: "sd-turbo-small", file: "sd_turbo-q4_0.gguf", label: "SD-Turbo — small", url: RELEASE + "sd_turbo-q4_0.gguf", mb: 1250, minRamMB: 3000,
-    note: "Works on most phones with 4 GB of memory or more." },
+  { id: "sd-turbo-small", file: "sd_turbo-q4_0.gguf", label: "SD-Turbo — small", url: RELEASE + "sd_turbo-q4_0.gguf", mb: 1700, minRamMB: 3500,
+    note: "For phones with 4 GB of memory or more." },
   { id: "sd-turbo", file: "sd_turbo-f16-q8_0.gguf", label: "SD-Turbo — better detail", url: "https://huggingface.co/Green-Sky/SD-Turbo-GGUF/resolve/main/sd_turbo-f16-q8_0.gguf",
     mb: 2020, minRamMB: 5500, note: "Sharper details. Needs a phone with 6 GB of memory or more." },
 ];

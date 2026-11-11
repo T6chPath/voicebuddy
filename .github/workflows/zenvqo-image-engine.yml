@@ -98,12 +98,28 @@ jobs:
           t2=$(date +%s)
           python3 - <<'PY'
           from PIL import Image
+          def grid(path):
+              # a 12×12 colour map in the log, to see what was drawn without opening the file
+              im = Image.open(path).convert("RGB").resize((12, 12), Image.BOX)
+              names = {"r": "R", "g": "G", "b": "B", "w": ".", "k": "#", "y": "Y", "o": "o", "p": "p", "x": "-"}
+              def name(r, g, b):
+                  if max(r, g, b) < 60: return "k"
+                  if min(r, g, b) > 190: return "w"
+                  if r > g + 40 and r > b + 40: return "o" if g > 110 else ("p" if b > 110 else "r")
+                  if g > r + 25 and g > b + 25: return "g"
+                  if b > r + 25 and b > g + 10: return "b"
+                  if r > b + 40 and g > b + 40: return "y"
+                  return "x"
+              print(path)
+              for y in range(12):
+                  print("   " + " ".join(names[name(*im.getpixel((x, y)))] for x in range(12)))
           def share(path, test):
-              im = Image.open(path).convert("RGB").resize((64, 64)); px = list(im.getdata())
+              im = Image.open(path).convert("RGB").resize((64, 64)); px = [im.getpixel((x, y)) for y in range(64) for x in range(64)]
               return sum(1 for p in px if test(*p)) / len(px)
-          red = share("check/apple.png", lambda r, g, b: r > 130 and g < 90 and b < 90)
-          green = share("check/apple-green.png", lambda r, g, b: g > 110 and r < 150 and b < 110)
-          blue = share("check/inpaint.png", lambda r, g, b: b > 120 and r < 110)
+          for f in ("check/apple.png", "check/apple-green.png", "check/inpaint.png"): grid(f)
+          red = share("check/apple.png", lambda r, g, b: r > g + 50 and r > b + 50)
+          green = share("check/apple-green.png", lambda r, g, b: g > r + 25 and g > b + 25)
+          blue = share("check/inpaint.png", lambda r, g, b: b > r + 25 and b > g + 10)
           print(f"red {red:.2f}  green {green:.2f}  blue {blue:.2f}")
           assert Image.open("check/apple.png").size == (512, 512)
           assert red > 0.05, "no red apple"
@@ -113,6 +129,7 @@ jobs:
           echo "text→picture: $((t1-t0)) s, two edits: $((t2-t1)) s on $(nproc) cores" | tee check/timings.txt
           sha256sum models/* | tee check/sha256.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: picture-check
           path: check
