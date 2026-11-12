@@ -59,15 +59,17 @@ function ProjectBar({ text }: { text: string }) {
         <button type="button" className="btn small primary" onClick={download}><Icon name="download" size={16} /> Download project (.zip)</button>
         {page && <button type="button" className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("zc-make-app", { detail: { html: page } }))}>
           <Icon name="phone" size={16} /> Make app</button>}
+        {page && <button type="button" className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("zc-view-site", { detail: { html: page } }))}>
+          <Icon name="globe" size={16} /> View site</button>}
         {msg && <span className="muted small-text" role="status">{msg}</span>}
       </div>
     </section>
   );
 }
 
-async function makeAppFromFile(id: string) {
+async function makeAppFromFile(id: string, ev = "zc-make-app") {
   const html = await api.fileText(id);
-  if (html) window.dispatchEvent(new CustomEvent("zc-make-app", { detail: { html } }));
+  if (html) window.dispatchEvent(new CustomEvent(ev, { detail: { html } }));
 }
 
 export const MessageView = memo(function MessageView({ m, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
@@ -96,7 +98,9 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
               <FileCard name={a.name} mime={a.mime} kind={a.kind} size={a.size}
                         onOpen={() => window.dispatchEvent(new CustomEvent("zc-preview-file", { detail: { id: a.id, name: a.name, mime: a.mime, kind: a.kind, size: a.size, href: fileHref(a) } }))} />
               {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id)} aria-label={`Make an Android app from ${a.name}`}>
-                <Icon name="phone" size={14} /> Make app</button>}</li>;
+                <Icon name="phone" size={14} /> Make app</button>}
+              {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id, "zc-view-site")} aria-label={`View ${a.name} as a website`}>
+                <Icon name="globe" size={14} /> View site</button>}</li>;
           })}
         </ul>
       )}

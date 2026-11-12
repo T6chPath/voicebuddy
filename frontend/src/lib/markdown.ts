@@ -54,9 +54,12 @@ marked.use({
       }
       const label = escapeHtml(raw || "text");
       // a web page the AI wrote: offer to turn it into an Android app
-      const app = (name === "xml" && /^(html?|xhtml)$/.test(raw)) || raw === "html" ? `<button type="button" class="code-copy code-app" data-make-app aria-label="Make an Android app from this page">Make app</button>` : "";
+      const web = (name === "xml" && /^(html?|xhtml)$/.test(raw)) || raw === "html";
+      const app = web ? `<button type="button" class="code-copy code-app" data-make-app aria-label="Make an Android app from this page">Make app</button>` : "";
+      // …and to see it running, like a real website
+      const view = web ? `<button type="button" class="code-copy code-view" data-view-site aria-label="View this website">View site</button>` : "";
       return `<div class="code-block"><div class="code-head"><span class="code-lang">${label}</span><span class="code-tools">${app}` +
-        `<button type="button" class="code-copy" data-copy aria-label="Copy ${label} code">Copy</button></span></div>` +
+        `<button type="button" class="code-copy" data-copy aria-label="Copy ${label} code">Copy</button>${view}</span></div>` +
         `<pre><code class="hljs language-${escapeHtml(name || "plaintext")}">${html}</code></pre></div>`;
     },
     blockquote({ tokens }: Tokens.Blockquote) {
@@ -117,7 +120,7 @@ export function renderMarkdown(src: string): string {
   const html = marked.parse(text, { async: false }) as string;
   return restoreMath(DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
-    ADD_ATTR: ["target", "data-copy", "data-make-app", "data-plot", "aria-label", "tabindex", "role"],
+    ADD_ATTR: ["target", "data-copy", "data-make-app", "data-view-site", "data-plot", "aria-label", "tabindex", "role"],
     ADD_TAGS: ["aside"],
     FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
     FORBID_ATTR: ["onerror", "onload", "onclick"],

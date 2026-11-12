@@ -110,3 +110,49 @@ def test_plus_menu_in_the_message_box(browser):
     p.mouse.click(5, 5)                                                                          # tapping elsewhere closes it
     expect(p.get_by_role("menu")).to_be_hidden()
     assert not errors, errors
+
+
+SITE = """<!doctype html>
+<html><head><title>Chai Shop</title><style>body{font-family:sans-serif} h1{color:#0060e6}</style></head>
+<body><h1>Chai Shop</h1><button id="add" onclick="n.textContent=++c;localStorage.setItem('c',c)">Add to cart</button>
+<span id="n">0</span><script>let c=+(localStorage.getItem('c')||0);n.textContent=c</script></body></html>"""
+
+
+def test_view_site_runs_the_page_full_screen(browser):
+    ai = FakeAI("Here is your website:\n\n```html\n" + SITE + "\n```\n\nTap **View site** to see it.")
+    p, errors = open_app(browser, ai, BRIDGE)
+    p.locator("#composer-input").fill("make a website for my chai shop")
+    p.locator("#composer-input").press("Enter")
+    wait_reply(p, 1)
+    system = ai.requests[0]["messages"][0]["content"]
+    assert "View site" in system and "never shorten it" in system
+    tools = p.locator("article.msg-assistant .code-block .code-tools button")
+    assert [t.strip() for t in tools.all_inner_texts()] == ["Make app", "Copy", "View site"]
+    p.get_by_role("button", name="View this website").click()
+    dlg = p.get_by_role("dialog", name="Chai Shop")
+    expect(dlg).to_be_visible()
+    site = p.frame_locator("iframe[title='Website: Chai Shop']")
+    expect(site.locator("h1")).to_have_text("Chai Shop")
+    site.get_by_role("button", name="Add to cart").click()
+    site.get_by_role("button", name="Add to cart").click()
+    expect(site.locator("#n")).to_have_text("2")                          # its script runs, and saving data works
+    box = dlg.bounding_box()
+    vp = p.viewport_size
+    assert box["width"] >= vp["width"] - 2 and box["height"] >= vp["height"] - 2   # full-screen
+    dlg.get_by_role("button", name="Desktop view").click()
+    expect(dlg.get_by_role("button", name="Desktop view")).to_have_attribute("aria-pressed", "true")
+    dlg.get_by_role("button", name="Close website").click()
+    expect(dlg).to_be_hidden()
+    # the phone's Back button closes it too, and stays in the chat
+    p.get_by_role("button", name="View this website").click()
+    expect(p.get_by_role("dialog", name="Chai Shop")).to_be_visible()
+    p.go_back()
+    expect(p.get_by_role("dialog", name="Chai Shop")).to_be_hidden()
+    expect(p.locator("article.msg-assistant")).to_have_count(1)
+    # "Make app" from the preview opens the app maker
+    p.get_by_role("button", name="View this website").click()
+    p.get_by_role("dialog", name="Chai Shop").get_by_role("button", name="Make app").click()
+    expect(p.get_by_role("dialog", name="Make an Android app")).to_be_visible()
+    expect(p.get_by_role("dialog", name="Make an Android app").get_by_label("App name")).to_have_value("Chai Shop")
+    # the test's own start-up script (it sets localStorage) also runs inside the sandboxed page; that's the only error allowed
+    assert not [e for e in errors if "sandboxed" not in e], errors

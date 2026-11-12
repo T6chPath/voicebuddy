@@ -7,6 +7,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { Icon } from "./Icon";
 import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
+import { SitePreview } from "./SitePreview";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
 import { APK_REQUEST } from "../apk/apk";
@@ -57,7 +58,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [target, setTarget] = useState<Attachment | null>(null);
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const [masking, setMasking] = useState<Attachment | null>(null);
-  const [makeApp, setMakeApp] = useState<string | null>(null);         // "Make app": the page to turn into an APK
+  const [makeApp, setMakeApp] = useState<string | null>(null);
+  const [site, setSite] = useState<string | null>(null);              // "View site": the page shown full-screen         // "Make app": the page to turn into an APK
   // shared from WhatsApp, Gallery, Files… (Android share menu): into the message box of a new chat, like ChatGPT
   const convRef = useRef(conversationId);
   convRef.current = conversationId;
@@ -82,6 +84,11 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     const on = (e: Event) => { const h = (e as CustomEvent<{ html: string }>).detail?.html; if (h) setMakeApp(h); };
     window.addEventListener("zc-make-app", on);
     return () => window.removeEventListener("zc-make-app", on);
+  }, []);
+  useEffect(() => {
+    const on = (e: Event) => { const h = (e as CustomEvent<{ html: string }>).detail?.html; if (h) setSite(h); };
+    window.addEventListener("zc-view-site", on);
+    return () => window.removeEventListener("zc-view-site", on);
   }, []);
   const imagesOn = !!caps?.available;
   const liveReplies = useRef(new Set<string>());          // replies streamed in this session (auto-speak only these)
@@ -439,6 +446,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       <div className="sr-only" aria-live="polite" role="status">{announce}</div>
       {viewing && <Lightbox a={viewing} src={fileUrl(viewing.id)} download={fileUrl(viewing.id, true)} onClose={() => setViewing(null)} onAction={imageAction}
                               canPaint={!caps || caps.ops.includes("inpaint")} />}
+      {site !== null && <SitePreview html={site} onClose={() => setSite(null)} />}
       {makeApp !== null && <MakeAppDialog html={makeApp} onClose={() => setMakeApp(null)} />}
       {preview && <FilePreview f={preview} onClose={() => setPreview(null)} />}
       {dropping && <div className="drop-overlay" aria-hidden="true"><div><Icon name="clip" size={34} /><strong>Add anything</strong><span>Drop files here to add them to your message</span></div></div>}

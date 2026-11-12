@@ -56,6 +56,12 @@ export const Markdown = memo(function Markdown({ text, live = false }: { text: s
       });
       return;
     }
+    const vs = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-view-site]");
+    if (vs) {
+      const code = vs.closest(".code-block")?.querySelector("code")?.textContent ?? "";
+      window.dispatchEvent(new CustomEvent("zc-view-site", { detail: { html: code } }));
+      return;
+    }
     const mk = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-make-app]");
     if (mk) {
       const code = mk.closest(".code-block")?.querySelector("code")?.textContent ?? "";
