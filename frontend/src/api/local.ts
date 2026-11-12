@@ -11,6 +11,7 @@
 import { createSSEParser } from "./sse";
 import { parseSpec } from "../plot/spec";
 import { BOOK_PREFIX, DEEP_PREFIX, isBookMessage, isBookRequest, isDeepRequest } from "../lib/book";
+import { bookSpeed } from "../lib/bookModel";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
 import { gemini, ImageEngineError, measure, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
 import { device, deviceModel, type DeviceModel } from "../images/device";
@@ -682,7 +683,8 @@ async function* echoStream(messages: ChatMsg[], temperature: number, signal: Abo
  * to carry on from the exact spot, up to a few times, and join the parts into one reply. */
 const CONTINUE = "Your previous reply was cut off by the length limit. Continue exactly where it stopped: don't repeat anything, " +
   "don't add an introduction, and if you stopped inside a code block, just continue the code (don't start a new code block).";
-async function* longStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, maxParts = 10): AsyncGenerator<string> {
+async function* longStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, maxParts = 10,
+                           extra?: Record<string, unknown>): AsyncGenerator<string> {
   let sofar = "";
   for (let part = 0; part < maxParts; part++) {
     const info: { finish?: string } = {};
@@ -691,7 +693,7 @@ async function* longStream(model: string, messages: ChatMsg[], s: UserSettings, 
     const insideCode = part > 0 && (sofar.match(/^```/gm) || []).length % 2 === 1;
     let head = part > 0 ? "" : null as string | null;
     const fix = (h: string) => (insideCode ? h.replace(/^\s*```[\w+#.-]*[ \t]*\n/, "") : h);
-    for await (const t of serverStream(model, msgs, s, signal, info)) {
+    for await (const t of serverStream(model, msgs, s, signal, info, extra)) {
       if (head !== null) {
         head += t;
         if (head.length < 40 && !head.includes("\n")) continue;
@@ -709,13 +711,17 @@ async function* longStream(model: string, messages: ChatMsg[], s: UserSettings, 
   }
 }
 
-async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, info: { finish?: string } = {}): AsyncGenerator<string> {
+/** Services and models that refused the quicker-start setting this session. */
+const noSpeed = new Set<string>();
+
+async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings, signal: AbortSignal, info: { finish?: string } = {},
+                             extra?: Record<string, unknown>): AsyncGenerator<string> {
   const b = base(s);
   if (!b) throw new ApiError(400, "No model server set. Open Settings → Connection.", undefined, "config");
   let r: Response;
   try {
     r = await net(b + "/chat/completions", { method: "POST", signal, headers: headers(s),
-      body: JSON.stringify({ model, messages, stream: true, temperature: s.temperature }) });
+      body: JSON.stringify({ model, messages, stream: true, temperature: s.temperature, ...(extra || {}) }) });
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
     throw new ApiError(0, `Can't reach the model server at ${b}. Is it running and reachable from this device?`, undefined, "unreachable");
@@ -723,6 +729,8 @@ async function* serverStream(model: string, messages: ChatMsg[], s: UserSettings
   if (r.status === 401 || r.status === 403) throw new ApiError(401, "The AI service rejected the API key. Check it in Settings → Connection.", undefined, "auth");
   if (!r.ok || !r.body) {
     const body = await r.json().catch(() => null);
+    // a setting this model doesn't take (a quicker start for book pages): ask again without it, and don't send it again
+    if (extra && (r.status === 400 || r.status === 422)) { noSpeed.add(b + "|" + model); yield* serverStream(model, messages, s, signal, info); return; }
     throw new ApiError(r.status, errorMessage(r.status, body) || `The model server returned ${r.status}.`);
   }
   const queue: string[] = [];
@@ -1244,7 +1252,11 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
     created_at: into ? into.created_at : now() + 0.001 };
   await put("messages", row);
   h.onMeta?.({ user_message: userMsg, assistant_message: { id: aid, model: modelId } });
-  const gen = modelId === "echo" ? echoStream(history, s.temperature, signal) : longStream(modelId.replace(/^srv:/, ""), history, s, signal);
+  // a page of a "Learn as a book" book: a quick start where the model thinks before it writes
+  const asked = [...history].reverse().find((m) => m.role === "user");
+  const askedText = !asked ? "" : typeof asked.content === "string" ? asked.content : asked.content.map((p) => p.text || "").join("");
+  const extra = isBookMessage(askedText) && !noSpeed.has(base(s) + "|" + modelId.replace(/^srv:/, "")) ? bookSpeed(base(s), modelId.replace(/^srv:/, "")) : undefined;
+  const gen = modelId === "echo" ? echoStream(history, s.temperature, signal) : longStream(modelId.replace(/^srv:/, ""), history, s, signal, 10, extra);
   let lastSave = Date.now();
   try {
     for await (const t of gen) {

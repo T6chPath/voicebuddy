@@ -11,6 +11,7 @@ import { MakeAppDialog } from "./MakeAppDialog";
 import { SitePreview } from "./SitePreview";
 import { BookBar } from "./BookViews";
 import { bookReplyIds, bookRequest, findBook, type Book } from "../lib/book";
+import { bestBookModel, modelName } from "../lib/bookModel";
 import { PlayDialog, type PlayTarget } from "./PlayDialog";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
@@ -89,6 +90,13 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [site, setSite] = useState<string | null>(null);
   const [bookMode, setBookMode] = useState(false);                     // "Learn as a book": the next message is a topic to learn
   const [bookDeep, setBookDeepState] = useState(() => { try { return localStorage.getItem("zc.book.depth") === "deep"; } catch { return false; } });
+  // a book is written with the best fast, accurate model on the user's AI service (unless they'd rather keep the chat's own)
+  const [bookBest, setBookBestState] = useState(() => { try { return localStorage.getItem("zc.book.best") !== "0"; } catch { return true; } });
+  const setBookBest = (on: boolean) => {
+    setBookBestState(on);
+    try { localStorage.setItem("zc.book.best", on ? "1" : "0"); } catch { /* private mode: just for now */ }
+  };
+  const bestBook = useMemo(() => bestBookModel(models, model), [models, model]);
   const setBookDeep = (deep: boolean) => {                             // chapter by chapter, or every topic in depth (remembered)
     setBookDeepState(deep);
     try { localStorage.setItem("zc.book.depth", deep ? "deep" : "chapters"); } catch { /* private mode: just for now */ }
@@ -344,8 +352,9 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     return null;
   }
 
-  async function send(text: string, files: UploadedFile[], override?: ImageOptions): Promise<boolean> {
+  async function send(text: string, files: UploadedFile[], override?: ImageOptions, useModel?: string): Promise<boolean> {
     if (busy) return false;
+    const writeWith = useModel || model;
     // "convert this html to an apk": with a page attached (or one earlier in the chat), open the app maker directly
     if (APK_REQUEST.test(text) && (files.length || /\b(this|it|that|these|isko|iska|ise|html|page|file|website|site|code)\b/i.test(text))) {
       const page = await pageForApp(files);
@@ -358,7 +367,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     let cid = conversationId;
     if (!cid) {
       try {
-        const c = await api.createConversation(model || undefined);
+        const c = await api.createConversation(writeWith || undefined);
         cid = c.id;
         justCreated.current = c.id;
         onConversationChange(c, true);
@@ -376,7 +385,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     try {
       if (imageOpts.op === "generate") setImageOpts((o) => ({ ...o, op: undefined }));      // one-shot toggle
       setTarget(null);
-      await runStream((signal) => sendMessage(id, { content: text, model, file_ids: files.map((f) => f.id),
+      if (writeWith !== model) { setModel(writeWith); onConversationChange({ id, model: writeWith }); }   // the header shows who writes
+      await runStream((signal) => sendMessage(id, { content: text, model: writeWith, file_ids: files.map((f) => f.id),
         ...(image && Object.keys(image).length ? { image } : {}) },
         handlers(id, (server) => setMessages((ms) => ms.map((m) => (m.id === userMsg.id ? server : m)))), signal));
       return true;
@@ -576,7 +586,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
                   onSend={async (t, f) => {
                     if (!bookMode || !t.trim()) return send(t, f);
-                    const ok = await send(bookRequest(t, bookDeep), f);
+                    const ok = await send(bookRequest(t, bookDeep), f, undefined, bookBest && bestBook ? bestBook.id : undefined);
                     if (ok) setBookMode(false);
                     return ok;
                   }}
@@ -618,6 +628,16 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                       </div>
                       <p className="book-mode-hint">{bookDeep ? "Every topic of every chapter explained in depth — one topic per page, with examples and practice."
                         : "A full chapter on each page, with key points and practice."}</p>
+                      {bestBook && bestBook.id !== model ? (
+                        <button type="button" className="book-model" aria-pressed={bookBest} onClick={() => setBookBest(!bookBest)}
+                                title={bookBest ? "Tap to keep this chat's model instead" : "Tap to write the book with the best model"}>
+                          <Icon name={bookBest ? "check" : "wand"} size={14} />
+                          <span>{bookBest ? <>Written by <strong>{modelName(bestBook.id)}</strong> — the fastest accurate model on your connection</>
+                            : <>Written by this chat's model, <strong>{modelName(model)}</strong>. Tap for the best: {modelName(bestBook.id)}</>}</span>
+                        </button>
+                      ) : bestBook ? (
+                        <p className="book-model on"><Icon name="check" size={14} /><span>Written by <strong>{modelName(bestBook.id)}</strong> — the fastest accurate model on your connection</span></p>
+                      ) : null}
                     </div>) : undefined} />
       </div>
     </main>

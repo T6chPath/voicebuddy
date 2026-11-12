@@ -979,6 +979,18 @@ button.fc-body:hover { background: var(--bg-soft); }
 .book-depth button[aria-pressed="false"]:hover { color: var(--text); }
 .book-depth button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-mode-row > .icon-btn { flex: none; }
+/* which model writes the book (the best fast, accurate one on the user's AI service — or the chat's own, by choice) */
+.book-model { display: flex; align-items: flex-start; gap: 7px; width: fit-content; max-width: calc(100% - 48px); margin: 5px 0 0 36px; padding: 6px 11px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elev); color: var(--text-soft); font: inherit; font-size: .78em;
+  line-height: 1.35; text-align: left; cursor: pointer; }
+button.book-model:hover { border-color: var(--border-strong); }
+.book-model[aria-pressed="true"], .book-model.on { border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, var(--bg-elev)); color: var(--text); }
+.book-model svg { flex: none; margin-top: 1px; color: var(--ok); }
+.book-model[aria-pressed="false"] svg { color: var(--accent); }
+.book-model strong { font-weight: 600; }
+p.book-model { cursor: default; }
+.book-model:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-mode-hint { margin: 0; padding: 0 8px 0 36px; font-size: .8em; line-height: 1.35; color: var(--text-soft); }
 /* its contents: chapters with their topics; topics not explained yet can be explained now */
 .book-toc li li { font-size: 1em; }

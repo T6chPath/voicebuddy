@@ -5,7 +5,7 @@ import re
 
 from playwright.sync_api import expect
 
-from test_camera_pdf_read import FakeAI, open_app, wait_reply
+from test_camera_pdf_read import HTML, FakeAI, open_app, wait_reply
 
 CH1 = """# Understanding Electricity
 *For curious beginners — by the end you'll be able to explain how your home's wiring works.*
@@ -323,3 +323,76 @@ def test_write_an_earlier_page_again(browser):
     expect(p.locator("article.msg-book").nth(0)).to_contain_text("even you")
     expect(p.locator("article.msg-book").nth(1)).to_contain_text("Current is the flow of charge")
     assert not errors, errors
+
+
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+class GeminiLike(BookAI):
+    """A Gemini-like service: several models, and it refuses the quicker-start setting (the app asks again without it)."""
+    MODELS = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.1-pro-preview"]
+
+    def __init__(self, replies):
+        super().__init__(replies)
+        self.bodies = []
+
+    def handle(self, route):
+        req = route.request
+        cors = {"access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, OPTIONS"}
+        if req.method == "OPTIONS":
+            return route.fulfill(status=204, headers=cors)
+        if req.url.endswith("/models"):
+            return route.fulfill(status=200, headers=cors, content_type="application/json", body=json.dumps({"data": [{"id": m} for m in self.MODELS]}))
+        body = json.loads(req.post_data)
+        self.bodies.append(body)
+        if "reasoning_effort" in body:
+            return route.fulfill(status=400, headers=cors, content_type="application/json", body=json.dumps({"error": {"message": 'Unknown name "reasoning_effort"'}}))
+        return super().handle(route)
+
+
+def test_book_written_with_the_best_model(browser):
+    """A book is written with the best fast, accurate model on the user's service (here: the newest Gemini Flash), with a
+    quick start for models that think first; the user can keep the chat's own model instead."""
+    ai = GeminiLike([CH1, CH2, "Because rubbing moves electrons onto it."])
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    settings = {"server_url": GEMINI, "api_key": "test-key", "default_model": "srv:gemini-2.5-flash"}
+    ctx.add_init_script(f"localStorage.setItem('zc.local.settings', {json.dumps(json.dumps(settings))});")
+    ctx.route(GEMINI + "/**", ai.handle)
+    p = ctx.new_page()
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
+    p.goto(HTML.as_uri())
+    expect(p.get_by_label("Model")).to_have_value("srv:gemini-2.5-flash")
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
+    chip = p.locator(".book-mode .book-model")
+    expect(chip).to_have_attribute("aria-pressed", "true")
+    expect(chip).to_contain_text("Written by Gemini 3.8 Flash")
+    chip.click()                                                                  # keep the chat's own model…
+    expect(chip).to_have_attribute("aria-pressed", "false")
+    expect(chip).to_contain_text("this chat's model, Gemini 2.5 Flash")
+    chip.click()                                                                  # …or not
+    expect(chip).to_have_attribute("aria-pressed", "true")
+    box = p.locator("#composer-input")
+    box.fill("electricity")
+    box.press("Enter")
+    wait_reply(p, 1)
+    expect(p.locator("article.msg-book")).to_contain_text("Everything around you is made of atoms")
+    assert [b["model"] for b in ai.bodies] == ["gemini-3.8-flash", "gemini-3.8-flash"], ai.bodies
+    assert ai.bodies[0]["reasoning_effort"] == "low" and "reasoning_effort" not in ai.bodies[1]     # refused once: asked again without
+    expect(p.get_by_label("Model")).to_have_value("srv:gemini-3.8-flash")         # the chat now writes with it (shown at the top)
+    # the next page: the same model, and the setting it refused isn't sent again
+    p.get_by_role("region", name="Book: Understanding Electricity").get_by_role("button", name=re.compile("^Next")).click()
+    wait_reply(p, 2)
+    assert ai.bodies[-1]["model"] == "gemini-3.8-flash" and "reasoning_effort" not in ai.bodies[-1] and len(ai.bodies) == 3
+    # a question between pages: the same model, no book setting
+    box.fill("why does a rubbed balloon stick to the wall?")
+    box.press("Enter")
+    wait_reply(p, 3)
+    assert ai.bodies[-1]["model"] == "gemini-3.8-flash" and "reasoning_effort" not in ai.bodies[-1]
+    # a new book in this chat: the model in use already is the best — said so, nothing to switch
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
+    expect(p.locator(".book-mode p.book-model")).to_contain_text("Written by Gemini 3.8 Flash")
+    assert not errors, errors
+    ctx.close()
