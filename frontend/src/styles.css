@@ -571,6 +571,9 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
 .callout-example .callout-label { color: var(--text-soft); }
 .callout-summary { background: var(--grad-soft); --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m12 2 3 7 7 .6-5.3 4.6 1.6 7.3L12 17.8 5.7 21.5l1.6-7.3L2 9.6 9 9z'/%3E%3C/svg%3E"); }
 .callout-summary .callout-label { color: var(--accent); }
+.callout-define { background: var(--bg-elev); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+  --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 2h12v20l-6-4.5L6 22z'/%3E%3C/svg%3E"); }
+.callout-define .callout-label { color: var(--accent); }
 .callout strong { background: none !important; }
 
 @media (forced-colors: active) { .callout { border: 1px solid CanvasText; } .callout-label::before { display: none; } }
@@ -805,17 +808,77 @@ button.fc-body:hover { background: var(--bg-soft); }
 @media (prefers-reduced-motion: reduce) { .tool, .ideas .suggestion svg { transition: none; } .tool:hover { transform: none; } }
 @media (max-width: 380px) { .tool-label { font-size: .8em; } .tool-ico { width: 40px; height: 40px; } .empty.home h2 { font-size: 1.85em; } }
 
-/* ---------- "Learn as a book": pages in a reading style ---------- */
-.msg-book .msg-body .md { --read: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif", Georgia, serif;
+/* ---------- "Learn as a book": pages that read like a well-made book ---------- */
+/* each page is a sheet of paper in the conversation */
+.msg-book .msg-body { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 22px; padding: 20px 18px 6px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(11, 27, 51, .04), 0 16px 34px -24px rgba(11, 27, 51, .4); }
+.msg-book .msg-body .md { --read: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif", "Source Serif Pro", Georgia, serif;
   font-family: var(--read); font-size: 1.06em; line-height: 1.78; }
-.msg-book .md h1 { font: 700 1.9em/1.15 var(--display); letter-spacing: -.02em; margin: .2em 0 .25em; }
-.msg-book .md h1 + p em, .msg-book .md h1 + p > em:only-child { color: var(--text-soft); }
-.msg-book .md h2 { font: 700 1.35em/1.25 var(--display); margin: 2em 0 .7em; padding-top: .9em; border-top: 3px solid var(--accent); }
-.msg-book .md h2:first-child { margin-top: .4em; }
-.msg-book .md h3 { font: 600 1.08em/1.3 var(--display); margin: 1.6em 0 .5em; color: var(--accent); }
-.msg-book .md ol, .msg-book .md ul { padding-left: 1.4em; }
 .msg-book .md p { margin: 0 0 .95em; }
-.book-chip { background: var(--accent-soft); }
+.msg-book .md p, .msg-book .md li { text-wrap: pretty; }
+.msg-book .md ol, .msg-book .md ul { padding-left: 1.4em; }
+.msg-book .md li::marker { color: var(--accent); font-family: var(--display); font-weight: 600; }
+/* the cover: the book's title across the top of its first page */
+.msg-book .md h1 { font: 700 1.9em/1.15 var(--display); letter-spacing: -.02em; margin: .2em 0 .25em; }
+.msg-book .md > h1:first-child { margin: -20px -18px 18px; padding: 30px 22px 26px; color: #fff; font-size: 1.8em; line-height: 1.14; text-wrap: balance;
+  background: radial-gradient(circle at 88% 20%, rgba(255, 255, 255, .2) 0 44px, transparent 45px),
+    radial-gradient(circle at 104% 120%, rgba(255, 255, 255, .13) 0 124px, transparent 125px), var(--grad); }
+.msg-book .md > h1:first-child::before { content: "A book by zenvqo"; display: block; margin-bottom: 12px; font: 500 .4em/1.2 var(--display); opacity: .86; }
+.msg-book .md > h1:first-child + p { font-size: 1.05em; color: var(--text-soft); margin-bottom: 1.5em; }
+/* contents: chapters with their topics */
+.msg-book .md h2.contents-head { margin: 1.3em 0 .8em; padding: 0; border: 0; font: 700 1.1em/1.3 var(--display); color: var(--text); }
+.msg-book .md h2.contents-head + ol { list-style: none; counter-reset: toc; display: grid; gap: 14px; margin: 0 0 1.4em; padding: 0; }
+.msg-book .md h2.contents-head + ol > li { counter-increment: toc; position: relative; min-height: 30px; margin: 0; padding-left: 44px; line-height: 1.5; color: var(--text-soft); }
+.msg-book .md h2.contents-head + ol > li::before { content: counter(toc); position: absolute; left: 0; top: -2px; width: 31px; height: 31px; border-radius: 10px;
+  display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font: 700 .86em/1 var(--display); }
+.msg-book .md h2.contents-head + ol > li > p { margin: 0; }
+.msg-book .md h2.contents-head + ol > li > strong:first-child,
+.msg-book .md h2.contents-head + ol > li > p:first-child > strong:first-child { font-family: var(--display); font-weight: 600; color: var(--text); }
+.msg-book .md h2.contents-head + ol ul { list-style: none; display: grid; gap: 3px; margin: 7px 0 0; padding: 0; font-size: .95em; }
+.msg-book .md h2.contents-head + ol ul li { margin: 0; color: var(--text); }
+.msg-book .md .sec-num { display: inline-block; min-width: 2.5em; color: var(--accent); font: 600 .84em/1 var(--display); font-variant-numeric: tabular-nums; }
+.msg-book .md .sec-sep { display: none; }
+/* chapter openers: a short brand rule, "Chapter 3" over the title and a big faint chapter number */
+.msg-book .md h2 { font: 700 1.3em/1.25 var(--display); margin: 2em 0 .7em; padding-top: .9em; border-top: 3px solid var(--accent); }
+.msg-book .md h2.chapter-head { position: relative; z-index: 0; display: grid; gap: 6px; margin: 2.3em 0 1em; padding: 22px 2.2em 0 0; border: 0; font-size: 1.5em; }
+.msg-book .md h2.chapter-head:first-child { margin-top: .3em; }
+.msg-book .md h2.chapter-head::before { content: ""; position: absolute; top: 0; left: 0; width: 54px; height: 5px; border-radius: 5px; background: var(--grad); }
+.msg-book .md h2.chapter-head::after { content: attr(data-chapter); position: absolute; z-index: -1; top: 6px; right: -2px; font: 700 2.9em/1 var(--display);
+  letter-spacing: -.05em; color: var(--accent-soft); }
+.msg-book .md .ch-label { font: 600 .5em/1.2 var(--display); color: var(--accent); }
+.msg-book .md .ch-sep { display: none; }
+.msg-book .md .ch-title { font: 700 1em/1.2 var(--display); color: var(--text); text-wrap: balance; }
+.msg-book .md h2.chapter-head + p { font-size: 1.04em; color: var(--text-soft); }
+/* one drop cap per page: where a chapter opens, or where a topic page begins */
+.msg-book .md h2.chapter-head + p::first-letter,
+.msg-book .md > h3.topic-head:first-child + p::first-letter { float: left; margin: .08em .1em 0 0; font: 700 3.1em/.8 var(--read); color: var(--accent); }
+/* topics: the number as a small tab beside the title */
+.msg-book .md h3 { font: 600 1.08em/1.3 var(--display); margin: 1.6em 0 .5em; color: var(--accent); }
+.msg-book .md h3.topic-head { display: flex; align-items: flex-start; gap: 10px; margin: 1.9em 0 .8em; font: 700 1.2em/1.28 var(--display); color: var(--text); }
+.msg-book .md h3.topic-head:first-child { margin-top: .2em; }
+.msg-book .md .topic-num { flex: none; margin-top: .1em; padding: 5px 8px; border-radius: 9px; background: var(--accent-soft); color: var(--accent);
+  font: 700 .7em/1 var(--display); font-variant-numeric: tabular-nums; }
+.msg-book .md h4 { font: 700 1.02em/1.3 var(--display); color: var(--text); margin: 1.6em 0 .45em; }
+/* a chapter's review */
+.msg-book .md .review-head { margin: 2.2em 0 .9em; padding: 14px 16px; border-radius: 16px; background: var(--grad-soft); color: var(--accent); font: 700 1.08em/1.3 var(--display); }
+/* examples, definitions, things to remember, common mistakes */
+.msg-book .callout { font-family: var(--read); max-width: none; }
+.msg-book .callout-label { font-family: var(--display); }
+.msg-book .callout-example { background: var(--bg-soft); box-shadow: none; border-left: 4px solid var(--accent); border-radius: 6px 16px 16px 6px; }
+.msg-book .callout-example .callout-label { color: var(--accent); }
+.msg-book .md hr { height: auto; margin: 1.8em 0; border: 0; text-align: center; }
+.msg-book .md hr::after { content: "⁂"; color: var(--accent); font-size: 1.1em; letter-spacing: .3em; }
+@media (max-width: 380px) {
+  .msg-book .msg-body { padding: 18px 14px 4px; border-radius: 18px; }
+  .msg-book .md > h1:first-child { margin: -18px -14px 16px; padding: 26px 18px 22px; }
+}
+/* asking for the next page: a page turn, not a chat bubble */
+.msg-turn { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
+.msg-turn::before, .msg-turn::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.turn-pill { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 82%; padding: 6px 13px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font: 600 .8em/1.3 var(--display); }
+.turn-pill svg { flex: none; }
+.turn-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-bar { margin: 6px 0 22px; padding: 16px 16px 14px; border-radius: 20px; background: var(--bg-elev); border: 1px solid var(--border); display: grid; gap: 12px; }
 .book-head { display: flex; align-items: center; gap: 12px; }
 .book-ico { width: 42px; height: 42px; flex: none; border-radius: 13px; display: grid; place-items: center; color: #fff; background: var(--grad); }
@@ -855,8 +918,6 @@ button.fc-body:hover { background: var(--bg-soft); }
 .book-depth button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-mode-row > .icon-btn { flex: none; }
 .book-mode-hint { margin: 0; padding: 0 8px 0 36px; font-size: .8em; line-height: 1.35; color: var(--text-soft); }
-/* an in-depth book's pages: each topic's parts ("The big idea", "Step by step", "Worked examples" …) */
-.msg-book .md h4 { font: 650 1.01em/1.3 var(--display); color: var(--text); margin: 1.5em 0 .45em; }
 /* its contents: chapters with their topics; topics not explained yet can be explained now */
 .book-toc li li { font-size: 1em; }
 .book-toc.deep > ol { gap: 4px; }

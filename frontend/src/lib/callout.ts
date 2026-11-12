@@ -4,6 +4,7 @@ const KINDS: [RegExp, string][] = [
   [/^(note|notes|remember|did you know|fun fact|key point|key points)$/i, "note"],
   [/^(important|warning|caution|careful|common mistake|watch out|danger)$/i, "warn"],
   [/^(example|for example|e\.g\.|analogy|real-life example|in real life)$/i, "example"],
+  [/^(definition|definitions|define|theorem|law|rule|principle|key idea|key concept)$/i, "define"],
   [/^(in short|summary|tl;?dr|in summary|key takeaway|takeaway|bottom line|short answer|answer|result|formula)$/i, "summary"],
 ];
 export function calloutKind(label: string): string {

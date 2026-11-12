@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Message } from "../api/types";
-import { bookMarkdown, bookReplyIds, bookRequest, chapterDone, chaptersIn, continueRequest, findBook, isBookMessage, parseContents, plannedTopics,
+import { bookMarkdown, bookReplyIds, bookRequest, bookTurnLabel, chapterDone, chaptersIn, continueRequest, findBook, isBookMessage, parseContents, plannedTopics,
   reviewsIn, topicAt, topicRequest, topicsIn } from "./book";
 
 const FIRST = `# Understanding Electricity
@@ -165,4 +165,14 @@ test("in-depth book whose topics weren't listed: on until the chapter's review",
   assert.equal(findBook([msg("u", "user", bookRequest("x")), msg("a", "assistant", first)])!.nextTopic, null);
   assert.equal(isBookMessage("Teach me as a book, every topic in depth: x") && isBookMessage("Continue the book: explain topic 1.2"), true);
   assert.equal(isBookMessage("Teach me about books"), false);
+});
+
+test("book messages show as short page-turn labels", () => {
+  assert.equal(bookTurnLabel(bookRequest("electricity")), "Book: Electricity");
+  assert.equal(bookTurnLabel(bookRequest("quantum physics", true)), "Book in depth: Quantum physics");
+  assert.equal(bookTurnLabel(continueRequest(3, "Circuits at home")), "Chapter 3 — Circuits at home");
+  assert.equal(bookTurnLabel(topicRequest({ n: 1, m: 2, title: "Static electricity", chapter: "Charge", start: false, endsChapter: true, last: false })), "1.2 Static electricity");
+  assert.equal(bookTurnLabel(topicRequest({ n: 2, m: 1, title: "What current is", chapter: "Current and voltage", start: true, endsChapter: false, last: false })), "Chapter 2 · 2.1 What current is");
+  assert.equal(bookTurnLabel(topicRequest({ n: 4, m: 3, title: "", chapter: "", start: false, endsChapter: true, last: true })), "4.3");
+  assert.equal(bookTurnLabel("hello"), "hello");
 });

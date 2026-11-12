@@ -63,7 +63,8 @@ def test_learn_a_topic_as_a_book(browser):
     box.press("Enter")
     wait_reply(p, 1)
     expect(chip).to_have_count(0)                                         # book mode is for one message
-    expect(p.locator("article.msg-user").last).to_contain_text("Teach me as a book: electricity")
+    expect(p.locator("article.msg-turn").last).to_have_text("Book: Electricity")
+    expect(p.locator("article.msg-turn").last).to_have_attribute("title", "Teach me as a book: electricity")
     expect(p.locator(".chat-title")).to_have_text("Book: Electricity")                # the chat is named after the topic
     req = ai.requests[0]
     assert "Learn as a book" in req["messages"][0]["content"] and "## Chapter N: Title" in req["messages"][0]["content"]
@@ -126,20 +127,15 @@ DEEP1 = """# Electricity, Topic by Topic
 Everything around you is made of atoms.
 
 ### 1.1 Atoms and electrons
-#### The big idea
-An atom is a nucleus with electrons around it.
+Everything around you is built from atoms: a tiny nucleus with electrons around it.
 
-#### Step by step
 Electrons carry a negative charge; protons a positive one.
 
-#### Check yourself
-1. What charge does an electron carry?
+> **Example:** An atom with 6 protons and 7 electrons has a charge of $-e$.
 
-#### Answers
-1. Negative.
+> **Definition:** Charge is the property that makes particles push or pull on each other.
 """
 DEEP2 = """### 1.2 Static electricity
-#### The big idea
 Rubbing moves electrons from one thing to another.
 
 ### Chapter 1 review
@@ -150,11 +146,9 @@ DEEP3 = """## Chapter 2: Current and voltage
 Now the charges start to move.
 
 ### 2.1 What current is
-#### The big idea
 Current is charge flowing past a point each second.
 """
 DEEP4 = """### 2.2 Voltage
-#### The big idea
 Voltage is the push that makes charge flow.
 
 ### Chapter 2 review
@@ -185,10 +179,12 @@ def test_learn_every_topic_in_depth(browser):
     box.fill("electricity")
     box.press("Enter")
     wait_reply(p, 1)
-    expect(p.locator("article.msg-user").last).to_contain_text("Teach me as a book, every topic in depth: electricity")
+    expect(p.locator("article.msg-turn").last).to_have_text("Book in depth: Electricity")
+    expect(p.locator("article.msg-turn").last).to_have_attribute("title", "Teach me as a book, every topic in depth: electricity")
     expect(p.locator(".chat-title")).to_have_text("Book in depth: Electricity")
     system = ai.requests[0]["messages"][0]["content"]
-    assert "Teach me as a book, every topic in depth:" in system and "#### The big idea" in system and "### Chapter N review" in system
+    assert "Teach me as a book, every topic in depth:" in system and "### Chapter N review" in system
+    assert "Never use fixed section labels" in system and '"**Example:**"' in system and "The big idea\" (" not in system
     expect(p.locator("article.msg-assistant").last).to_have_class(re.compile(r"\bmsg-book\b"))
     bar = p.get_by_role("region", name="Book: Electricity, Topic by Topic")
     expect(bar).to_contain_text("1 of 4 topics explained · Chapter 1 of 2")
@@ -198,6 +194,7 @@ def test_learn_every_topic_in_depth(browser):
     bar.get_by_role("button", name="Next: 1.2 — Static electricity").click()
     wait_reply(p, 2)
     assert ai.requests[-1]["messages"][-1]["content"] == "Continue the book: explain topic 1.2 — Static electricity, then end Chapter 1 with its review"
+    expect(p.locator("article.msg-turn").last).to_have_text("1.2 Static electricity")
     # a doubt between pages: answered normally, and the book is still a tap away
     box.fill("why does my hair stand up after combing?")
     box.press("Enter")
@@ -227,9 +224,25 @@ def test_learn_every_topic_in_depth(browser):
     expect(bar).to_contain_text("All 4 topics explained — book complete")
     expect(bar.get_by_role("button", name=re.compile("^Next"))).to_have_count(0)
     expect(bar.get_by_role("button", name="Save book as PDF")).to_have_class(re.compile(r"\bprimary\b"))
-    # the topic pages read like a book: the parts of each topic are headings of their own
-    h4 = p.locator("article.msg-book .md h4").first
-    expect(h4).to_have_text("The big idea")
+    # the pages read like a book: a cover, contents, chapter openers, numbered topics, examples and definitions in boxes
+    first = p.locator("article.msg-book").first
+    expect(first.locator(".md > h1:first-child")).to_have_text("Electricity, Topic by Topic")
+    expect(first.locator("h2.contents-head + ol > li")).to_have_count(2)
+    expect(first.locator("h2.contents-head + ol .sec-num").first).to_have_text("1.1")
+    expect(first.locator('h2.chapter-head[data-chapter="1"] .ch-title')).to_have_text("What is electric charge?")
+    expect(first.locator('h3.topic-head[data-topic="1.1"] .topic-num')).to_have_text("1.1")
+    expect(first.locator(".callout-example .callout-label")).to_have_text("Example")
+    expect(first.locator(".callout-define .callout-label")).to_have_text("Definition")
+    expect(p.locator(".msg-book .review-head")).to_have_count(2)
+    cover = first.locator(".md > h1:first-child").evaluate("e => getComputedStyle(e).backgroundImage")
+    assert "gradient" in cover, cover
+    expect(p.locator("article.msg-turn")).to_have_count(4)                # the doubt stays a normal message
+    expect(p.locator("article.msg-user:not(.msg-turn)")).to_have_count(1)
+    # the whole book as a PDF: a cover page, then each chapter on a page of its own
+    with p.expect_download(timeout=90_000) as dl:
+        bar.get_by_role("button", name="Save book as PDF").click()
+    pdf = open(dl.value.path(), "rb").read()
+    assert pdf.startswith(b"%PDF") and len(re.findall(rb"/Type /Page\b(?!s)", pdf)) >= 3
     # the choice is remembered for the next book
     p.get_by_role("button", name="Add photos, files and more").click()
     p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()

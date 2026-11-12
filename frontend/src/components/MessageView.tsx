@@ -12,6 +12,7 @@ import { copyText, Markdown } from "./Markdown";
 import { PdfButton, PdfCard, PdfPending } from "./PdfViews";
 import { wantsPdf } from "../pdf/pdf";
 import { NowSpeaking, SpeakControls } from "./SpeechViews";
+import { bookTurnLabel, isBookMessage } from "../lib/book";
 
 interface Props {
   m: Message;
@@ -86,6 +87,12 @@ export const MessageView = memo(function MessageView({ m, book, isLast, busy, mo
   const [copied, setCopied] = useState(false);
   const streaming = m.status === "streaming";
   const label = m.role === "user" ? "You" : models.find((x) => x.id === m.model)?.label || "Assistant";
+  // "Learn as a book": the request for the next page shows as a page turn, not as a chat bubble
+  if (m.role === "user" && !m.attachments.length && isBookMessage(m.content)) return (
+    <article className="msg msg-user msg-turn" aria-label="Your message" title={m.content}>
+      <span className="turn-pill"><Icon name="book" size={14} /><span>{bookTurnLabel(m.content)}</span></span>
+    </article>
+  );
   return (
     <article className={`msg msg-${m.role}${book ? " msg-book" : ""}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
       <header className="msg-head">

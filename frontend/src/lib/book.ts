@@ -22,6 +22,23 @@ export function continueRequest(n: number, title: string): string {
   return `${CONTINUE_PREFIX}write Chapter ${n}${title ? ` — ${title}` : ""}`;
 }
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** How a "Learn as a book" message shows in the conversation: a short page-turn label, not the instruction sent to
+ *  the AI ("Continue the book: explain topic 1.2 — Static electricity, then end Chapter 1 with its review" → "1.2 Static
+ *  electricity"). */
+export function bookTurnLabel(t: string): string {
+  if (isDeepRequest(t)) return `Book in depth: ${cap(t.slice(DEEP_PREFIX.length).trim())}`;
+  if (t.startsWith(BOOK_PREFIX)) return `Book: ${cap(t.slice(BOOK_PREFIX.length).trim())}`;
+  if (!isBookContinue(t)) return t;
+  const rest = t.slice(CONTINUE_PREFIX.length).trim();
+  const ch = rest.match(/^write Chapter (\d+)(?: — (.+))?$/);
+  if (ch) return `Chapter ${ch[1]}${ch[2] ? ` — ${ch[2]}` : ""}`;
+  const tp = rest.match(/^(?:start Chapter (\d+)(?: — .+?)?, and )?explain topic (\d+\.\d+)(?: — (.+?))?(?:, then end Chapter \d+ with its review)?(?: \(the last topic of the book\))?$/);
+  if (tp) return `${tp[1] ? `Chapter ${tp[1]} · ` : ""}${tp[2]}${tp[3] ? ` ${tp[3]}` : ""}`;
+  return cap(rest);
+}
+
 /** The next topic of an in-depth book — and what else that page has to do. */
 export interface NextTopic {
   n: number;               // chapter

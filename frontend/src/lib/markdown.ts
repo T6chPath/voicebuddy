@@ -80,6 +80,39 @@ marked.use({
       if (!kind) return `<blockquote>${body}</blockquote>`;
       return `<aside class="callout callout-${kind}" role="note"><p class="callout-label">${escapeHtml(label)}</p>${body}</aside>`;
     },
+    heading({ tokens, depth }: Tokens.Heading) {
+      // book headings get a shape of their own: "Chapter 3: Title" (a chapter opener), "2.4 Title" (a numbered topic),
+      // "Chapter 3 review", "Contents" — the words stay the same, so outside a book they read as before
+      const inner = this.parser.parseInline(tokens);
+      const text = inner.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").trim();
+      if (depth === 2) {
+        const ch = text.match(/^Chapter\s+(\d{1,3})\s*[:.—–-]\s*(\S.*)$/i);
+        if (ch) {
+          const title = inner.replace(/^(?:<(strong|em)>)?\s*Chapter\s+\d{1,3}\s*(?:<\/(?:strong|em)>)?\s*[:.—–-]\s*(?:<\/(?:strong|em)>)?\s*/i, "");
+          return `<h2 class="chapter-head" data-chapter="${+ch[1]}"><span class="ch-label">Chapter ${+ch[1]}</span><span class="ch-sep">: </span>` +
+            `<span class="ch-title">${title}</span></h2>\n`;
+        }
+        if (/^(?:contents|table of contents)$/i.test(text)) return `<h2 class="contents-head">${inner}</h2>\n`;
+      }
+      if (depth === 3 || depth === 4) {
+        const rv = text.match(/^Chapter\s+(\d{1,3})\s*(?:[:—–-]\s*)?(?:review|recap|summary)\b/i);
+        if (rv) return `<h${depth} class="review-head" data-review="${+rv[1]}">${inner}</h${depth}>\n`;
+        const tp = depth === 3 && text.match(/^(?:Topic\s+)?(\d{1,2})\.(\d{1,2})(?![\d.]\d)\.?\s*[:.—–-]?\s+(\S.*)$/i);
+        if (tp) {
+          const id = `${+tp[1]}.${+tp[2]}`;
+          const title = inner.replace(/^(?:<(strong|em)>)?\s*(?:Topic\s+)?\d{1,2}\.\d{1,2}\.?\s*(?:<\/(?:strong|em)>)?\s*[:.—–-]?\s*/i, "");
+          return `<h3 class="topic-head" data-topic="${id}"><span class="topic-num">${id}</span> <span class="topic-title">${title}</span></h3>\n`;
+        }
+      }
+      return `<h${depth}>${inner}</h${depth}>\n`;
+    },
+    listitem(item: Tokens.ListItem) {
+      // "1.2 Static electricity" (a numbered section, as in a book's contents): the number set apart
+      const body = this.parser.parse(item.tokens)
+        .replace(/^(<p>)?(<strong>)?(\d{1,2}\.\d{1,2})(?![\d.]\d)(\.?)(<\/strong>)?(\s*[:.—–-]?\s+)/, (_m, p = "", b = "", num: string, dot = "", eb = "", sep: string) =>
+          `${p}${b}<span class="sec-num">${num}</span>${eb}<span class="sec-sep">${dot}${sep}</span>`);
+      return `<li>${body}</li>\n`;
+    },
     table(token: Tokens.Table) {
       // wrap tables so they scroll horizontally on phones instead of breaking the layout
       const head = token.header.map((c) => `<th${c.align ? ` style="text-align:${c.align}"` : ""}>${this.parser.parseInline(c.tokens)}</th>`).join("");

@@ -4,13 +4,12 @@ import { bookMarkdown, chapterDone, continueRequest, plannedTopics, topicAt, top
 import { makePdf, openPdf, sharePdf, type PdfResult } from "../pdf/pdf";
 import { Icon } from "./Icon";
 
-/** Scrolls the conversation to a page heading: a chapter ("Chapter 3") or a topic ("2.4"). */
-function goTo(match: RegExp, level: "h2" | "h3") {
-  const h = [...document.querySelectorAll<HTMLElement>(`.msg-book .msg-body ${level}`)].find((x) => match.test((x.textContent || "").trim()));
-  h?.scrollIntoView({ behavior: "smooth", block: "start" });
+/** Scrolls the conversation to a page heading: a chapter ("Chapter 3") or a topic ("2.4") — the first page that has it. */
+function goTo(selector: string) {
+  document.querySelector<HTMLElement>(`.msg-book .msg-body ${selector}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-const goToChapter = (n: number) => goTo(new RegExp(`^Chapter\\s+${n}\\b`, "i"), "h2");
-const goToTopic = (id: string) => goTo(new RegExp(`^(?:Topic\\s+)?${id.replace(".", "\\.")}(?![\\d.]\\d)`), "h3");
+const goToChapter = (n: number) => goTo(`h2[data-chapter="${n}"]`);
+const goToTopic = (id: string) => goTo(`h3[data-topic="${id}"]`);
 
 const topicLabel = (t: NextTopic) => `${t.start ? `Chapter ${t.n} · ` : ""}${t.n}.${t.m}${t.title ? ` — ${t.title}` : ""}`;
 
@@ -40,7 +39,7 @@ export function BookBar({ book, messages, busy, onNext, compact = false }: { boo
 
   async function save() {
     setPdf({ status: "making" });
-    try { setPdf({ status: "saved", result: await makePdf(book.title, bookMarkdown(messages, book)) }); }
+    try { setPdf({ status: "saved", result: await makePdf(book.title, bookMarkdown(messages, book), { book: true }) }); }
     catch (e) { setPdf({ status: "error", error: (e as Error).message || "Couldn't make the PDF." }); }
   }
 

@@ -105,6 +105,55 @@ body { margin: 0; font: 11.5pt/1.55 system-ui, -apple-system, "Segoe UI", Roboto
 .pdf-doc .pdf-plot { margin: 10px 0; text-align: center; break-inside: avoid; }
 .pdf-doc .pdf-plot img { width: 100%; max-width: 15cm; border: 1px solid #e5e7eb; border-radius: 6px; }
 .pdf-foot { margin-top: 24px; color: #888; font-size: 8.5pt; border-top: 1px solid #eee; padding-top: 6px; }
+.pdf-doc .callout-define { background: #fff !important; border: 1.5px solid #8db8f5; } .pdf-doc .callout-define .callout-label { color: #0060e6; }
+
+/* ---- a book: a cover, each chapter on a new page, book type ---- */
+.pdf-book { --serif: "Noto Serif", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; --sans: Poppins, Roboto, system-ui, sans-serif; }
+.pdf-book .md { font: 11.4pt/1.64 var(--serif); color: #1a2438; }
+.pdf-book .md p { margin: 0 0 3.2mm; }
+.pdf-book .pdf-cover { break-after: page; page-break-after: always; height: 246mm; display: flex; flex-direction: column; margin: 0; padding: 0; border: 0; }
+.pdf-book .cover-art { flex: 0 0 64%; display: flex; flex-direction: column; justify-content: flex-end; padding: 16mm 13mm 14mm; border-radius: 5mm; color: #fff;
+  background: radial-gradient(circle at 84% 18%, rgba(255, 255, 255, .22) 0 21mm, transparent 21.3mm),
+    radial-gradient(circle at 104% 112%, rgba(255, 255, 255, .13) 0 62mm, transparent 62.3mm), linear-gradient(140deg, #1e8ffe 0%, #0060e6 58%, #0a46b8 100%);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .cover-kicker { margin: 0 0 5mm; font: 500 10.5pt/1.3 var(--sans); opacity: .9; }
+.pdf-book .pdf-cover h1 { margin: 0; font: 700 29pt/1.12 var(--sans); letter-spacing: -.01em; color: #fff; }
+.pdf-book .cover-sub { margin: 10mm 3mm 0; font: italic 13pt/1.55 var(--serif); color: #3a4b66; }
+.pdf-book .cover-meta { margin: auto 3mm 0; font: 9.5pt/1.4 var(--sans); color: #6b7a93; }
+.pdf-book .md h2.contents-head { margin: 0 0 7mm; padding: 0; border: 0; font: 700 20pt/1.2 var(--sans); color: #0b1b33; }
+.pdf-book .md h2.contents-head + ol { list-style: none; counter-reset: toc; margin: 0; padding: 0; }
+.pdf-book .md h2.contents-head + ol > li { counter-increment: toc; position: relative; margin: 0 0 4.5mm; padding-left: 11mm; color: #3a4b66; }
+.pdf-book .md h2.contents-head + ol > li::before { content: counter(toc); position: absolute; left: 0; top: .2mm; width: 7.4mm; height: 7.4mm; border-radius: 2mm;
+  background: #e3eeff; color: #0060e6; font: 700 10pt/7.4mm var(--sans); text-align: center; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md h2.contents-head + ol > li > p { margin: 0; }
+.pdf-book .md h2.contents-head + ol > li > strong:first-child,
+.pdf-book .md h2.contents-head + ol > li > p:first-child > strong:first-child { font: 600 11.5pt var(--sans); color: #0b1b33; }
+.pdf-book .md h2.contents-head + ol ul { list-style: none; margin: 1.6mm 0 0; padding: 0; }
+.pdf-book .md h2.contents-head + ol ul li { margin: .7mm 0; font-size: 10.6pt; color: #1a2438; }
+.pdf-book .sec-num { display: inline-block; min-width: 9mm; color: #0060e6; font: 600 9.5pt var(--sans); }
+.pdf-book .sec-sep { display: none; }
+.pdf-book .md h2 { font: 700 15pt/1.3 var(--sans); color: #0b1b33; border-bottom: 0; border-top: 2px solid #0060e6; padding: 3mm 0 0; margin: 9mm 0 3mm; }
+.pdf-book .md h2.chapter-head { break-before: page; page-break-before: always; position: relative; z-index: 0; display: block; margin: 0 0 7mm; padding: 6mm 22mm 0 0; border: 0; }
+.pdf-book .md h2.chapter-head::before { content: ""; position: absolute; top: 0; left: 0; width: 17mm; height: 1.5mm; border-radius: 1mm;
+  background: linear-gradient(90deg, #1e8ffe, #0060e6); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md h2.chapter-head::after { content: attr(data-chapter); position: absolute; z-index: -1; top: 1mm; right: 0; font: 700 54pt/1 var(--sans); color: #e3eeff; }
+.pdf-book .ch-label { display: block; margin-bottom: 1.6mm; font: 600 11pt/1.3 var(--sans); color: #0060e6; }
+.pdf-book .ch-sep { display: none; }
+.pdf-book .ch-title { display: block; font: 700 23pt/1.18 var(--sans); color: #0b1b33; }
+.pdf-book .md h2.chapter-head + p { font-size: 12.3pt; color: #3a4b66; }
+.pdf-book .md h2.chapter-head + p::first-letter { float: left; margin: 1mm 1.6mm 0 0; font: 700 31pt/.8 var(--serif); color: #0060e6; }
+.pdf-book .md h3 { font: 600 12.5pt/1.3 var(--sans); color: #0060e6; margin: 7mm 0 2.5mm; }
+.pdf-book .md h3.topic-head { display: flex; align-items: flex-start; gap: 3mm; margin: 9mm 0 3.5mm; font: 700 14.5pt/1.3 var(--sans); color: #0b1b33; }
+.pdf-book .topic-num { flex: none; margin-top: .4mm; padding: 1.3mm 2.2mm; border-radius: 1.8mm; background: #e3eeff; color: #0060e6; font: 700 9.5pt/1 var(--sans);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md h4 { font: 700 11.6pt/1.3 var(--sans); color: #0b1b33; margin: 6mm 0 2mm; }
+.pdf-book .md .review-head { margin: 9mm 0 3.5mm; padding: 3.2mm 4.5mm; border-radius: 2.5mm; background: #e8f2ff; color: #0050c8; font: 700 13pt/1.3 var(--sans);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .callout { font-family: var(--serif); }
+.pdf-book .callout-label { font-family: var(--sans); }
+.pdf-book .callout-example { background: #f5f8ff !important; border: 0; border-left: 1mm solid #0060e6; border-radius: 0 2mm 2mm 0; }
+.pdf-book .callout-example .callout-label { color: #0060e6; }
+.pdf-book .pdf-foot { font-family: var(--sans); }
 `;
 
 function esc(s: string) {
@@ -118,8 +167,20 @@ export function documentMarkdown(reply: string): string {
   return m ? reply.slice(m.index! + m[0].length).replace(/^\s+/, "") : reply;
 }
 
-function bodyHtml(title: string, markdown: string): string {
+/** A "Learn as a book" book: a cover page (title, the line about who it's for, the date), then the book. */
+function bookHtml(title: string, markdown: string, date: string): string {
+  let md = documentMarkdown(markdown);
+  const sub = md.match(/^\s*(?:\*([^*\n]+)\*|_([^_\n]+)_)[ \t]*(?:\n|$)/);
+  if (sub) md = md.slice(sub[0].length);
+  const subtitle = sub ? (sub[1] || sub[2]).trim() : "";
+  return `<article class="pdf-doc pdf-book"><header class="pdf-head pdf-cover"><div class="cover-art"><p class="cover-kicker">A book by zenvqo</p><h1>${esc(title)}</h1></div>` +
+    (subtitle ? `<p class="cover-sub">${esc(subtitle)}</p>` : "") + `<p class="cover-meta">${esc(date)}</p></header>` +
+    `<div class="md">${plotsToImages(renderMarkdown(md))}</div><footer class="pdf-foot">Made with zenvqo. AI-generated content can be wrong — check important information.</footer></article>`;
+}
+
+function bodyHtml(title: string, markdown: string, book = false): string {
   const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  if (book) return bookHtml(title, markdown, date);
   return `<article class="pdf-doc"><header class="pdf-head"><h1>${esc(title)}</h1><div class="pdf-meta">${esc(date)} · zenvqo</div></header>` +
     `<div class="md">${plotsToImages(renderMarkdown(documentMarkdown(markdown)))}</div><footer class="pdf-foot">Made with zenvqo. AI-generated content can be wrong — check important information.</footer></article>`;
 }
@@ -172,13 +233,14 @@ function documentCss(body: string): string {
   for (const sheet of Array.from(document.styleSheets)) {
     try { css += usedCss(doc, sheet.cssRules, families, fonts, sheet.href || location.href); } catch { /* cross-origin sheet: skip */ }
   }
+  if (body.includes("pdf-book")) families.add("Poppins");
   const faces = fonts.filter((f) => families.has(f.slice(0, f.indexOf("\u0000")))).map((f) => f.slice(f.indexOf("\u0000") + 1)).join("\n");
   return faces + "\n" + css;
 }
 
 /** A complete, self-contained HTML document — only the styles (and math fonts) it uses — what the Android engine prints. */
-export function printableDocument(title: string, markdown: string): string {
-  const body = bodyHtml(title, markdown);
+export function printableDocument(title: string, markdown: string, book = false): string {
+  const body = bodyHtml(title, markdown, book);
   // documents of the same shape (same element/class set) share the computed CSS
   const key = Array.from(new Set(body.match(/class="[^"]*"|<[a-z0-9]+/g) || [])).sort().join("|");
   const css = cssCache?.key === key ? cssCache.css : documentCss(body);
@@ -212,8 +274,8 @@ function viaBridge(name: string, send: (id: string) => void): Promise<PdfResult>
   });
 }
 
-async function nativeSave(bridge: NativePDF, title: string, markdown: string, name: string): Promise<PdfResult> {
-  const html = printableDocument(title, markdown);
+async function nativeSave(bridge: NativePDF, title: string, markdown: string, name: string, book = false): Promise<PdfResult> {
+  const html = printableDocument(title, markdown, book);
   try {
     return await viaBridge(name, (id) => bridge.save(id, html, name));        // phone's print engine: selectable text
   } catch (e) {
@@ -265,15 +327,16 @@ function browserPrint(title: string, markdown: string, name: string): Promise<Pd
 export function canSaveFile(): boolean { return true; }
 
 /** Browsers: a real .pdf file, downloaded straight away. */
-async function browserDownload(title: string, markdown: string, name: string): Promise<PdfResult> {
-  const html = await inlineFonts(printableDocument(title, markdown));
+async function browserDownload(title: string, markdown: string, name: string, book = false): Promise<PdfResult> {
+  const html = await inlineFonts(printableDocument(title, markdown, book));
   downloadBytes(await rasterPdf(html, title), name);
   return { kind: "download", id: "download", name, where: "your Downloads" };
 }
 
-export function makePdf(title: string, markdown: string): Promise<PdfResult> {
+/** `book`: a "Learn as a book" book — a cover page, each chapter on a new page, book type. */
+export function makePdf(title: string, markdown: string, opts: { book?: boolean } = {}): Promise<PdfResult> {
   const name = pdfName(title);
-  return window.ZenvqoPDF ? nativeSave(window.ZenvqoPDF, title, markdown, name) : browserDownload(title, markdown, name);
+  return window.ZenvqoPDF ? nativeSave(window.ZenvqoPDF, title, markdown, name, opts.book) : browserDownload(title, markdown, name, opts.book);
 }
 
 /** Browsers: the print window's "Save as PDF" (sharper, selectable text). */

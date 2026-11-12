@@ -36,11 +36,26 @@ function breakPoints(doc: Document): number[] {
   return [...pts].filter((p) => p > 0).sort((a, b) => a - b);
 }
 
-export function paginate(height: number, points: number[], pageH = PH): [number, number][] {
+/** Where a page must end: after the cover of a book, before each of its chapters (CSS page breaks). */
+function forcedBreaks(doc: Document): number[] {
+  const win = doc.defaultView!;
+  const out = new Set<number>();
+  doc.querySelectorAll<HTMLElement>(".pdf-head, .md > *").forEach((el) => {
+    const cs = win.getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    if (cs.breakBefore === "page" || cs.pageBreakBefore === "always") out.add(Math.floor(r.top + win.scrollY));
+    if (cs.breakAfter === "page" || cs.pageBreakAfter === "always") out.add(Math.ceil(r.bottom + win.scrollY));
+  });
+  return [...out].filter((p) => p > 0).sort((a, b) => a - b);
+}
+
+export function paginate(height: number, points: number[], pageH = PH, forced: number[] = []): [number, number][] {
   const pages: [number, number][] = [];
   let start = 0;
   while (start < height - 1) {
     const limit = start + pageH;
+    const must = forced.find((p) => p > start + 8 && p < Math.min(limit, height - 1));
+    if (must !== undefined) { pages.push([start, must]); start = must; continue; }
     if (limit >= height) { pages.push([start, height]); break; }
     let end = 0;
     for (const p of points) if (p > start + pageH * 0.3 && p <= limit) end = p;   // last break that fits
@@ -130,7 +145,7 @@ export async function rasterPdf(html: string, title: string): Promise<Uint8Array
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     const article = doc.querySelector(".pdf-doc") || doc.body;
     const height = Math.ceil(Math.max(article.getBoundingClientRect().bottom, doc.body.scrollHeight)) + 4;
-    const pages = paginate(height, breakPoints(doc));
+    const pages = paginate(height, breakPoints(doc), PH, forcedBreaks(doc));
 
     const xhtml = new XMLSerializer().serializeToString(doc.documentElement);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${A4_W * SCALE}" height="${height * SCALE}" viewBox="0 0 ${A4_W} ${height}">` +
