@@ -32,10 +32,33 @@ interface Props {
   sidebarOpen: boolean;
 }
 
-const SUGGESTIONS: [IconName, string][] = [["code", "Explain this code with an example"], ["mail", "Draft a polite email asking for leave"],
-  ["table", "Show a table comparing Python and JavaScript"], ["graph", "Plot y = sin(x) and y = cos(x)"]];
-const IMAGE_SUGGESTIONS: [IconName, string][] = [["image", "Generate an image of a futuristic city at sunset"], ["wand", "Make a logo for a chai shop called Garam"],
-  ["graph", "Plot y = sin(x) and y = cos(x)"], ["code", "Explain this code with an example"]];
+/** Home-screen ideas: three are picked at random each time, so the page feels fresh. */
+const IDEAS = [
+  "Explain photosynthesis simply, with a diagram",
+  "Draft a polite email asking my manager for leave",
+  "Show a table comparing Python and JavaScript",
+  "Make a 10-question quiz on the solar system as a PDF",
+  "Plan a 3-day trip to Jaipur on a student budget",
+  "Make a to-do list app that remembers my tasks",
+  "Write a short story about a robot who loves chai",
+  "Explain compound interest with a worked example",
+  "Make a website for a small bakery",
+  "Help me prepare for a job interview",
+];
+type Tool = { key: string; icon: IconName; label: string; tone: string; run: "camera" | "files" | string };
+/** One-tap shortcuts to what zenvqo does best; text ones start the request in the message box. */
+const TOOLS: Tool[] = [
+  { key: "snap", icon: "camera", label: "Snap a question", tone: "blue", run: "camera" },
+  { key: "image", icon: "image", label: "Create an image", tone: "violet", run: "Create an image of " },
+  { key: "app", icon: "phone", label: "Build an app", tone: "green", run: "Make an app: " },
+  { key: "pdf", icon: "pdf", label: "Make a PDF", tone: "red", run: "Make a PDF of notes on " },
+  { key: "graph", icon: "graph", label: "Plot a graph", tone: "teal", run: "Plot y = " },
+  { key: "file", icon: "clip", label: "Read a file", tone: "amber", run: "files" },
+];
+function greeting(d = new Date()): string {
+  const h = d.getHours();
+  return h >= 5 && h < 12 ? "Good morning" : h >= 12 && h < 17 ? "Good afternoon" : h >= 17 && h < 22 ? "Good evening" : "Hello";
+}
 
 export function ChatView({ conversationId, navigate, onConversationChange, onOpenSidebar, sidebarOpen }: Props) {
   const { settings, models } = useSession();
@@ -61,6 +84,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [masking, setMasking] = useState<Attachment | null>(null);
   const [makeApp, setMakeApp] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
+  const [ideas] = useState(() => [...IDEAS].sort(() => Math.random() - 0.5).slice(0, 3));
   const [play, setPlay] = useState<PlayTarget | null>(null);          // "Google Play package"              // "View site": the page shown full-screen         // "Make app": the page to turn into an APK
   // shared from WhatsApp, Gallery, Files… (Android share menu): into the message box of a new chat, like ChatGPT
   const convRef = useRef(conversationId);
@@ -416,10 +440,10 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
             </div>
           )}
           {loadState === "idle" && messages.length === 0 && (
-            <div className="empty">
-              <Eye big />
+            <div className="empty home">
+              <div className="home-mark"><Eye big /></div>
+              <p className="home-hello">{greeting()}</p>
               <h2>How can I help?</h2>
-              <p className="lede">Ask anything, or make a picture, a graph or a PDF.</p>
               {LOCAL_MODE && (settings.default_model === "echo" || !settings.server_url) && (
                 <div className="setup-card" role="note">
                   <div><strong>Connect a real AI to get answers</strong>
@@ -427,12 +451,26 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                   <button type="button" className="btn primary" onClick={() => window.dispatchEvent(new Event("zc:open-settings"))}>Connect AI</button>
                 </div>
               )}
-              <ul className="suggestions">
-                {(imagesOn ? IMAGE_SUGGESTIONS : SUGGESTIONS).map(([icon, s]) => (
-                  <li key={s}><button type="button" className="suggestion" onClick={() => composer.current?.setText(s)}>
-                    <span className="s-ico" aria-hidden="true"><Icon name={icon} size={18} /></span><span>{s}</span></button></li>
+              <ul className="tools" aria-label="Quick tools">
+                {TOOLS.filter((t) => t.key !== "image" || imagesOn || LOCAL_MODE).map((t) => (
+                  <li key={t.key}>
+                    <button type="button" className={`tool tone-${t.tone}`}
+                            onClick={() => t.run === "camera" ? composer.current?.openCamera() : t.run === "files" ? composer.current?.pickFiles() : composer.current?.setText(t.run)}>
+                      <span className="tool-ico" aria-hidden="true"><Icon name={t.icon} size={22} /></span>
+                      <span className="tool-label">{t.label}</span>
+                    </button>
+                  </li>
                 ))}
               </ul>
+              <div className="ideas">
+                <h3>Try asking</h3>
+                <ul>
+                  {ideas.map((s) => (
+                    <li key={s}><button type="button" className="suggestion" onClick={() => composer.current?.setText(s)}>
+                      <span>{s}</span><Icon name="send" size={16} /></button></li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
           {loadState === "idle" && messages.map((m, i) => (

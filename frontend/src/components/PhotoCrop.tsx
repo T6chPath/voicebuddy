@@ -88,7 +88,8 @@ export function PhotoCrop({ photo, alt, onUse, onBack, backLabel, useLabel = "Us
   }, []);
 
   const nw = img?.naturalWidth || 1, nh = img?.naturalHeight || 1;
-  const k = img && box.w ? Math.min(box.w / nw, box.h / nh) : 0;
+  // (older WebViews may report no height for the area: then the photo is fitted to the width)
+  const k = img && box.w ? Math.min(box.w / nw, box.h > 40 ? box.h / nh : box.w / nw) : 0;
   const sw = Math.round(nw * k), sh = Math.round(nh * k);                 // the photo's size on screen
 
   function shape(r: number | null) { setRatio(r); setRect(fitted(r, nw, nh)); }

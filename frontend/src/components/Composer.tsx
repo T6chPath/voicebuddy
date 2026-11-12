@@ -19,7 +19,9 @@ interface Pending { key: string; file: File; progress: number; uploaded?: Upload
 
 export interface MenuItem { key: string; icon: string; label: string; hint?: string; ariaLabel?: string; on?: boolean; disabled?: boolean; onSelect: () => void }
 
-export interface ComposerHandle { focus: () => void; setText: (t: string) => void; addFiles: (f: FileList | File[]) => void }
+export interface ComposerHandle { focus: () => void; setText: (t: string) => void; addFiles: (f: FileList | File[]) => void;
+  /** the "+" menu's Camera and Photos & files, for shortcuts elsewhere (the home screen) */
+  openCamera: () => void; pickFiles: () => void }
 
 export type Uploader = (file: File, onProgress: (frac: number) => void) => { promise: Promise<UploadedFile>; abort: () => void };
 
@@ -132,7 +134,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const hintId = useId();
 
   useImperativeHandle(ref, () => ({ focus: () => ta.current?.focus(), setText: (t) => { setText(t); ta.current?.focus(); },
-    addFiles: (f) => addFilesRef.current(f) }), []);
+    addFiles: (f) => addFilesRef.current(f), openCamera: () => setCamera(true), pickFiles: () => input.current?.click() }), []);
 
   // slim one-line box (like ChatGPT) until the message wraps; then text on top, tools below — back to slim once empty
   const [tall, setTall] = useState(false);
