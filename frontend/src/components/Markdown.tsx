@@ -1,11 +1,15 @@
-import { memo, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { renderMarkdown } from "../lib/markdown";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { renderBlocks, type Block } from "../lib/markdown";
 import type { PlotHandle } from "../plot/mount";
 
-/** Renders sanitised Markdown. Code-block "Copy" buttons are handled by event delegation. */
+interface Shown { html: string; nodes: ChildNode[] }
+
+/** Renders sanitised Markdown. Code-block "Copy" buttons are handled by event delegation.
+ *  The reply is drawn block by block (see renderBlocks): when it changes, only the blocks that changed are replaced on
+ *  the page, so a long reply streaming in doesn't rebuild — and re-lay-out — everything above the line being written. */
 export const Markdown = memo(function Markdown({ text, live = false }: { text: string; live?: boolean }) {
-  // While a reply streams in, re-format it only as often as this phone can keep up with: the gap between redraws
-  // adapts to how long the last one took (fast phones ~every 60 ms, slow ones less often), so typing stays smooth.
+  // While a reply streams in, redraw it only as often as this phone can keep up with: the gap between redraws adapts to
+  // how long the last one took (fast phones ~every 50 ms, slow ones less often), so scrolling and typing stay smooth.
   const [shown, setShown] = useState(text);
   const latest = useRef(text);
   const lastAt = useRef(0);
@@ -14,7 +18,7 @@ export const Markdown = memo(function Markdown({ text, live = false }: { text: s
   latest.current = text;
   useEffect(() => {
     if (!live) return;
-    const gap = Math.max(60, Math.min(400, cost.current * 4));
+    const gap = Math.max(50, Math.min(500, cost.current * 3));
     const wait = lastAt.current + gap - performance.now();
     if (wait <= 0) { lastAt.current = performance.now(); setShown(text); }
     else if (timer.current === undefined) {
@@ -23,29 +27,62 @@ export const Markdown = memo(function Markdown({ text, live = false }: { text: s
   }, [text, live]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const display = live ? shown : text;
-  const html = useMemo(() => {
+  const blocks = useMemo<Block[]>(() => {
     const t0 = performance.now();
-    const h = renderMarkdown(display);
+    const b = renderBlocks(display, live);
     cost.current = performance.now() - t0;
-    return h;
-  }, [display]);
+    return b;
+  }, [display, live]);
+
   const box = useRef<HTMLDivElement>(null);
-  // ```plot blocks → live graphs (after the text settles: while a reply streams in, the block keeps changing)
+  const onPage = useRef<Shown[]>([]);
+  const plots = useRef(new Map<HTMLElement, PlotHandle>());
+  // put the blocks on the page: keep the ones that didn't change, replace from the first one that did
+  useLayoutEffect(() => {
+    const root = box.current;
+    if (!root) return;
+    const t0 = performance.now();
+    const prev = onPage.current;
+    let i = 0;
+    while (i < prev.length && i < blocks.length && prev[i].html === blocks[i].html) i++;
+    for (let j = i; j < prev.length; j++) {
+      for (const n of prev[j].nodes) {
+        if (n instanceof HTMLElement) for (const [el, h] of plots.current) if (n === el || n.contains(el)) { h.destroy(); plots.current.delete(el); }
+        n.remove();
+      }
+    }
+    const next = prev.slice(0, i);
+    if (i < blocks.length) {
+      const frag = document.createDocumentFragment();
+      for (let j = i; j < blocks.length; j++) {
+        const t = document.createElement("template");
+        t.innerHTML = blocks[j].html;
+        next.push({ html: blocks[j].html, nodes: [...t.content.childNodes] });
+        frag.append(t.content);
+      }
+      root.append(frag);
+    }
+    onPage.current = next;
+    // what the phone then spends laying out and painting the change counts too (measured just after that frame)
+    if (live) requestAnimationFrame(() => window.setTimeout(() => { cost.current = Math.max(cost.current, performance.now() - t0 - 16); }, 0));
+    cost.current += performance.now() - t0;
+  }, [blocks]);
+  // ```plot blocks → live graphs, once their text has settled (while a reply streams in, the last block keeps changing)
   useEffect(() => {
     const root = box.current;
-    if (!root || !html.includes("plot-block")) return;
-    const handles: PlotHandle[] = [];
+    if (!root || !blocks.some((b) => b.html.includes("plot-block"))) return;
     const t = window.setTimeout(() => {
       void import("../plot/mount").then(({ mountPlot }) => {
         for (const el of root.querySelectorAll<HTMLElement>(".plot-block[data-plot]")) {
-          if (el.dataset.mounted) continue;
+          if (el.dataset.mounted || !el.isConnected) continue;
           el.dataset.mounted = "1";
-          try { handles.push(mountPlot(el, decodeURIComponent(el.dataset.plot || ""))); } catch (e) { console.error("plot failed", e); }
+          try { plots.current.set(el, mountPlot(el, decodeURIComponent(el.dataset.plot || ""))); } catch (e) { console.error("plot failed", e); }
         }
       });
-    }, 250);
-    return () => { clearTimeout(t); handles.forEach((h) => h.destroy()); };
-  }, [html]);
+    }, live ? 600 : 50);
+    return () => clearTimeout(t);
+  }, [blocks, live]);
+  useEffect(() => () => { for (const h of plots.current.values()) h.destroy(); plots.current.clear(); }, []);
   function onClick(e: MouseEvent<HTMLDivElement>) {
     const tex = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copy-tex]");
     if (tex) {
@@ -76,7 +113,7 @@ export const Markdown = memo(function Markdown({ text, live = false }: { text: s
       window.setTimeout(() => { btn.textContent = "Copy"; }, 1500);
     });
   }
-  return <div className="md" ref={box} onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className="md" ref={box} onClick={onClick} />;
 });
 
 export async function copyText(text: string): Promise<boolean> {

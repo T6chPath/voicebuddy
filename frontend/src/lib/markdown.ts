@@ -44,7 +44,7 @@ marked.use({
       const name = ALIAS[raw] || raw;
       let html: string;
       let lit = "";
-      if (name && hljs.getLanguage(name)) {
+      if (name && hljs.getLanguage(name) && text.length <= MAX_HIGHLIGHT) {
         try { lit = hljs.highlight(text, { language: name, ignoreIllegals: true }).value; } catch { lit = ""; }
       }
       if (lit) {
@@ -112,17 +112,89 @@ function hookPurify() {
   });
 }
 
+const PURIFY = {
+  USE_PROFILES: { html: true },
+  ADD_ATTR: ["target", "data-copy", "data-make-app", "data-view-site", "data-plot", "aria-label", "tabindex", "role"],
+  ADD_TAGS: ["aside"],
+  FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
+  FORBID_ATTR: ["onerror", "onload", "onclick"],
+};
+
+/** the model's request for a picture ([[image: …]]) is for the app, not the reader — also while it's still arriving */
+const stripImageAsks = (src: string) =>
+  src.replace(/\[\[\s*image\s*:[^\]]*\]\]/gi, "").replace(/\[\[\s*i?m?a?g?e?\s*:?[^\]\n]*\]?$/i, (m) => (/^\[\[\s*(i|$)/i.test(m) ? "" : m));
+
 export function renderMarkdown(src: string): string {
   hookPurify();
-  // the model's request for a picture ([[image: …]]) is for the app, not the reader — also while it's still arriving
-  src = src.replace(/\[\[\s*image\s*:[^\]]*\]\]/gi, "").replace(/\[\[\s*i?m?a?g?e?\s*:?[^\]\n]*\]?$/i, (m) => (/^\[\[\s*(i|$)/i.test(m) ? "" : m));
-  const { text, blocks } = extractMath(src);
+  const { text, blocks } = extractMath(stripImageAsks(src));
   const html = marked.parse(text, { async: false }) as string;
-  return restoreMath(DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true },
-    ADD_ATTR: ["target", "data-copy", "data-make-app", "data-view-site", "data-plot", "aria-label", "tabindex", "role"],
-    ADD_TAGS: ["aside"],
-    FORBID_TAGS: ["style", "form", "input", "textarea", "select", "iframe", "object", "embed"],
-    FORBID_ATTR: ["onerror", "onload", "onclick"],
-  }), blocks);                                       // KaTeX output goes in after sanitising (it is generated, not model HTML)
+  return restoreMath(DOMPurify.sanitize(html, PURIFY), blocks);   // KaTeX output goes in after sanitising (it is generated, not model HTML)
+}
+
+/* ---------- replies block by block (fast while they stream in) ----------
+ * A reply is cut into its top-level blocks (paragraphs, headings, lists, tables, code…). Each block is turned into HTML
+ * once and remembered, so while a reply streams in only the block that is still growing is redone — not the whole
+ * reply, with every code block coloured and every formula typeset again, many times a second. A code block that is
+ * still being written is shown as plain text; it gets its colours once its closing ``` arrives. */
+export interface Block { key: string; html: string }
+
+const cache = new Map<string, string>();
+const CACHE_MAX = 600;
+function remember(key: string, html: string) {
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  cache.set(key, html);
+}
+
+/** Code this big is shown without colours: colouring it would freeze a phone for seconds. */
+const MAX_HIGHLIGHT = 60_000;
+
+function openFence(t: Tokens.Code): boolean {
+  if (t.codeBlockStyle === "indented") return false;
+  const raw = t.raw.replace(/\s+$/, "");
+  const fence = raw.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
+  if (!fence) return false;
+  const lines = raw.split("\n");
+  return lines.length < 2 || !new RegExp(`^ {0,3}${fence[0] === "`" ? "`" : "~"}{${fence.length},}\\s*$`).test(lines[lines.length - 1]);
+}
+
+/** How many of the newest lines a code block shows while it's being written (like a terminal): redrawing a page-long
+ *  block on every update is what made phones stutter on big code. The whole block appears as soon as it's finished. */
+const WRITING_LINES = 40;
+
+function plainCode(text: string, lang: string): string {
+  const label = escapeHtml(lang || "text");
+  const lines = text.split("\n");
+  const n = lines.length - (lines[lines.length - 1] === "" ? 1 : 0);
+  const tail = n > WRITING_LINES ? lines.slice(n - WRITING_LINES).join("\n") : text;
+  return `<div class="code-block writing"><div class="code-head"><span class="code-lang">${label}</span><span class="code-tools">` +
+    `<span class="code-writing">Writing… ${n} line${n === 1 ? "" : "s"}</span></span></div>` +
+    (n > WRITING_LINES ? `<div class="code-more" aria-hidden="true">⋯ ${n - WRITING_LINES} lines above — the whole code shows when it's finished</div>` : "") +
+    `<pre><code class="hljs">${escapeHtml(tail)}</code></pre></div>`;
+}
+
+export function renderBlocks(src: string, live = false): Block[] {
+  hookPurify();
+  const { text, blocks: math } = extractMath(stripImageAsks(src));
+  const tokens = marked.lexer(text);
+  const out: Block[] = [];
+  const last = tokens.length - 1;
+  tokens.forEach((tok, i) => {
+    if (tok.type === "space") return;
+    const writing = live && i === last && tok.type === "code" && openFence(tok as Tokens.Code);
+    const refs = [...tok.raw.matchAll(/ZQMATH(\d+)ZQ/g)].map((m) => { const b = math[+m[1]]; return b ? (b.display ? "D" : "I") + b.tex : ""; });
+    const key = (writing ? "w\u0001" : "") + tok.raw + (refs.length ? "\u0002" + refs.join("\u0003") : "");
+    let html = cache.get(key);
+    if (html === undefined) {
+      if (writing) {
+        const c = tok as Tokens.Code;
+        html = plainCode(c.text, (c.lang || "").trim().split(/\s+/)[0]);
+      } else {
+        const one = Object.assign([tok], { links: tokens.links }) as unknown as Parameters<typeof marked.parser>[0];
+        html = restoreMath(DOMPurify.sanitize(marked.parser(one) as string, PURIFY), math);
+      }
+      if (!(live && i === last)) remember(key, html);              // the growing block changes every time: don't keep it
+    }
+    out.push({ key, html });
+  });
+  return out;
 }

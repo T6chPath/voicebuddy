@@ -87,7 +87,12 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [makeApp, setMakeApp] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
   const [bookMode, setBookMode] = useState(false);                     // "Learn as a book": the next message is a topic to learn
-  const book = useMemo(() => findBook(messages), [messages]);
+  const lastStreaming = messages[messages.length - 1]?.status === "streaming";
+  const askedFor = useMemo(() => {                                     // each reply's question, in one pass
+    let q: string | undefined;
+    return messages.map((m) => { const r = m.role === "assistant" ? q : undefined; if (m.role === "user") q = m.content; return r; });
+  }, [messages]);
+  const book = useMemo(() => (lastStreaming ? null : findBook(messages)), [messages, lastStreaming]);
   const bookPages = useMemo(() => bookReplyIds(messages), [messages]);
   const [ideas] = useState(() => [...IDEAS].sort(() => Math.random() - 0.5).slice(0, 3));
   const [play, setPlay] = useState<PlayTarget | null>(null);          // "Google Play package"              // "View site": the page shown full-screen         // "Make app": the page to turn into an APK
@@ -170,12 +175,14 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   }, [settings.server_url, settings.api_key]);                // the phone app's engines follow Settings → Connection
   useEffect(() => { setTarget(null); setMasking(null); setViewing(null); }, [conversationId]);
 
-  const numbers = (() => {
+  // picture numbers (#1, #2…) — only recounted when the pictures change, not on every word of a streaming reply
+  const imageIds = messages.map((m) => m.attachments.filter((a) => a.kind === "image").map((a) => a.id).join(",")).join("|");
+  const numbers = useMemo(() => {
     const map = new Map<string, number>();
-    for (const m of messages) for (const a of m.attachments) if (a.kind === "image" && !map.has(a.id)) map.set(a.id, map.size + 1);
+    for (const id of imageIds.split(/[|,]/)) if (id && !map.has(id)) map.set(id, map.size + 1);
     return map;
-  })();
-  const numberOf = (id: string) => numbers.get(id);
+  }, [imageIds]);
+  const numberOf = useCallback((id: string) => numbers.get(id), [numbers]);
 
   // ----- load conversation -----
   const load = useCallback((id: string) => {
@@ -211,9 +218,23 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     const el = scroller.current;
     if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
   };
-  useLayoutEffect(() => {
-    if (atBottom && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [messages, atBottom]);
+  // follow the reply as it grows — when the page has been laid out anyway (a ResizeObserver), instead of forcing a
+  // fresh layout of the whole conversation after every update (that was most of the lag on long replies)
+  const atBottomRef = useRef(atBottom);
+  atBottomRef.current = atBottom;
+  useLayoutEffect(() => { if (atBottom && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; }, [atBottom]);
+  useEffect(() => {
+    const el = scroller.current, inner = el?.firstElementChild;
+    if (!el || !inner || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { if (atBottomRef.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+  const regenerateRef = useRef<() => void>(() => {});
+  const imageActionRef = useRef<(action: ImageAction, a: Attachment) => void>(() => {});
+  const onRegenerate = useCallback(() => regenerateRef.current(), []);
+  const onImageAction = useCallback((action: ImageAction, a: Attachment) => imageActionRef.current(action, a), []);
+  const messageFileHref = useCallback((a: Attachment, d?: boolean) => fileUrl(a.id, d) || null, []);
   const jumpToLatest = () => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
 
   // ----- streaming helpers -----
@@ -348,6 +369,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     }
   }
 
+  regenerateRef.current = () => { void regenerate(); };
+  imageActionRef.current = (action, a) => { void imageAction(action, a); };
   async function regenerate() {
     if (!conversationId || busy) return;
     speech.stop();
@@ -480,10 +503,10 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           )}
           {loadState === "idle" && messages.map((m, i) => (
             <MessageView key={m.id} m={m} book={bookPages.has(m.id)} isLast={i === messages.length - 1} busy={busy} models={models}
-                         request={m.role === "assistant" ? [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content : undefined}
-                         showTime={settings.show_timestamps} onRegenerate={regenerate}
-                         onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
-                         fileHref={(a, d) => fileUrl(a.id, d) || null} imageOps={caps?.ops} />
+                         request={askedFor[i]}
+                         showTime={settings.show_timestamps} onRegenerate={onRegenerate}
+                         onImageAction={onImageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
+                         fileHref={messageFileHref} imageOps={caps?.ops} />
           ))}
           {loadState === "idle" && book && messages[messages.length - 1]?.id === book.replies[book.replies.length - 1]
             && messages[messages.length - 1]?.status !== "streaming" && (

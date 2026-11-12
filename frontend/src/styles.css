@@ -837,3 +837,7 @@ button.fc-body:hover { background: var(--bg-soft); }
 .book-pdf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: .92em; }
 .book-pdf svg { color: var(--ok, #1e9c5a); }
 @media (prefers-reduced-motion: reduce) { .book-progress i { transition: none; } }
+
+/* a code block that is still being written: plain text until its closing ``` arrives (then colours and buttons) */
+.code-writing { font-size: .95em; color: #8cc4ff; padding: 0 8px; min-height: 28px; display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
+.code-more { padding: 8px 14px 0; font-size: .8em; color: #8f9bb3; background: var(--code-bg, #0f1b2d); }
