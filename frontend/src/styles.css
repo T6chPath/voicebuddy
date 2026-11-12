@@ -967,31 +967,6 @@ button.fc-body:hover { background: var(--bg-soft); }
 .code-writing { font-size: .95em; color: #8cc4ff; padding: 0 8px; min-height: 28px; display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
 .code-more { padding: 8px 14px 0; font-size: .8em; color: #8f9bb3; background: var(--code-bg, #0f1b2d); }
 
-/* "Learn as a book" in the message box: chapter by chapter, or every topic in depth */
-.book-mode { display: grid; gap: 2px; padding: 2px 2px 6px 6px; }
-.book-mode-row { display: flex; align-items: center; gap: 6px; }
-.book-mode-ico { width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--grad); }
-.book-mode-label { flex: 1 1 auto; min-width: 0; font: 600 .92em/1.2 var(--display); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.book-depth { display: inline-flex; flex: none; gap: 2px; padding: 3px; border-radius: 999px; background: var(--accent-soft); }
-.book-depth button { height: 30px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; cursor: pointer;
-  font-family: inherit; font-size: .84em; font-weight: 600; line-height: 1; color: var(--text-soft); white-space: nowrap; }
-.book-depth button[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0, 40, 120, .25); }
-.book-depth button[aria-pressed="false"]:hover { color: var(--text); }
-.book-depth button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.book-mode-row > .icon-btn { flex: none; }
-/* which model writes the book (the best fast, accurate one on the user's AI service — or the chat's own, by choice) */
-.book-model { display: flex; align-items: flex-start; gap: 7px; width: fit-content; max-width: calc(100% - 48px); margin: 5px 0 0 36px; padding: 6px 11px;
-  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elev); color: var(--text-soft); font: inherit; font-size: .78em;
-  line-height: 1.35; text-align: left; cursor: pointer; }
-button.book-model:hover { border-color: var(--border-strong); }
-.book-model[aria-pressed="true"], .book-model.on { border-color: color-mix(in srgb, var(--ok) 35%, transparent);
-  background: color-mix(in srgb, var(--ok) 8%, var(--bg-elev)); color: var(--text); }
-.book-model svg { flex: none; margin-top: 1px; color: var(--ok); }
-.book-model[aria-pressed="false"] svg { color: var(--accent); }
-.book-model strong { font-weight: 600; }
-p.book-model { cursor: default; }
-.book-model:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.book-mode-hint { margin: 0; padding: 0 8px 0 36px; font-size: .8em; line-height: 1.35; color: var(--text-soft); }
 /* its contents: chapters with their topics; topics not explained yet can be explained now */
 .book-toc li li { font-size: 1em; }
 .book-toc.deep > ol { gap: 4px; }

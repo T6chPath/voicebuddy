@@ -10,8 +10,8 @@ import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
 import { SitePreview } from "./SitePreview";
 import { BookBar } from "./BookViews";
-import { bookReplyIds, bookRequest, findBook, type Book } from "../lib/book";
-import { bestBookModel, modelName } from "../lib/bookModel";
+import { bookReplyIds, findBook, isBookRequest, type Book } from "../lib/book";
+import { bestBookModel } from "../lib/bookModel";
 import { PlayDialog, type PlayTarget } from "./PlayDialog";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
@@ -88,20 +88,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [masking, setMasking] = useState<Attachment | null>(null);
   const [makeApp, setMakeApp] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
-  const [bookMode, setBookMode] = useState(false);                     // "Learn as a book": the next message is a topic to learn
-  const [bookDeep, setBookDeepState] = useState(() => { try { return localStorage.getItem("zc.book.depth") === "deep"; } catch { return false; } });
-  // a book is written with the best fast, accurate model on the user's AI service (unless they'd rather keep the chat's own)
-  const [bookBest, setBookBestState] = useState(() => { try { return localStorage.getItem("zc.book.best") !== "0"; } catch { return true; } });
-  const setBookBest = (on: boolean) => {
-    setBookBestState(on);
-    try { localStorage.setItem("zc.book.best", on ? "1" : "0"); } catch { /* private mode: just for now */ }
-  };
+  // a book ("Teach me as a book: …") is written with the best fast, accurate model on the user's AI service
   const bestBook = useMemo(() => bestBookModel(models, model), [models, model]);
-  const setBookDeep = (deep: boolean) => {                             // chapter by chapter, or every topic in depth (remembered)
-    setBookDeepState(deep);
-    try { localStorage.setItem("zc.book.depth", deep ? "deep" : "chapters"); } catch { /* private mode: just for now */ }
-    composer.current?.focus();
-  };
   const lastStreaming = messages[messages.length - 1]?.status === "streaming";
   const askedFor = useMemo(() => {                                     // each reply's question, in one pass
     let q: string | undefined;
@@ -448,7 +436,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     const n = numberOf(a.id);
     const label = n ? `image #${n}` : "this image";
     if (action === "open") setViewing(a);
-    else if (action === "edit") { setTarget(a); setBookMode(false); composer.current?.focus(); }
+    else if (action === "edit") { setTarget(a); composer.current?.focus(); }
     else if (action === "mask") setMasking(a);
     else if (action === "variations") await send(`Make variations of ${label}`, [], { op: "variations", source_id: a.id, n: imageOpts.n && imageOpts.n > 1 ? imageOpts.n : 3 });
     else if (action === "remove_background") await send(`Remove the background of ${label}`, [], { op: "remove_background", source_id: a.id, output_format: "png" });
@@ -584,22 +572,14 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       <div className="composer-wrap">
         <VoicePanel />
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
-                  onSend={async (t, f) => {
-                    if (!bookMode || !t.trim()) return send(t, f);
-                    const ok = await send(bookRequest(t, bookDeep), f, undefined, bookBest && bestBook ? bestBook.id : undefined);
-                    if (ok) setBookMode(false);
-                    return ok;
-                  }}
-                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…"
-                    : bookMode ? (bookDeep ? "What do you want to learn in depth?" : "What do you want to learn?") : undefined}
+                  onSend={(t, f) => send(t, f, undefined, isBookRequest(t) && bestBook ? bestBook.id : undefined)}
+                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…" : undefined}
                   menu={[
-                    { key: "book", icon: "book", label: "Learn as a book", hint: "Chapter by chapter, or every topic in depth", on: bookMode,
-                      onSelect: () => { setBookMode((b) => !b); setTarget(null); setImageOpts((o) => ({ ...o, op: undefined })); composer.current?.focus(); } },
                     { key: "voice", icon: "wave", label: "Voice conversation", hint: "Talk and listen, hands-free", ariaLabel: "Start voice conversation",
                       onSelect: () => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); } },
                     ...(imagesOn ? [
                     { key: "image", icon: "image", label: "Create image", hint: "Your next message makes a picture", on: imageOpts.op === "generate",
-                      onSelect: () => { setImageOpts((o) => ({ ...o, op: o.op === "generate" ? undefined : "generate" })); setBookMode(false); composer.current?.focus(); } },
+                      onSelect: () => { setImageOpts((o) => ({ ...o, op: o.op === "generate" ? undefined : "generate" })); composer.current?.focus(); } },
                     { key: "image-settings", icon: "sliders", label: "Image settings", hint: "Style, shape, size, how many", ariaLabel: "Image settings",
                       on: Object.keys(changedOpts({ ...imageOpts, op: undefined })).length > 0, onSelect: () => setShowImageSettings(true) },
                   ] : []),
@@ -615,29 +595,6 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                       <img src={fileUrl(target.id)} alt="" />
                       <span>Editing <strong>image #{numberOf(target.id)}</strong> — describe the change</span>
                       <button type="button" className="icon-btn small" aria-label="Stop editing this image" onClick={() => setTarget(null)}><Icon name="close" size={14} /></button>
-                    </div>) : bookMode ? (
-                    <div className="book-mode" role="group" aria-label="Learn as a book">
-                      <div className="book-mode-row">
-                        <span className="book-mode-ico" aria-hidden="true"><Icon name="book" size={16} /></span>
-                        <span className="book-mode-label">Learn as a book<span className="sr-only"> — your next message is the topic</span></span>
-                        <span className="book-depth" role="group" aria-label="How the book is written">
-                          <button type="button" aria-pressed={!bookDeep} onClick={() => setBookDeep(false)}>Chapters</button>
-                          <button type="button" aria-pressed={bookDeep} onClick={() => setBookDeep(true)}>In depth</button>
-                        </span>
-                        <button type="button" className="icon-btn small" aria-label="Cancel book mode" onClick={() => setBookMode(false)}><Icon name="close" size={14} /></button>
-                      </div>
-                      <p className="book-mode-hint">{bookDeep ? "Every topic of every chapter explained in depth — one topic per page, with examples and practice."
-                        : "A full chapter on each page, with key points and practice."}</p>
-                      {bestBook && bestBook.id !== model ? (
-                        <button type="button" className="book-model" aria-pressed={bookBest} onClick={() => setBookBest(!bookBest)}
-                                title={bookBest ? "Tap to keep this chat's model instead" : "Tap to write the book with the best model"}>
-                          <Icon name={bookBest ? "check" : "wand"} size={14} />
-                          <span>{bookBest ? <>Written by <strong>{modelName(bestBook.id)}</strong> — the fastest accurate model on your connection</>
-                            : <>Written by this chat's model, <strong>{modelName(model)}</strong>. Tap for the best: {modelName(bestBook.id)}</>}</span>
-                        </button>
-                      ) : bestBook ? (
-                        <p className="book-model on"><Icon name="check" size={14} /><span>Written by <strong>{modelName(bestBook.id)}</strong> — the fastest accurate model on your connection</span></p>
-                      ) : null}
                     </div>) : undefined} />
       </div>
     </main>

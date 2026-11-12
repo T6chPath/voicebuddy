@@ -54,17 +54,10 @@ class BookAI(FakeAI):
 def test_learn_a_topic_as_a_book(browser):
     ai = BookAI([CH1, CH2])
     p, errors = open_app(browser, ai)
-    p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    chip = p.locator(".book-mode")
-    expect(chip).to_contain_text("Learn as a book")
-    expect(chip.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "true")
     box = p.locator("#composer-input")
-    expect(box).to_have_attribute("placeholder", re.compile("What do you want to learn"))
-    box.fill("electricity")
+    box.fill("Teach me as a book: electricity")
     box.press("Enter")
     wait_reply(p, 1)
-    expect(chip).to_have_count(0)                                         # book mode is for one message
     expect(p.locator("article.msg-turn").last).to_have_text("Book: Electricity")
     expect(p.locator("article.msg-turn").last).to_have_attribute("title", "Teach me as a book: electricity")
     expect(p.locator(".chat-title")).to_have_text("Book: Electricity")                # the chat is named after the topic
@@ -109,13 +102,14 @@ def test_learn_a_topic_as_a_book(browser):
     assert not errors, errors
 
 
-def test_book_mode_and_image_mode_switch_each_other_off(browser):
+def test_no_learn_as_a_book_in_the_plus_menu(browser):
     p, errors = open_app(browser, FakeAI("ok"))
     p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    expect(p.locator(".book-mode")).to_be_visible()
-    p.get_by_role("button", name="Cancel book mode").click()
-    expect(p.locator(".book-mode")).to_have_count(0)
+    menu = p.get_by_role("menu", name="Add to your message")
+    expect(menu.get_by_role("menuitem", name="Take a photo")).to_be_visible()
+    expect(menu.get_by_role("menuitem", name=re.compile("Learn as a book"))).to_have_count(0)
+    expect(menu).not_to_contain_text("Learn as a book")
+    p.keyboard.press("Escape")
     p.locator("#composer-input").fill("hello")
     p.locator("#composer-input").press("Enter")
     wait_reply(p, 1)
@@ -186,19 +180,8 @@ def test_learn_every_topic_in_depth(browser):
     chapters on the way; a doubt asked between pages keeps the way back into the book."""
     ai = BookAI([DEEP1, DEEP2, DOUBT, DEEP3, DEEP4])
     p, errors = open_app(browser, ai)
-    p.get_by_role("button", name="Add photos, files and more").click()
-    expect(p.get_by_role("menuitem", name=re.compile("^Learn as a book"))).to_contain_text("every topic in depth")
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    depth = p.get_by_role("group", name="Learn as a book").get_by_role("group", name="How the book is written")
-    expect(depth.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "true")
-    depth.get_by_role("button", name="In depth").click()
-    expect(depth.get_by_role("button", name="In depth")).to_have_attribute("aria-pressed", "true")
-    expect(depth.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "false")
     box = p.locator("#composer-input")
-    expect(box).to_have_attribute("placeholder", "What do you want to learn in depth?")
-    expect(box).to_be_focused()
-    expect(p.locator(".book-mode")).to_contain_text("Every topic of every chapter explained in depth")
-    box.fill("electricity")
+    box.fill("Teach me as a book, every topic in depth: electricity")
     box.press("Enter")
     wait_reply(p, 1)
     expect(p.locator("article.msg-turn").last).to_have_text("Book in depth: Electricity")
@@ -274,10 +257,6 @@ def test_learn_every_topic_in_depth(browser):
         bar.get_by_role("button", name="Save book as PDF").click()
     pdf = open(dl.value.path(), "rb").read()
     assert pdf.startswith(b"%PDF") and len(re.findall(rb"/Type /Page\b(?!s)", pdf)) >= 3
-    # the choice is remembered for the next book
-    p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    expect(p.locator(".book-mode").get_by_role("button", name="In depth")).to_have_attribute("aria-pressed", "true")
     assert not errors, errors
 
 
@@ -287,9 +266,7 @@ def test_write_an_earlier_page_again(browser):
     fresh = CH1.replace("Everything around you is made of atoms.", "Everything around you is made of atoms — even you.")
     ai = BookAI([CH1, CH2, fresh])
     p, errors = open_app(browser, ai)
-    p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    p.locator("#composer-input").fill("electricity")
+    p.locator("#composer-input").fill("Teach me as a book: electricity")
     p.locator("#composer-input").press("Enter")
     wait_reply(p, 1)
     p.get_by_role("region", name="Book: Understanding Electricity").get_by_role("button", name=re.compile("^Next")).click()
@@ -352,7 +329,7 @@ class GeminiLike(BookAI):
 
 def test_book_written_with_the_best_model(browser):
     """A book is written with the best fast, accurate model on the user's service (here: the newest Gemini Flash), with a
-    quick start for models that think first; the user can keep the chat's own model instead."""
+    quick start for models that think first."""
     ai = GeminiLike([CH1, CH2, "Because rubbing moves electrons onto it."])
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     settings = {"server_url": GEMINI, "api_key": "test-key", "default_model": "srv:gemini-2.5-flash"}
@@ -363,18 +340,8 @@ def test_book_written_with_the_best_model(browser):
     p.on("pageerror", lambda e: errors.append(str(e)))
     p.goto(HTML.as_uri())
     expect(p.get_by_label("Model")).to_have_value("srv:gemini-2.5-flash")
-    p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    chip = p.locator(".book-mode .book-model")
-    expect(chip).to_have_attribute("aria-pressed", "true")
-    expect(chip).to_contain_text("Written by Gemini 3.8 Flash")
-    chip.click()                                                                  # keep the chat's own model…
-    expect(chip).to_have_attribute("aria-pressed", "false")
-    expect(chip).to_contain_text("this chat's model, Gemini 2.5 Flash")
-    chip.click()                                                                  # …or not
-    expect(chip).to_have_attribute("aria-pressed", "true")
     box = p.locator("#composer-input")
-    box.fill("electricity")
+    box.fill("Teach me as a book: electricity")
     box.press("Enter")
     wait_reply(p, 1)
     expect(p.locator("article.msg-book")).to_contain_text("Everything around you is made of atoms")
@@ -390,9 +357,5 @@ def test_book_written_with_the_best_model(browser):
     box.press("Enter")
     wait_reply(p, 3)
     assert ai.bodies[-1]["model"] == "gemini-3.8-flash" and "reasoning_effort" not in ai.bodies[-1]
-    # a new book in this chat: the model in use already is the best — said so, nothing to switch
-    p.get_by_role("button", name="Add photos, files and more").click()
-    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    expect(p.locator(".book-mode p.book-model")).to_contain_text("Written by Gemini 3.8 Flash")
     assert not errors, errors
     ctx.close()

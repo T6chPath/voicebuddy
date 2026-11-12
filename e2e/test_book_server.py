@@ -8,9 +8,7 @@ from test_app import send, signup, wait_reply_done
 
 def test_earlier_book_page_written_again_on_the_server(page):
     signup(page)
-    page.get_by_role("button", name="Add photos, files and more").click()
-    page.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    send(page, "electricity")
+    send(page, "Teach me as a book: electricity")
     wait_reply_done(page)
     page._assistant_before = 1
     page.locator(".book-bar").get_by_role("button", name=re.compile("^Next")).click()
