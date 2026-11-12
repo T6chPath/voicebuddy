@@ -11,7 +11,8 @@ import { MakeAppDialog } from "./MakeAppDialog";
 import { SitePreview } from "./SitePreview";
 import { BookBar } from "./BookViews";
 import { bookReplyIds, findBook, isBookRequest, type Book } from "../lib/book";
-import { bestBookModel } from "../lib/bookModel";
+import { bestBookModel, modelName } from "../lib/bookModel";
+import { bestProjectModel, isProjectRequest } from "../lib/projectModel";
 import { PlayDialog, type PlayTarget } from "./PlayDialog";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
@@ -90,6 +91,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [site, setSite] = useState<string | null>(null);
   // a book ("Teach me as a book: …") is written with the best fast, accurate model on the user's AI service
   const bestBook = useMemo(() => bestBookModel(models, model), [models, model]);
+  // a project (an app, a website, a game…) is written with the strongest coding model — unless the user picked the model
+  const userPicked = useRef(false);
   const lastStreaming = messages[messages.length - 1]?.status === "streaming";
   const askedFor = useMemo(() => {                                     // each reply's question, in one pass
     let q: string | undefined;
@@ -210,6 +213,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     // first message of a new chat changes the URL while its reply is streaming: keep that stream alive
     if (conversationId && justCreated.current === conversationId) { justCreated.current = null; return; }
     abort.current?.abort();
+    userPicked.current = false;
     if (!conversationId) {
       setMessages([]); setTitle("New chat"); setLoadState("idle");
       setModel(settings.default_model || models[0]?.id || "");
@@ -340,7 +344,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     return null;
   }
 
-  async function send(text: string, files: UploadedFile[], override?: ImageOptions, useModel?: string): Promise<boolean> {
+  async function send(text: string, files: UploadedFile[], override?: ImageOptions, useModel?: string, note?: string): Promise<boolean> {
     if (busy) return false;
     const writeWith = useModel || model;
     // "convert this html to an apk": with a page attached (or one earlier in the chat), open the app maker directly
@@ -373,7 +377,11 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     try {
       if (imageOpts.op === "generate") setImageOpts((o) => ({ ...o, op: undefined }));      // one-shot toggle
       setTarget(null);
-      if (writeWith !== model) { setModel(writeWith); onConversationChange({ id, model: writeWith }); }   // the header shows who writes
+      if (writeWith !== model) {                                   // the header shows who writes
+        setModel(writeWith);
+        onConversationChange({ id, model: writeWith });
+        if (note) toasts.push({ kind: "info", text: note }, 6000);
+      }
       await runStream((signal) => sendMessage(id, { content: text, model: writeWith, file_ids: files.map((f) => f.id),
         ...(image && Object.keys(image).length ? { image } : {}) },
         handlers(id, (server) => setMessages((ms) => ms.map((m) => (m.id === userMsg.id ? server : m)))), signal));
@@ -425,6 +433,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   async function changeModel(next: string) {
     const prev = model;
+    userPicked.current = true;
     setModel(next);
     if (conversationId) {
       try { await api.updateConversation(conversationId, { model: next }); onConversationChange({ id: conversationId, model: next }); }
@@ -577,7 +586,11 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       <div className="composer-wrap">
         <VoicePanel />
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
-                  onSend={(t, f) => send(t, f, undefined, isBookRequest(t) && bestBook ? bestBook.id : undefined)}
+                  onSend={(t, f) => {
+                    if (isBookRequest(t)) return send(t, f, undefined, bestBook?.id);
+                    const coder = !userPicked.current && isProjectRequest(t) ? bestProjectModel(models, model, f.some((x) => x.kind === "image")) : null;
+                    return send(t, f, undefined, coder?.id, coder ? `Writing this project with ${modelName(coder.id)}, a stronger coding model. You can change it at the top.` : undefined);
+                  }}
                   placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…"
                     : current?.pictures ? `Describe a picture for ${current.label.replace(/ \(free\)$/, "")} to make…` : undefined}
                   menu={[

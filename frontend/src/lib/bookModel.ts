@@ -19,15 +19,15 @@ const FAMILIES: RegExp[][] = [
 /** Not for writing a book: too small, or made for something else (speech, pictures, search, code…). */
 const UNFIT = /lite|nano|live|tts|image|audio|embed|guard|transcri|translate|robotics|research|agent|antigravity|omni|realtime|search|computer|codex|coder|\bcode\b|instant/i;
 
-const bare = (id: string) => id.replace(/^srv:/, "");
-const isFree = (id: string) => /:free$/.test(id) || bare(id) === "openrouter/free";
+export const bare = (id: string) => id.replace(/^srv:/, "");
+export const isFree = (id: string) => /:free$/.test(id) || bare(id) === "openrouter/free";
 
 /** The version in a model's name ("gemini-3.8-flash" → 3.8, "claude-haiku-4-5-20251001" → 4.5), for newest first. */
-function version(id: string): [number, number] {
+export function version(id: string): [number, number] {
   const m = bare(id).split("/").pop()!.match(/(\d+)(?:[.-](\d{1,2})(?!\d))?/);
   return m ? [+m[1], m[2] ? +m[2] : 0] : [0, 0];
 }
-const preview = (id: string) => /preview|exp\b|experimental|beta/i.test(id);
+export const preview = (id: string) => /preview|exp\b|experimental|beta/i.test(id);
 
 /** The model a book should be written with, from the service's list — or null when there is no better choice than the
  *  chat's own model (one model on a laptop, the offline demo, nothing that fits). On OpenRouter a free key stays on
