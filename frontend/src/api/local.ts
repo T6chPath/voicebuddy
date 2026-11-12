@@ -13,7 +13,8 @@ import { parseSpec } from "../plot/spec";
 import { BOOK_PREFIX, DEEP_PREFIX, isBookMessage, isBookRequest, isDeepRequest } from "../lib/book";
 import { bookSpeed } from "../lib/bookModel";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
-import { gemini, ImageEngineError, measure, openai, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { gemini, GEMINI_IMAGE_MODEL, ImageEngineError, measure, openai, OPENAI_IMAGE_MODEL, openrouterImage, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { cleanWrittenPrompt, FREE_PICTURE_MODEL, FREE_PICTURES, isPictureModel, pictureEngine, pictureName, pictureWriterMessages } from "../images/pictureModels";
 import { device, deviceModel, type DeviceModel } from "../images/device";
 import { blendUnder, composite, cutOut, drawText, fillArea, padFor, placeOn, upscale, type Side } from "../images/canvas";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
@@ -222,7 +223,8 @@ export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): 
   }
   if (!r.ok) throw new ApiError(r.status, `The server answered ${r.status} for /models.`);
   const j = await r.json().catch(() => ({}));
-  const items = (j.data || j.models || []) as { id?: string; name?: string; model?: string; pricing?: { prompt?: string; completion?: string }; context_length?: number }[];
+  const items = (j.data || j.models || []) as { id?: string; name?: string; model?: string; pricing?: { prompt?: string; completion?: string }; context_length?: number;
+    architecture?: { output_modalities?: string[] } }[];
   const host = (() => { try { return new URL(b).host; } catch { return b; } })();
   const router = /openrouter\.ai/.test(b);
   const list = items.map((m) => {
@@ -231,6 +233,10 @@ export async function fetchServerModels(s: UserSettings, signal?: AbortSignal): 
     const ctx = m.context_length && m.context_length >= 100_000 ? ` · ${m.context_length >= 1_000_000 ? Math.round(m.context_length / 1_000_000) + "M" : Math.round(m.context_length / 1000) + "K"} context` : "";
     // OpenRouter ids are "maker/model": keep the maker so 500 models stay tellable apart
     const name = router ? id.replace(/:free$/, "") : id.split("/").pop()!.replace(/\.gguf$/i, "");
+    // models that make pictures themselves (Nano Banana, GPT Image…; OpenRouter lists "image" among a model's outputs)
+    const pictures = isPictureModel(id) || (router && !!m.architecture?.output_modalities?.includes("image"));
+    if (pictures) return { id, free, info: { id: "srv:" + id, label: pictureName(id, router ? m.name : undefined) + (free ? " (free)" : ""), vision: false,
+      pictures: true, description: `makes pictures · on ${host}` } as ModelInfo };
     return { id, free, info: { id: "srv:" + id, label: name + (free ? " (free)" : ""), vision: canSee(id), description: `on ${host}${ctx}` } as ModelInfo };
   }).filter((x) => x.id && !NOT_CHAT.test(x.id));
   if (router) list.sort((a, b2) => (a.id === "openrouter/free" ? -1 : b2.id === "openrouter/free" ? 1 : 0) || Number(b2.free) - Number(a.free) || a.id.localeCompare(b2.id));
@@ -251,7 +257,7 @@ export const api = {
     const s = loadSettings();
     let srv: ModelInfo[] = [];
     try { srv = await fetchServerModels(s, AbortSignal.timeout?.(4000)); } catch { srv = modelCache?.filter((m) => m.id !== "echo") ?? []; }
-    modelCache = [...srv, ECHO];
+    modelCache = [...srv, FREE_PICTURE_MODEL, ECHO];
     return { items: modelCache };
   },
   settings: async () => loadSettings(),
@@ -304,7 +310,7 @@ export const api = {
   quickText: async (prompt: string, maxTokens = 900): Promise<string | null> => {
     const s = loadSettings();
     if (!base(s)) return null;
-    const pick = s.default_model && s.default_model !== "echo" ? s.default_model : bestModelFor({ see: false, hear: false });
+    const pick = chatModelFor(s);
     if (!pick) return null;
     try {
       const r = await net(base(s) + "/chat/completions", { method: "POST", headers: headers(s), body: JSON.stringify({
@@ -324,7 +330,7 @@ export const api = {
       providers: [
         ...(() => { const st = loadSettings(); const d = st.image_engine === "online" ? null : deviceModel(st.device_model);
           return d ? [{ name: "This phone (no internet)", model: d.label, ready: true, reason: null, ops, negative_prompt: false, seed: true }] : []; })(),
-        ...e.map((n) => ({ name: label[n], model: n === "gemini" ? "gemini-2.5-flash-image" : n === "openai" ? "gpt-image-1" : "flux",
+        ...e.map((n) => ({ name: label[n], model: n === "gemini" ? GEMINI_IMAGE_MODEL : n === "openai" ? OPENAI_IMAGE_MODEL : "flux",
           ready: true, reason: null, ops, negative_prompt: n !== "gemini", seed: n === "pollinations" }))] };
   },
   ttsVoices: async (): Promise<TTSCatalog> => ({ available: false, reason: "this app has no server; it uses your device's own voices", engines: [], voices: [], languages: [], defaults: {}, max_chars: 0 }),
@@ -853,6 +859,7 @@ const NEEDS_EDITOR = "Changing your own photos this way needs an image editor: i
  * service plus the on-phone tools in images/canvas.ts. */
 async function produce(c: ProduceCtx): Promise<MadeImage> {
   const { op, plan, job, source, refs, s, modelId, signal, notes } = c;
+  const seeWith = isPicture(modelId) ? chatModelFor(s) || modelId : modelId;
   const src = source?.file.dataUrl;
   // the picture maker for the free route: this phone (once its model is downloaded), else the free online service
   const dev: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model);
@@ -886,7 +893,27 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
 
   // keyed engines (not when pictures should be made only on this phone)
   let lastErr: ImageEngineError | null = null;
-  for (const e of s.image_engine === "device" ? [] : imageEngines(s)) {
+  // a picture model picked in the model menu makes the picture itself (the free picture AI: the free route below);
+  // if the key can't use it, the free picture AI makes it and says why
+  const pick = isPicture(modelId) ? pictureEngine(modelId, base(s), modelCache?.find((m) => m.id === modelId)?.label) : null;
+  if (pick && pick.kind !== "free" && s.image_engine !== "device") {
+    try {
+      let j = job;
+      if (op === "outpaint" && src) { const p = await padFor(src, plan.aspect_ratio || null, (plan.side || "center") as Side); j = { ...job, source: p.padded, mask: p.mask }; }
+      const key = s.api_key || "";
+      return pick.kind === "gemini" ? await gemini(j, key, net, signal, pick.model)
+        : pick.kind === "openai" ? await openai(j, base(s), key, net, signal, pick.model)
+        : await openrouterImage(j, base(s), key, pick.model, net, signal, pick.name);
+    } catch (err) {
+      if ((err as Error).name === "AbortError") throw err;
+      const ie = err instanceof ImageEngineError ? err : new ImageEngineError("The picture couldn't be made.", "failed");
+      if (ie.code === "blocked") throw ie;
+      const why = ie.message.trim();
+      notes.add(`${pick.name} couldn't make this picture — ${why.charAt(0).toLowerCase() + why.slice(1)} The free picture AI made it instead.`);
+      lastErr = ie;
+    }
+  }
+  for (const e of s.image_engine === "device" || pick ? [] : imageEngines(s)) {
     if (e === "pollinations") break;
     try {
       if (e === "gemini" && quotaKnownEmpty(s.api_key || "")) { lastErr = new ImageEngineError("no quota", "quota"); continue; }
@@ -911,7 +938,7 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
   let described: string | null | undefined;
   const scene = async () => {
     if (made) return made;
-    if (described === undefined) { c.progress(0.05, "Looking at the picture…"); described = src ? await describeImage(src, modelId, s, "all", signal) : null; }
+    if (described === undefined) { c.progress(0.05, "Looking at the picture…"); described = src ? await describeImage(src, seeWith, s, "all", signal) : null; }
     return described;
   };
   const srcAspect = source?.file.meta?.aspect_ratio as string | undefined || (source?.file.width && source.file.height ? nearestAspect(source.file.width, source.file.height) : job.aspect);
@@ -952,10 +979,10 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
       for (const r of refs) {
         const isMade = !!r.file.meta?.prompt;
         if (plan.refMode === "style") {
-          const st = await describeImage(r.file.dataUrl!, modelId, s, "style", signal) || (isMade ? `same art style as: ${r.file.meta!.prompt}` : null);
+          const st = await describeImage(r.file.dataUrl!, seeWith, s, "style", signal) || (isMade ? `same art style as: ${r.file.meta!.prompt}` : null);
           if (st) prompt += `, in this visual style: ${st}`;
         } else {
-          const who = (isMade ? (r.file.meta!.subject as string | undefined) : undefined) || await describeImage(r.file.dataUrl!, modelId, s, "subject", signal) || (isMade ? (r.file.meta!.prompt as string) : null);
+          const who = (isMade ? (r.file.meta!.subject as string | undefined) : undefined) || await describeImage(r.file.dataUrl!, seeWith, s, "subject", signal) || (isMade ? (r.file.meta!.prompt as string) : null);
           if (who) { prompt = `${prompt}. The main character/object, exactly as before: ${who}`; if (isMade && !plan.fresh) seed = r.file.meta!.seed as number ?? seed; }
           else notes.add("I couldn't look at the reference picture (the current chat model can't see images), so it may not match exactly.");
         }
@@ -1070,6 +1097,12 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
   }
   const say = async (t: string) => { row!.content += t; h.onDelta(t); };
   const op = (opts?.op || plan.op) as ImageOp;
+  if (modelId === FREE_PICTURES && op === "generate" && !plan.clarify && !plan.text) {
+    h.onTool?.({ name: "generate_image", op, status: "running" });
+    h.onProgress?.({ fraction: 0.02, text: "Writing the picture…" });
+    const written = await writePicturePrompt(cid, plan.prompt, s, signal);
+    if (written) plan = { ...plan, say: plan.prompt, prompt: written };
+  }
   const tool = op === "generate" ? "generate_image" : "edit_image";
   try {
     if (plan.clarify) { await say(plan.clarify); row.status = "complete"; h.onDone?.({ status: "complete", title: await titleIfNew(cid) }); return; }
@@ -1141,7 +1174,7 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
     if (signal.aborted && !made) { row.status = "stopped"; return; }
     h.onTool?.({ name: tool, op, status: "done" });
     h.onProgress?.({ fraction: 1, text: "" });
-    const what = op === "generate" ? `Here ${made > 1 ? `are ${made} images` : "is your image"} of **${plan.prompt.replace(/\*/g, "")}**.`
+    const what = op === "generate" ? `Here ${made > 1 ? `are ${made} images` : "is your image"} of **${(plan.say || plan.prompt).replace(/\*/g, "")}**.`
       : `${OP_DONE[op] || "Here's the changed image"}${source ? ` (from image #${source.n})` : ""}.`;
     await say(what + (notes.size ? "\n\n" + [...notes].map((x) => `_${x}_`).join("\n\n") : ""));
     row.status = "complete";
@@ -1189,6 +1222,39 @@ async function titleIfNew(cid: string): Promise<string | null> {
   return title;
 }
 
+/** A message to a picture model that doesn't read like a picture request by itself ("a red fox in the snow"): a new
+ *  picture of it — or, with a picture attached, that picture changed. */
+function picturePlan(text: string, atts: Attachment[]): Plan {
+  const attached = atts.some((a) => a.kind === "image");
+  return { op: attached ? "edit" : "generate", prompt: text.trim() || "a beautiful picture", image_ref: attached ? "attached" : "latest" };
+}
+
+/** The free picture AI: the chat's own AI turns the request (and the conversation around it) into a detailed picture
+ *  description for the free picture service. null when there's no chat AI to ask, or it doesn't answer in time. */
+async function writePicturePrompt(cid: string, request: string, s: UserSettings, signal: AbortSignal): Promise<string | null> {
+  const writer = chatModelFor(s);
+  if (!writer || !base(s)) return null;
+  const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && m.content);
+  const history = rows.slice(0, -1).map((m) => ({ role: m.role, text: m.content }));        // the request itself is the last one
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  signal.addEventListener("abort", stop, { once: true });
+  const timer = setTimeout(stop, 20_000);
+  try {
+    const r = await net(base(s) + "/chat/completions", { method: "POST", signal: ctl.signal, headers: headers(s), body: JSON.stringify({
+      model: writer.replace(/^srv:/, ""), stream: false, temperature: 0.7, max_tokens: 400, messages: pictureWriterMessages(history, request) }) });
+    if (!r.ok) return null;
+    const j = await r.json() as { choices?: { message?: { content?: string } }[] };
+    return cleanWrittenPrompt(j.choices?.[0]?.message?.content || "") || null;
+  } catch (e) {
+    if (signal.aborted) throw e;
+    return null;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+}
+
 /** Should this message make or change a picture? */
 async function imagePlan(cid: string, text: string, atts: Attachment[], opts?: ImageOptions): Promise<Plan | null> {
   const msgs = await messagesOf(cid);
@@ -1213,8 +1279,19 @@ export const canSee = (id: string) => !TEXT_ONLY.test(id);
 /** Models that can listen to recordings (input_audio). */
 export const canHear = (id: string) => /gemini(?!.*(embed|image|tts))|gpt-4o(-mini)?-audio|gpt-audio|voxtral|omni/i.test(id);
 const HEAR_PREF = [/gemini-2\.5-flash$/, /gemini-[\d.]+-flash(?!-lite)/, /gemini/, /gpt-4o-mini-audio|gpt-4o-audio|gpt-audio/, /voxtral/, /omni/];
+/** A model that makes pictures (picked in the model menu) rather than writing. */
+function isPicture(id: string): boolean {
+  return isPictureModel(id) || !!modelCache?.some((m) => m.id === id && m.pictures);
+}
+
+/** The chat's own AI on this connection (never a picture model): writes picture prompts, looks at pictures. */
+function chatModelFor(s: UserSettings): string | null {
+  if (s.default_model && s.default_model !== "echo" && s.default_model.startsWith("srv:") && !isPicture(s.default_model)) return s.default_model;
+  return (modelCache || []).find((m) => m.id.startsWith("srv:") && !isPicture(m.id))?.id || bestModelFor({ see: false, hear: false });
+}
+
 function bestModelFor(need: { see: boolean; hear: boolean }): string | null {
-  const ids = (modelCache || []).map((m) => m.id.replace(/^srv:/, "")).filter((id) => id !== "echo" && !NOT_CHAT.test(id) &&
+  const ids = (modelCache || []).filter((m) => !isPicture(m.id)).map((m) => m.id.replace(/^srv:/, "")).filter((id) => id !== "echo" && !NOT_CHAT.test(id) &&
     (!need.see || canSee(id)) && (!need.hear || canHear(id)));
   const free = ids.filter((id) => /:free$/.test(id));
   const prefs = need.hear ? HEAR_PREF : VISION_PREF;
@@ -1308,7 +1385,7 @@ export async function sendMessage(cid: string, body: { content: string; model?: 
     if (!f) throw new ApiError(400, "An attached file was not found. Remove it and try again.");
     atts.push({ id: f.id, name: f.name, mime: f.mime, size: f.size, kind: f.kind, ...(f.images?.length ? { _pictures: true } : {}) } as Attachment);
   }
-  const plan = await imagePlan(cid, body.content, atts, body.image);
+  const plan = (await imagePlan(cid, body.content, atts, body.image)) ?? (isPicture(model) ? picturePlan(body.content, atts) : null);
   if (!plan && model === "echo" && atts.some((a) => a.kind === "image" || (a as { _pictures?: boolean })._pictures))
     throw new ApiError(400, "The offline demo can't see pictures. To have photos explained, open Settings → Connection, choose Google Gemini — free key, and save.");
   for (const a of atts) delete (a as { _pictures?: boolean })._pictures;
@@ -1326,7 +1403,7 @@ export async function regenerate(cid: string, h: StreamHandlers, signal: AbortSi
   while (rows.length && rows[rows.length - 1].role === "assistant") await del("messages", rows.pop()!.id);
   if (!rows.length) throw new ApiError(400, "Nothing to regenerate.");
   const last = rows[rows.length - 1];
-  const plan = last.role === "user" ? await imagePlan(cid, last.content, last.attachments) : null;
+  const plan = last.role === "user" ? (await imagePlan(cid, last.content, last.attachments)) ?? (isPicture(c.model) ? picturePlan(last.content, last.attachments) : null) : null;
   if (plan) await runImageTurn(cid, c.model, null, { ...plan, seed: undefined, fresh: true }, undefined, h, signal);   // a new picture
   else await runTurn(cid, c.model, null, h, signal);
 }

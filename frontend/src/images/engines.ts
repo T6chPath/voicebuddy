@@ -1,8 +1,10 @@
 // Image engines the phone app calls directly (no server):
 //   free    — Pollinations' public image endpoint: no key, no sign-up (rate-limited: about one image per 15 s).
-//   gemini  — Google's Gemini image model with the user's Gemini key: makes AND edits images. Google offers it on paid
-//             (billing-enabled) keys; free keys get "limit: 0", and the app then falls back to the free engine.
-//   openai  — gpt-image-1 with an OpenAI key (new images).
+//   gemini  — Google's Gemini picture model (Nano Banana 2) with the user's Gemini key: makes AND edits images. Google
+//             offers it on paid (billing-enabled) keys; free keys get "limit: 0", and the app then falls back to the free engine.
+//   openai  — GPT Image 2 with an OpenAI key.
+//   openrouter — any OpenRouter model that makes pictures (Nano Banana, GPT Image, Grok Imagine, Seedream…), chosen in the
+//             model menu.
 // Everything comes back as a data: URL that the chat stores on the device.
 import type { ImageOp } from "../api/types";
 import { sizeFor, STYLES, normStyle, styledPrompt } from "./intent";
@@ -120,7 +122,9 @@ export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSig
 }
 
 /* ---------------- Gemini ---------------- */
-export const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
+/** Nano Banana 2; keys or regions without it get the first Nano Banana. */
+export const GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image";
+const GEMINI_IMAGE_FALLBACK = "gemini-2.5-flash-image";
 
 function instruction(job: ImageJob): string {
   const style = STYLES[normStyle(job.style)][0];
@@ -151,14 +155,14 @@ function inline(dataUrl: string) {
   return { inlineData: { mimeType: m[1], data: m[2] } };
 }
 
-export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: AbortSignal): Promise<MadeImage> {
+export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: AbortSignal, model = GEMINI_IMAGE_MODEL): Promise<MadeImage> {
   const parts: unknown[] = [{ text: instruction(job) }];
   if (job.source) parts.push(inline(job.source));
   if (job.mask) parts.push(inline(job.mask));
   for (const r of job.references || []) parts.push(inline(r));
   const cfg: Record<string, unknown> = { responseModalities: ["TEXT", "IMAGE"] };
   if (job.op === "generate" || job.op === "outpaint") cfg.imageConfig = { aspectRatio: job.aspect };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   let r: Response;
   try {
     r = await net(url, { method: "POST", signal, headers: { "Content-Type": "application/json", "x-goog-api-key": key },
@@ -178,7 +182,8 @@ export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: A
     }
     if (r.status === 429) throw new ImageEngineError("Gemini's rate limit was reached. Wait a minute and try again.", "rate_limited", 60);
     if (r.status === 401 || r.status === 403 || /API key not valid/i.test(msg)) throw new ImageEngineError("Gemini rejected the API key. Check it in Settings → Connection.", "auth");
-    if (r.status === 404) throw new ImageEngineError(`Gemini doesn't offer the image model “${GEMINI_IMAGE_MODEL}” for this key.`, "config");
+    if (r.status === 404 && model === GEMINI_IMAGE_MODEL) return gemini(job, key, net, signal, GEMINI_IMAGE_FALLBACK);
+    if (r.status === 404) throw new ImageEngineError(`Gemini doesn't offer the picture model “${model}” for this key.`, "config");
     throw new ImageEngineError(`Gemini returned an error (${r.status}). ${msg.slice(0, 200)}`.trim(), "failed");
   }
   if (j.promptFeedback?.blockReason) throw new ImageEngineError("Gemini declined this request under its safety rules.", "blocked");
@@ -192,7 +197,7 @@ export async function gemini(job: ImageJob, key: string, net: Fetcher, signal: A
         const notes: string[] = [];
         if (job.op === "remove_background") notes.push("Gemini can't make transparent images, so the subject is on white.");
         if (job.mask) notes.push("Gemini follows the painted area approximately.");
-        return { dataUrl, mime: d.mimeType!, width, height, engine: "gemini", model: GEMINI_IMAGE_MODEL, notes };
+        return { dataUrl, mime: d.mimeType!, width, height, engine: "gemini", model, notes };
       }
     }
   }
@@ -252,7 +257,7 @@ function multipart(fields: Record<string, string>, files: { name: string; filena
   return { body: bytesToB64(total), type: `multipart/form-data; boundary=${boundary}` };
 }
 
-async function openaiResult(r: Response): Promise<MadeImage> {
+async function openaiResult(r: Response, model: string): Promise<MadeImage> {
   const j = await r.json().catch(() => ({})) as { data?: { b64_json?: string }[]; error?: { message?: string; code?: string } };
   if (!r.ok) {
     const msg = j.error?.message || "";
@@ -265,10 +270,13 @@ async function openaiResult(r: Response): Promise<MadeImage> {
   if (!b64) throw new ImageEngineError("OpenAI answered without an image.", "failed");
   const dataUrl = `data:image/png;base64,${b64}`;
   const { width, height } = await measure(dataUrl);
-  return { dataUrl, mime: "image/png", width, height, engine: "openai", model: "gpt-image-1", notes: [] };
+  return { dataUrl, mime: "image/png", width, height, engine: "openai", model, notes: [] };
 }
 
-export async function openai(job: ImageJob, base: string, key: string, net: Fetcher, signal: AbortSignal): Promise<MadeImage> {
+/** GPT Image 2; accounts without it get GPT Image 1. */
+export const OPENAI_IMAGE_MODEL = "gpt-image-2";
+
+export async function openai(job: ImageJob, base: string, key: string, net: Fetcher, signal: AbortSignal, model = OPENAI_IMAGE_MODEL): Promise<MadeImage> {
   const [a, b] = job.aspect.split(":").map(Number);
   const size = a > b ? "1536x1024" : a < b ? "1024x1536" : "1024x1024";
   const url = base.replace(/\/+$/, "");
@@ -279,17 +287,59 @@ export async function openai(job: ImageJob, base: string, key: string, net: Fetc
     const inputs = [job.source, ...(job.references || [])].filter(Boolean) as string[];
     if (!inputs.length) {
       r = await net(url + "/images/generations", { method: "POST", signal, headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: "gpt-image-1", prompt, size, n: 1 }) });
+        body: JSON.stringify({ model, prompt, size, n: 1 }) });
     } else {
       const { width, height } = await measure(inputs[0]);
       const files = inputs.map((d, i) => ({ name: "image[]", filename: `image${i}.png`, dataUrl: d }));
       if (job.mask) files.push({ name: "mask", filename: "mask.png", dataUrl: await alphaMask(job.mask, width, height) });
-      const mp = multipart({ model: "gpt-image-1", prompt: prompt + (job.op === "generate" ? instruction({ ...job, prompt: "" }).replace(/^Generate an image: \.?/, " ") : ""), size: job.op === "generate" || job.op === "outpaint" ? size : "auto", n: "1" }, files);
+      const mp = multipart({ model, prompt: prompt + (job.op === "generate" ? instruction({ ...job, prompt: "" }).replace(/^Generate an image: \.?/, " ") : ""), size: job.op === "generate" || job.op === "outpaint" ? size : "auto", n: "1" }, files);
       r = await net(url + "/images/edits", { method: "POST", signal, headers: { "Content-Type": mp.type, Authorization: `Bearer ${key}`, "X-Zenvqo-Body-Base64": "1" }, body: mp.body });
     }
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
     throw new ImageEngineError("Couldn't reach OpenAI. Check your internet connection.", "network");
   }
-  return openaiResult(r);
+  // an account or service without the newest model: the previous one
+  if (model === OPENAI_IMAGE_MODEL && (r.status === 404 || r.status === 400)) {
+    const peek = await r.clone().json().catch(() => ({})) as { error?: { message?: string; code?: string } };
+    if (r.status === 404 || /model/i.test(`${peek.error?.code || ""} ${peek.error?.message || ""}`)) return openai(job, base, key, net, signal, "gpt-image-1");
+  }
+  return openaiResult(r, model);
+}
+
+/* ---------------- OpenRouter: any model that makes pictures ---------------- */
+/** A picture from an OpenRouter model that makes pictures (chat completions with image output). */
+export async function openrouterImage(job: ImageJob, base: string, key: string, model: string, net: Fetcher, signal: AbortSignal,
+                                      name = model): Promise<MadeImage> {
+  const content: unknown[] = [{ type: "text", text: instruction(job) }];
+  for (const d of [job.source, job.mask, ...(job.references || [])]) if (d) content.push({ type: "image_url", image_url: { url: d } });
+  const ask = async (modalities: string[]) => net(base.replace(/\/+$/, "") + "/chat/completions", { method: "POST", signal,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "X-Title": "zenvqo" },
+    body: JSON.stringify({ model, stream: false, modalities, messages: [{ role: "user", content }],
+      ...(job.op === "generate" || job.op === "outpaint" ? { image_config: { aspect_ratio: job.aspect } } : {}) }) });
+  let r: Response;
+  try {
+    r = await ask(["image", "text"]);
+    if (r.status === 400) {                                             // models that only make pictures (no words)
+      const again = await ask(["image"]);
+      if (again.ok) r = again;
+    }
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ImageEngineError("Couldn't reach OpenRouter. Check your internet connection.", "network");
+  }
+  const j = await r.json().catch(() => ({})) as { error?: { message?: string; code?: number | string };
+    choices?: { message?: { content?: string; images?: { image_url?: { url?: string } }[] } }[] };
+  if (!r.ok) {
+    const msg = j.error?.message || "";
+    if (r.status === 401) throw new ImageEngineError("OpenRouter rejected the API key. Check it in Settings → Connection.", "auth");
+    if (r.status === 402) throw new ImageEngineError(`${name} needs credit on your OpenRouter account.`, "quota");
+    if (r.status === 429) throw new ImageEngineError(`${name} is busy right now (rate limit). Try again in a minute.`, "rate_limited", 60);
+    if (/safety|moderation|content policy/i.test(msg)) throw new ImageEngineError(`${name} declined this request under its safety rules.`, "blocked");
+    throw new ImageEngineError(`${name} returned an error (${r.status}). ${msg.slice(0, 200)}`.trim(), "failed");
+  }
+  const url = j.choices?.[0]?.message?.images?.find((x) => x.image_url?.url?.startsWith("data:image/"))?.image_url?.url;
+  if (!url) throw new ImageEngineError(`${name} answered without a picture.`, "failed");
+  const { width, height } = await measure(url);
+  return { dataUrl: url, mime: url.slice(5, url.indexOf(";")), width, height, engine: "openrouter", model, notes: [] };
 }

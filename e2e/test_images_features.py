@@ -212,6 +212,35 @@ def test_openai_key_edits_your_photo_with_an_upload(browser, tmp_path):
     expect(reply.locator("img").first).to_be_visible()
     url, ctype, body = calls[-1]
     assert url.endswith("/images/edits") and ctype.startswith("multipart/form-data; boundary=")
-    assert b'name="image[]"' in body and b"\x89PNG" in body and b"gpt-image-1" in body, "the photo itself is uploaded as bytes"
+    assert b'name="image[]"' in body and b"\x89PNG" in body and b"gpt-image-2" in body, "the photo itself is uploaded as bytes"   # GPT Image 2
+    assert not polli.calls
+    assert not errors, errors
+
+
+def test_openai_without_gpt_image_2_uses_gpt_image_1(browser):
+    """An account (or an OpenAI-compatible service) without the newest picture model: the app asks for the previous one."""
+    calls = []
+
+    def handle(route):
+        req = route.request
+        if req.method == "OPTIONS":
+            return route.fulfill(status=204, headers=CORS)
+        if req.url.endswith("/models"):
+            return route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps({"data": [{"id": "gpt-4o-mini"}]}))
+        body = json.loads(req.post_data)
+        calls.append(body["model"])
+        if body["model"] == "gpt-image-2":
+            return route.fulfill(status=404, headers=CORS, content_type="application/json",
+                                 body=json.dumps({"error": {"message": "The model `gpt-image-2` does not exist", "code": "model_not_found"}}))
+        b = io.BytesIO()
+        Image.new("RGB", (64, 64), (200, 60, 30)).save(b, "PNG")
+        route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps({"data": [{"b64_json": base64.b64encode(b.getvalue()).decode()}]}))
+
+    p, errors, polli = app(browser, {"server_url": "https://api.openai.com/v1", "api_key": "sk-test", "default_model": "echo"})
+    p.context.route("https://api.openai.com/v1/**", handle)
+    p.locator("#composer-input").fill("draw a red kite in the sky")
+    p.locator("#composer-input").press("Enter")
+    expect(p.locator("article.msg-assistant").last.locator("img").first).to_be_visible(timeout=20_000)
+    assert calls == ["gpt-image-2", "gpt-image-1"], calls
     assert not polli.calls
     assert not errors, errors

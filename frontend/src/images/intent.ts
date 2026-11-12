@@ -23,6 +23,7 @@ export interface Plan {
   refMode?: "style" | "subject";     // follow the reference's look, or keep its character/object
   side?: "center" | "left" | "right" | "top" | "bottom";   // outpainting: where the new area goes
   target?: string;                   // replace_object: the thing being replaced
+  say?: string;                      // what to call the picture in the reply (when the prompt was written out in full)
 }
 
 /* ---------- styles and sizes ---------- */

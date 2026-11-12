@@ -479,7 +479,12 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
           <span className="sr-only">Model</span>
           <select value={model} onChange={(e) => changeModel(e.target.value)} disabled={busy || models.length === 0}
                   aria-describedby={current?.description ? "model-desc" : undefined}>
-            {models.map((m) => <option key={m.id} value={m.id}>{m.label}{m.vision ? " · images" : ""}</option>)}
+            {models.filter((m) => !m.pictures).map((m) => <option key={m.id} value={m.id}>{m.label}{m.vision ? " · images" : ""}</option>)}
+            {models.some((m) => m.pictures) && (
+              <optgroup label="Make pictures">                                  {/* AI models that make pictures themselves */}
+                {models.filter((m) => m.pictures).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </optgroup>
+            )}
           </select>
           {current?.description && <span id="model-desc" className="sr-only">{current.description}</span>}
         </label>
@@ -573,7 +578,8 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
         <VoicePanel />
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
                   onSend={(t, f) => send(t, f, undefined, isBookRequest(t) && bestBook ? bestBook.id : undefined)}
-                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…" : undefined}
+                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…"
+                    : current?.pictures ? `Describe a picture for ${current.label.replace(/ \(free\)$/, "")} to make…` : undefined}
                   menu={[
                     { key: "voice", icon: "wave", label: "Voice conversation", hint: "Talk and listen, hands-free", ariaLabel: "Start voice conversation",
                       onSelect: () => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); } },

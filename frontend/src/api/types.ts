@@ -1,6 +1,8 @@
 export interface User { id: string; email: string; name: string }
 
-export interface ModelInfo { id: string; label: string; vision: boolean; description: string }
+export interface ModelInfo { id: string; label: string; vision: boolean; description: string;
+  /** makes pictures itself (Nano Banana, GPT Image… or the free picture AI) instead of writing */
+  pictures?: boolean }
 
 export interface ImageMeta {
   op: ImageOp; prompt: string; seed: number | null; provider: string; model: string; parent_id: string | null;
