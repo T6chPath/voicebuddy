@@ -63,6 +63,41 @@ jobs:
           unzip -p "$T/out.apk" assets/index.html | grep -q "My Todo List"
           cp "$T/out.apk" made-from-html-test.apk
 
+      - name: Check "Google Play package" (web page → .aab) with bundletool, jarsigner and aapt2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          T=$(mktemp -d)
+          cp android/webshell/build/outputs/bundle/release/*.aab "$T/template.aab"
+          unzip -l "$T/template.aab"
+          gh release download -R google/bundletool --pattern 'bundletool-all-*.jar' -O "$T/bundletool.jar"
+          javac -d "$T/cls" android/app/src/main/java/app/zenvqo/chat/ApkMaker.java android/app/src/main/java/app/zenvqo/chat/PlayBundle.java
+          printf '<!doctype html><title>Chai Shop</title><h1>Chai Shop</h1>' > "$T/page.html"
+          java -cp "$T/cls" app.zenvqo.chat.PlayBundle "$T/template.aab" "$T/page.html" "Chai Shop" com.chaishop.app 7 1.6 "$T/out.aab" "$T/upload.p12" secret123
+          jarsigner -verify -verbose:summary "$T/out.aab" | tee "$T/jarsigner.txt"
+          grep -q "jar verified" "$T/jarsigner.txt"
+          keytool -list -v -keystore "$T/upload.p12" -storetype PKCS12 -storepass secret123 | grep -E "Alias name|Owner|Valid|SHA256:"
+          java -jar "$T/bundletool.jar" validate --bundle "$T/out.aab"
+          java -jar "$T/bundletool.jar" dump manifest --bundle "$T/out.aab" | tee "$T/manifest.xml"
+          grep -Eq 'package="com.chaishop.app"' "$T/manifest.xml"
+          grep -Eq 'android:versionCode="7"' "$T/manifest.xml"
+          grep -Eq 'android:versionName="1.6"' "$T/manifest.xml"
+          grep -Eq 'android:targetSdkVersion="36"' "$T/manifest.xml"
+          grep -Eq 'android:label="Chai Shop"' "$T/manifest.xml"
+          keytool -genkeypair -keystore "$T/dev.p12" -storetype PKCS12 -storepass secret1 -keypass secret1 -alias a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=dev" >/dev/null 2>&1
+          java -jar "$T/bundletool.jar" build-apks --bundle "$T/out.aab" --output "$T/out.apks" --mode=universal \
+            --ks "$T/dev.p12" --ks-pass pass:secret1 --ks-key-alias a --key-pass pass:secret1
+          unzip -p "$T/out.apks" universal.apk > "$T/universal.apk"
+          "$BT/apksigner" verify --min-sdk-version 24 "$T/universal.apk"
+          "$BT/aapt2" dump badging "$T/universal.apk" | tee "$T/badging.txt" | head -14
+          grep -q "package: name='com.chaishop.app' versionCode='7' versionName='1.6'" "$T/badging.txt"
+          grep -q "targetSdkVersion:'36'" "$T/badging.txt"
+          grep -q "application-label:'Chai Shop'" "$T/badging.txt"
+          unzip -p "$T/universal.apk" assets/index.html | grep -q "Chai Shop"
+          unzip -l zenvqo-chat.apk | grep -q "assets/webshell.aab"
+
       - uses: actions/upload-artifact@v4
         with:
           name: zenvqo-chat-apk

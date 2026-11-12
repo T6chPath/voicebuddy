@@ -72,6 +72,13 @@ async function makeAppFromFile(id: string, ev = "zc-make-app") {
   if (html) window.dispatchEvent(new CustomEvent(ev, { detail: { html } }));
 }
 
+/** An attached APK → Google Play package (when it's an app made from a web page). */
+async function playFromApk(id: string, name: string) {
+  const [html, icon] = await Promise.all([api.fileText(id), api.fileIcon(id)]);
+  const page = html && /<(!doctype|html|head|body|div|h1|script)\b/i.test(html) && !/^\(Android app \(APK\)\)/.test(html) ? html : "";
+  window.dispatchEvent(new CustomEvent("zc-play", { detail: page ? { html: page, icon } : { html: "", error: `${name} isn't an app made from a web page, so it can't be turned into a Google Play package here.` } }));
+}
+
 export const MessageView = memo(function MessageView({ m, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
   onImageAction, imageActions = false, numberOf = noNumber, request, imageOps }: Props) {
   const [copied, setCopied] = useState(false);
@@ -94,13 +101,16 @@ export const MessageView = memo(function MessageView({ m, isLast, busy, models, 
         <ul className="att-list fc-row" aria-label="Attachments">
           {m.attachments.filter((a) => !(a.kind === "image" && fileHref(a))).map((a) => {
             const page = /\.x?html?$/i.test(a.name);
+            const apk = /\.apk$/i.test(a.name);
             return <li key={a.id} className="chip fc-li">
               <FileCard name={a.name} mime={a.mime} kind={a.kind} size={a.size}
                         onOpen={() => window.dispatchEvent(new CustomEvent("zc-preview-file", { detail: { id: a.id, name: a.name, mime: a.mime, kind: a.kind, size: a.size, href: fileHref(a) } }))} />
               {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id)} aria-label={`Make an Android app from ${a.name}`}>
                 <Icon name="phone" size={14} /> Make app</button>}
               {page && <button type="button" className="chip chip-action" onClick={() => void makeAppFromFile(a.id, "zc-view-site")} aria-label={`View ${a.name} as a website`}>
-                <Icon name="globe" size={14} /> View site</button>}</li>;
+                <Icon name="globe" size={14} /> View site</button>}
+              {apk && <button type="button" className="chip chip-action" onClick={() => void playFromApk(a.id, a.name)} aria-label={`Make a Google Play package from ${a.name}`}>
+                <Icon name="upload" size={14} /> Google Play</button>}</li>;
           })}
         </ul>
       )}

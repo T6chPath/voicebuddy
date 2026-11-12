@@ -51,6 +51,13 @@ export function MakeAppDialog({ html, onClose }: { html: string; onClose: () => 
     }
   }
 
+  /** the same page, packaged for Google Play Console instead */
+  function toPlay() {
+    const detail = { html, name: label, icon: picture || null };
+    onClose();
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("zc-play", { detail })), 50);
+  }
+
   function pick(f: File | undefined) {
     if (!f) return;
     const r = new FileReader();
@@ -86,6 +93,8 @@ export function MakeAppDialog({ html, onClose }: { html: string; onClose: () => 
               </div>
             </div>
             <p className="muted small-text">Page size: {fileSize(new Blob([html]).size)}</p>
+            <button type="button" className="btn small play-link" onClick={toPlay} disabled={busy}>
+              <Icon name="upload" size={16} /> Google Play package (to publish on the Play Store)</button>
             {!avail.ok && <p className="form-error" role="alert">{avail.reason}</p>}
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="modal-actions">
@@ -103,6 +112,8 @@ export function MakeAppDialog({ html, onClose }: { html: string; onClose: () => 
                 : <span><strong>{app?.name}</strong> is ready ({fileSize(app?.size || 0)}){app?.saved ? <> and saved in {app.saved}</> : null}.</span>}
             </p>
             {step !== "installed" && <p className="muted small-text">The first time, Android asks you to allow zenvqo to install apps — allow it, then tap Install again.</p>}
+            <button type="button" className="btn small play-link" onClick={toPlay} disabled={step === "installing"}>
+              <Icon name="upload" size={16} /> Google Play package (to publish on the Play Store)</button>
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="modal-actions">
               {app?.saved && <button type="button" className="btn" onClick={() => app && shareApk(app.id)}><Icon name="share" size={16} /> Share</button>}

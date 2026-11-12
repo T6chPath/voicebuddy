@@ -21,6 +21,7 @@ const P: Record<string, string> = {
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",
   image: "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9.5a1.5 1.5 0 1 0 0-.01",
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  upload: "M12 16V5M7 10l5-5 5 5M5 20h14",
   wand: "M15 4V2M15 10V8M12 5h-2M20 5h-2M18 7.5l1.5 1.5M18 2.5L19.5 1M3 21l11-11 2 2L5 23z",
   brush: "M14 4l6 6-8 8H6v-6zM3 21c2 0 3-1 3-3",
   layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",

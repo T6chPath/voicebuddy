@@ -6,13 +6,14 @@ plugins {
 
 android {
     namespace "app.zenvqo.webshell"
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         // a placeholder: the phone gives every app its own package name (see ApkMaker.TEMPLATE_PACKAGE)
         applicationId "app.zenvqo.webshell.template"
         minSdk 24
-        targetSdk 34
+        // Google Play takes new apps and updates only when they target Android 16 (API 36), from 31 Aug 2026
+        targetSdk 36
         versionCode 1
         versionName "1.0"
     }

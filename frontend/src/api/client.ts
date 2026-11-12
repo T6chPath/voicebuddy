@@ -68,6 +68,8 @@ export const api = {
     const r = await fetch(fileUrl(id), { headers: HEADERS, credentials: "same-origin" }).catch(() => null);
     return r && r.ok ? r.text() : null;
   },
+  fileIcon: async (_id: string): Promise<string | null> => null,
+  quickText: async (_prompt: string, _maxTokens?: number): Promise<string | null> => null,
   me: () => request<User>("GET", "/api/auth/me"),
   login: (email: string, password: string) => request<User>("POST", "/api/auth/login", { email, password }),
   register: (email: string, name: string, password: string) => request<User>("POST", "/api/auth/register", { email, name, password }),

@@ -64,4 +64,11 @@ def copyWebShell = tasks.register("copyWebShell", Copy) {
     into webshellOut
     rename { "webshell.apk" }
 }
-tasks.named("preBuild") { dependsOn copyWebShell }
+// "Google Play package": the same template as an Android App Bundle, bundled as assets/webshell.aab
+def copyWebShellBundle = tasks.register("copyWebShellBundle", Copy) {
+    dependsOn ":webshell:bundleRelease"
+    from(project(":webshell").layout.buildDirectory.dir("outputs/bundle/release")) { include "*.aab" }
+    into webshellOut
+    rename { "webshell.aab" }
+}
+tasks.named("preBuild") { dependsOn copyWebShell, copyWebShellBundle }

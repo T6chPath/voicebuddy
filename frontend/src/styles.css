@@ -605,6 +605,14 @@ details summary { cursor: pointer; font-weight: 500; padding: 6px 0; }
   background-size: cover; background-position: center; box-shadow: 0 6px 18px rgba(15, 38, 35, .22); }
 .app-icon-name { font-size: .9em; font-weight: 500; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .make-app-lede { margin: 0 0 10px; }
+.play-link { justify-self: start; margin: 2px 0 10px; flex-wrap: wrap; text-align: left; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field .count { font-style: normal; font-weight: 400; color: var(--muted); font-size: .85em; float: right; font-variant-numeric: tabular-nums; }
+.field small { font-size: .82em; }
+.play .icon-pick { margin: -4px 0 14px; align-items: center; flex-wrap: wrap; }
+.play-files { list-style: none; padding: 0; margin: 6px 0 10px; display: grid; gap: 8px; }
+.play-files li { display: flex; gap: 10px; align-items: flex-start; font-size: .92em; }
+.play-files svg { color: var(--accent); flex: none; margin-top: 2px; }
 .icon-pick { display: flex; flex-wrap: wrap; gap: 8px; }
 .make-app-done { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 6px; }
 .make-app-done svg { color: var(--ok); flex: none; margin-top: 3px; }

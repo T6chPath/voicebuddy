@@ -236,38 +236,48 @@ final class NativeApk {
     }
 
     /** A square launcher icon: the user's picture, centre-cropped. */
-    private static byte[] iconFromImage(byte[] img) {
+    private static byte[] iconFromImage(byte[] img) { return iconFromImage(img, 192); }
+
+    static byte[] iconFromImage(byte[] img, int size) {
         Bitmap src = BitmapFactory.decodeByteArray(img, 0, img.length);
         if (src == null) return null;
         int s = Math.min(src.getWidth(), src.getHeight());
-        Bitmap out = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
         android.graphics.Rect from = new android.graphics.Rect((src.getWidth() - s) / 2, (src.getHeight() - s) / 2, (src.getWidth() + s) / 2, (src.getHeight() + s) / 2);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        c.drawBitmap(src, from, new RectF(0, 0, 192, 192), p);
+        c.drawBitmap(src, from, new RectF(0, 0, size, size), p);
         return png(out);
     }
 
     /** The app name's first letter on a colour picked from the name. */
-    private static byte[] letterIcon(String label) {
+    private static byte[] letterIcon(String label) { return letterIcon(label, 192, true); }
+
+    static int letterColour(String label) {
         int[] colours = {0xFF0060E6, 0xFF1F4E8C, 0xFF7A3E9D, 0xFFB4441F, 0xFF2E7D32, 0xFF8C5A00, 0xFF00796B, 0xFF37474F};
-        int bg = colours[Math.abs(label.hashCode()) % colours.length];
-        Bitmap out = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        return colours[Math.abs(label.hashCode()) % colours.length];
+    }
+
+    /** The app name's first letter on a colour picked from the name (rounded for a launcher icon, square for the Play listing,
+     *  which rounds icons itself). */
+    static byte[] letterIcon(String label, int size, boolean rounded) {
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setColor(bg);
-        c.drawRoundRect(new RectF(0, 0, 192, 192), 44, 44, p);
+        p.setColor(letterColour(label));
+        if (rounded) c.drawRoundRect(new RectF(0, 0, size, size), size * 44f / 192, size * 44f / 192, p);
+        else c.drawRect(0, 0, size, size, p);
         String ch = label.substring(0, label.offsetByCodePoints(0, 1)).toUpperCase(java.util.Locale.ROOT);
         p.setColor(0xFFFFFFFF);
-        p.setTextSize(108);
+        p.setTextSize(size * 108f / 192);
         p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         p.setTextAlign(Paint.Align.CENTER);
         Paint.FontMetrics fm = p.getFontMetrics();
-        c.drawText(ch, 96, 96 - (fm.ascent + fm.descent) / 2, p);
+        c.drawText(ch, size / 2f, size / 2f - (fm.ascent + fm.descent) / 2, p);
         return png(out);
     }
 
-    private static byte[] png(Bitmap b) {
+    static byte[] png(Bitmap b) {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         b.compress(Bitmap.CompressFormat.PNG, 100, o);
         return o.toByteArray();
@@ -292,7 +302,7 @@ final class NativeApk {
         return uri;
     }
 
-    private static byte[] readAll(InputStream in) throws Exception {
+    static byte[] readAll(InputStream in) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] buf = new byte[65536];
         int n;

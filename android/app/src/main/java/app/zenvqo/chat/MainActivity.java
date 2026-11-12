@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(pdf, "ZenvqoPDF");         // replies → PDF files in Downloads
         web.addJavascriptInterface(new NativeAssets(this), "ZenvqoAssets");   // data files the PDF reader needs
         web.addJavascriptInterface(new NativeApk(this, web), "ZenvqoApk");       // "Make app": web pages → installable APKs
+        web.addJavascriptInterface(new NativePlay(this, web), "ZenvqoPlay");     // "Google Play package": web pages → .aab + store listing folder
         share = new NativeShare(this, web);
         web.addJavascriptInterface(share, "ZenvqoShare");     // "Share → zenvqo" from WhatsApp, Gallery, Files…
         images = new NativeImageGen(this, web);

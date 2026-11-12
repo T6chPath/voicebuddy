@@ -11,7 +11,8 @@ python3 e2e/android/pdf_on_phone.py "$OUT"; rc=$?
 python3 e2e/android/read_on_phone.py "$OUT" || rc=1
 python3 e2e/android/apps_on_phone.py "$OUT" || rc=1
 python3 e2e/android/share_on_phone.py "$OUT" || rc=1
+python3 e2e/android/play_on_phone.py "$OUT" || rc=1
 python3 e2e/android/pictures_on_phone.py "$OUT" || rc=1
 adb logcat -d > "$OUT/logcat.txt" || true
-grep -E "ZenvqoPDF|ZenvqoApk|ZenvqoShare|PackageInstaller|AndroidRuntime|FATAL|lowmemorykiller|libsdcli|chromium.*(print|pdf|CONSOLE|camera)|PrintManager|Camera" -i "$OUT/logcat.txt" | grep -v SystemServerTiming | tail -80
+grep -E "ZenvqoPDF|ZenvqoApk|ZenvqoShare|ZenvqoPlay|PackageInstaller|AndroidRuntime|FATAL|lowmemorykiller|libsdcli|chromium.*(print|pdf|CONSOLE|camera)|PrintManager|Camera" -i "$OUT/logcat.txt" | grep -v SystemServerTiming | tail -80
 exit $rc
