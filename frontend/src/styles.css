@@ -810,24 +810,26 @@ button.fc-body:hover { background: var(--bg-soft); }
 
 /* ---------- "Learn as a book": pages that read like a well-made book ---------- */
 /* each page is a sheet of paper in the conversation */
-.msg-book .msg-body { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 22px; padding: 20px 18px 6px; overflow: hidden;
+.msg-book .msg-body { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 22px; padding: 20px 18px 6px;
   box-shadow: 0 1px 2px rgba(11, 27, 51, .04), 0 16px 34px -24px rgba(11, 27, 51, .4); }
 .msg-book .msg-body .md { --read: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif", "Source Serif Pro", Georgia, serif;
-  font-family: var(--read); font-size: 1.06em; line-height: 1.78; }
+  font-family: var(--read); font-size: 1.06em; line-height: 1.78; overflow-wrap: break-word; }
 .msg-book .md p { margin: 0 0 .95em; }
 .msg-book .md p, .msg-book .md li { text-wrap: pretty; }
+/* a long formula wraps after "=", "+" or "−" (like in a printed book) instead of running off the page */
+.msg-book .md .math-inline .katex { white-space: normal; }
 .msg-book .md ol, .msg-book .md ul { padding-left: 1.4em; }
 .msg-book .md li::marker { color: var(--accent); font-family: var(--display); font-weight: 600; }
 /* the cover: the book's title across the top of its first page */
 .msg-book .md h1 { font: 700 1.9em/1.15 var(--display); letter-spacing: -.02em; margin: .2em 0 .25em; }
-.msg-book .md > h1:first-child { margin: -20px -18px 18px; padding: 30px 22px 26px; color: #fff; font-size: 1.8em; line-height: 1.14; text-wrap: balance;
+.msg-book .md > h1:first-child { margin: -20px -18px 18px; padding: 30px 22px 26px; border-radius: 21px 21px 0 0; color: #fff; font-size: 1.8em; line-height: 1.14; text-wrap: balance;
   background: radial-gradient(circle at 88% 20%, rgba(255, 255, 255, .2) 0 44px, transparent 45px),
     radial-gradient(circle at 104% 120%, rgba(255, 255, 255, .13) 0 124px, transparent 125px), var(--grad); }
 .msg-book .md > h1:first-child::before { content: "A book by zenvqo"; display: block; margin-bottom: 12px; font: 500 .4em/1.2 var(--display); opacity: .86; }
 .msg-book .md > h1:first-child + p { font-size: 1.05em; color: var(--text-soft); margin-bottom: 1.5em; }
 /* contents: chapters with their topics */
 .msg-book .md h2.contents-head { margin: 1.3em 0 .8em; padding: 0; border: 0; font: 700 1.1em/1.3 var(--display); color: var(--text); }
-.msg-book .md h2.contents-head + ol { list-style: none; counter-reset: toc; display: grid; gap: 14px; margin: 0 0 1.4em; padding: 0; }
+.msg-book .md h2.contents-head + ol { list-style: none; counter-reset: toc; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 0 0 1.4em; padding: 0; }
 .msg-book .md h2.contents-head + ol > li { counter-increment: toc; position: relative; min-height: 30px; margin: 0; padding-left: 44px; line-height: 1.5; color: var(--text-soft); }
 .msg-book .md h2.contents-head + ol > li::before { content: counter(toc); position: absolute; left: 0; top: -2px; width: 31px; height: 31px; border-radius: 10px;
   display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font: 700 .86em/1 var(--display); }
@@ -850,6 +852,7 @@ button.fc-body:hover { background: var(--bg-soft); }
 .msg-book .md .ch-title { font: 700 1em/1.2 var(--display); color: var(--text); text-wrap: balance; }
 .msg-book .md h2.chapter-head + p { font-size: 1.04em; color: var(--text-soft); }
 /* one drop cap per page: where a chapter opens, or where a topic page begins */
+.msg-book .md h2.chapter-head + p, .msg-book .md > h3.topic-head:first-child + p { display: flow-root; }
 .msg-book .md h2.chapter-head + p::first-letter,
 .msg-book .md > h3.topic-head:first-child + p::first-letter { float: left; margin: .08em .1em 0 0; font: 700 3.1em/.8 var(--read); color: var(--accent); }
 /* topics: the number as a small tab beside the title */
@@ -859,6 +862,65 @@ button.fc-body:hover { background: var(--bg-soft); }
 .msg-book .md .topic-num { flex: none; margin-top: .1em; padding: 5px 8px; border-radius: 9px; background: var(--accent-soft); color: var(--accent);
   font: 700 .7em/1 var(--display); font-variant-numeric: tabular-nums; }
 .msg-book .md h4 { font: 700 1.02em/1.3 var(--display); color: var(--text); margin: 1.6em 0 .45em; }
+/* practice questions and their answers: numbered cards — blue for the questions, green for the worked answers */
+.msg-book .md .practice-head, .msg-book .md .answers-head { display: flex; align-items: center; gap: 10px; margin: 2.1em 0 .9em; padding-top: 1.1em;
+  border-top: 1px solid var(--border); font: 700 1.12em/1.3 var(--display); color: var(--text); }
+.msg-book .md .practice-head::before, .msg-book .md .answers-head::before { content: ""; width: 22px; height: 22px; flex: none; background: var(--accent);
+  -webkit-mask: var(--ico) center / 22px no-repeat; mask: var(--ico) center / 22px no-repeat; }
+.msg-book .md .practice-head { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z'/%3E%3C/svg%3E"); }
+.msg-book .md .answers-head { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z'/%3E%3C/svg%3E"); }
+.msg-book .md .answers-head::before { background: var(--ok); }
+.msg-book .md .practice-head + ol,
+.msg-book .md .practice-head + ul,
+.msg-book .md .answers-head + ol,
+.msg-book .md .answers-head + ul,
+.msg-book .md .practice-head + p + ol,
+.msg-book .md .practice-head + p + ul,
+.msg-book .md .answers-head + p + ol,
+.msg-book .md .answers-head + p + ul { list-style: none; counter-reset: q; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 0 0 1.4em; padding: 0; }
+.msg-book .md .practice-head + ol > li,
+.msg-book .md .practice-head + ul > li,
+.msg-book .md .answers-head + ol > li,
+.msg-book .md .answers-head + ul > li,
+.msg-book .md .practice-head + p + ol > li,
+.msg-book .md .practice-head + p + ul > li,
+.msg-book .md .answers-head + p + ol > li,
+.msg-book .md .answers-head + p + ul > li { counter-increment: q; position: relative; min-width: 0; margin: 0; padding: 11px 14px 11px 52px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--bg-soft); overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+.msg-book .md .practice-head + ol > li::before,
+.msg-book .md .practice-head + ul > li::before,
+.msg-book .md .answers-head + ol > li::before,
+.msg-book .md .answers-head + ul > li::before,
+.msg-book .md .practice-head + p + ol > li::before,
+.msg-book .md .practice-head + p + ul > li::before,
+.msg-book .md .answers-head + p + ol > li::before,
+.msg-book .md .answers-head + p + ul > li::before { content: counter(q); position: absolute; left: 12px; top: 11px; width: 28px; height: 28px;
+  display: grid; place-items: center; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font: 700 .8em/1 var(--display); }
+.msg-book .md .answers-head + ol > li,
+.msg-book .md .answers-head + ul > li,
+.msg-book .md .answers-head + p + ol > li,
+.msg-book .md .answers-head + p + ul > li {
+  border-color: color-mix(in srgb, var(--ok) 26%, transparent); background: color-mix(in srgb, var(--ok) 7%, var(--bg-elev)); }
+.msg-book .md .answers-head + ol > li::before,
+.msg-book .md .answers-head + ul > li::before,
+.msg-book .md .answers-head + p + ol > li::before,
+.msg-book .md .answers-head + p + ul > li::before { background: var(--ok); }
+.msg-book .md .practice-head + ol > li > p,
+.msg-book .md .practice-head + ul > li > p,
+.msg-book .md .answers-head + ol > li > p,
+.msg-book .md .answers-head + ul > li > p { margin: 0 0 .5em; }
+.msg-book .md .practice-head + ol > li > :last-child,
+.msg-book .md .practice-head + ul > li > :last-child,
+.msg-book .md .answers-head + ol > li > :last-child,
+.msg-book .md .answers-head + ul > li > :last-child { margin-bottom: 0; }
+.msg-book .md .practice-head + ol li ol,
+.msg-book .md .practice-head + ol li ul,
+.msg-book .md .practice-head + ul li ol,
+.msg-book .md .practice-head + ul li ul,
+.msg-book .md .answers-head + ol li ol,
+.msg-book .md .answers-head + ol li ul,
+.msg-book .md .answers-head + ul li ol,
+.msg-book .md .answers-head + ul li ul { margin: .4em 0 0; padding-left: 1.3em; }
 /* a chapter's review */
 .msg-book .md .review-head { margin: 2.2em 0 .9em; padding: 14px 16px; border-radius: 16px; background: var(--grad-soft); color: var(--accent); font: 700 1.08em/1.3 var(--display); }
 /* examples, definitions, things to remember, common mistakes */
@@ -870,7 +932,7 @@ button.fc-body:hover { background: var(--bg-soft); }
 .msg-book .md hr::after { content: "⁂"; color: var(--accent); font-size: 1.1em; letter-spacing: .3em; }
 @media (max-width: 380px) {
   .msg-book .msg-body { padding: 18px 14px 4px; border-radius: 18px; }
-  .msg-book .md > h1:first-child { margin: -18px -14px 16px; padding: 26px 18px 22px; }
+  .msg-book .md > h1:first-child { margin: -18px -14px 16px; padding: 26px 18px 22px; border-radius: 17px 17px 0 0; }
 }
 /* asking for the next page: a page turn, not a chat bubble */
 .msg-turn { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }

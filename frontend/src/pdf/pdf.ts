@@ -111,6 +111,7 @@ body { margin: 0; font: 11.5pt/1.55 system-ui, -apple-system, "Segoe UI", Roboto
 .pdf-book { --serif: "Noto Serif", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; --sans: Poppins, Roboto, system-ui, sans-serif; }
 .pdf-book .md { font: 11.4pt/1.64 var(--serif); color: #1a2438; }
 .pdf-book .md p { margin: 0 0 3.2mm; }
+.pdf-book .md .math-inline .katex { white-space: normal; }
 .pdf-book .pdf-cover { break-after: page; page-break-after: always; height: 246mm; display: flex; flex-direction: column; margin: 0; padding: 0; border: 0; }
 .pdf-book .cover-art { flex: 0 0 64%; display: flex; flex-direction: column; justify-content: flex-end; padding: 16mm 13mm 14mm; border-radius: 5mm; color: #fff;
   background: radial-gradient(circle at 84% 18%, rgba(255, 255, 255, .22) 0 21mm, transparent 21.3mm),
@@ -154,6 +155,57 @@ body { margin: 0; font: 11.5pt/1.55 system-ui, -apple-system, "Segoe UI", Roboto
 .pdf-book .callout-example { background: #f5f8ff !important; border: 0; border-left: 1mm solid #0060e6; border-radius: 0 2mm 2mm 0; }
 .pdf-book .callout-example .callout-label { color: #0060e6; }
 .pdf-book .pdf-foot { font-family: var(--sans); }
+.pdf-book .md .practice-head, .pdf-book .md .answers-head { display: flex; align-items: center; gap: 2.4mm; margin: 8mm 0 3mm; padding-top: 4mm; border-top: 1px solid #dce5f5;
+  font: 700 13pt/1.3 var(--sans); color: #0b1b33; }
+.pdf-book .md .practice-head::before, .pdf-book .md .answers-head::before { content: ""; width: 5.4mm; height: 5.4mm; flex: none; background: #0060e6;
+  -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md .answers-head::before { background: #12704a; }
+.pdf-book .md .practice-head { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z'/%3E%3C/svg%3E"); }
+.pdf-book .md .answers-head { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z'/%3E%3C/svg%3E"); }
+.pdf-book .md .practice-head + ol,
+.pdf-book .md .practice-head + ul,
+.pdf-book .md .answers-head + ol,
+.pdf-book .md .answers-head + ul,
+.pdf-book .md .practice-head + p + ol,
+.pdf-book .md .practice-head + p + ul,
+.pdf-book .md .answers-head + p + ol,
+.pdf-book .md .answers-head + p + ul { list-style: none; counter-reset: q; margin: 0 0 4mm; padding: 0; }
+.pdf-book .md .practice-head + ol > li,
+.pdf-book .md .practice-head + ul > li,
+.pdf-book .md .answers-head + ol > li,
+.pdf-book .md .answers-head + ul > li,
+.pdf-book .md .practice-head + p + ol > li,
+.pdf-book .md .practice-head + p + ul > li,
+.pdf-book .md .answers-head + p + ol > li,
+.pdf-book .md .answers-head + p + ul > li { counter-increment: q; position: relative;
+  margin: 0 0 2.4mm; padding: 2.4mm 3.5mm 2.4mm 12mm; border: 1px solid #dce5f5; border-radius: 2.5mm; background: #f5f8ff; break-inside: avoid;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md .practice-head + ol > li::before,
+.pdf-book .md .practice-head + ul > li::before,
+.pdf-book .md .answers-head + ol > li::before,
+.pdf-book .md .answers-head + ul > li::before,
+.pdf-book .md .practice-head + p + ol > li::before,
+.pdf-book .md .practice-head + p + ul > li::before,
+.pdf-book .md .answers-head + p + ol > li::before,
+.pdf-book .md .answers-head + p + ul > li::before { content: counter(q);
+  position: absolute; left: 3mm; top: 2.3mm; width: 6.2mm; height: 6.2mm; border-radius: 1.8mm; background: #0060e6; color: #fff; font: 700 9.5pt/6.2mm var(--sans);
+  text-align: center; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-book .md .answers-head + ol > li,
+.pdf-book .md .answers-head + ul > li,
+.pdf-book .md .answers-head + p + ol > li,
+.pdf-book .md .answers-head + p + ul > li { background: #f1faf5; border-color: #cfe9db; }
+.pdf-book .md .answers-head + ol > li::before,
+.pdf-book .md .answers-head + ul > li::before,
+.pdf-book .md .answers-head + p + ol > li::before,
+.pdf-book .md .answers-head + p + ul > li::before { background: #12704a; }
+.pdf-book .md .practice-head + ol > li > p,
+.pdf-book .md .practice-head + ul > li > p,
+.pdf-book .md .answers-head + ol > li > p,
+.pdf-book .md .answers-head + ul > li > p { margin: 0 0 1.5mm; }
+.pdf-book .md .practice-head + ol > li > :last-child,
+.pdf-book .md .practice-head + ul > li > :last-child,
+.pdf-book .md .answers-head + ol > li > :last-child,
+.pdf-book .md .answers-head + ul > li > :last-child { margin-bottom: 0; }
 `;
 
 function esc(s: string) {

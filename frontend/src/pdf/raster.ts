@@ -25,15 +25,22 @@ function frameFor(html: string): Promise<HTMLIFrameElement> {
   });
 }
 
-/** Where pages may end: below each block and list item, so no line is ever cut in half. */
+/** Where pages may end: below each block and list item, so no line is ever cut in half — and never right after a
+ *  heading (a heading goes over to the next page with what it introduces). */
 function breakPoints(doc: Document): number[] {
+  const y = doc.defaultView!.scrollY;
   const pts = new Set<number>();
   doc.querySelectorAll(".pdf-head, .md > *, .md li, .md tr, .md pre, .pdf-foot, .md .math-display").forEach((el) => {
     const r = el.getBoundingClientRect();
-    pts.add(Math.ceil(r.bottom + doc.defaultView!.scrollY));
-    pts.add(Math.floor(r.top + doc.defaultView!.scrollY));
+    pts.add(Math.ceil(r.bottom + y));
+    pts.add(Math.floor(r.top + y));
   });
-  return [...pts].filter((p) => p > 0).sort((a, b) => a - b);
+  const keep: [number, number][] = [];
+  doc.querySelectorAll<HTMLElement>(".md > h1, .md > h2, .md > h3, .md > h4").forEach((h) => {
+    const next = h.nextElementSibling;
+    if (next) keep.push([Math.floor(h.getBoundingClientRect().top + y) + 1, Math.ceil(next.getBoundingClientRect().top + y) + 1]);
+  });
+  return [...pts].filter((p) => p > 0 && !keep.some(([a, b]) => p >= a && p <= b)).sort((a, b) => a - b);
 }
 
 /** Where a page must end: after the cover of a book, before each of its chapters (CSS page breaks). */

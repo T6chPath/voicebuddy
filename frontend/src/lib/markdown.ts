@@ -95,6 +95,14 @@ marked.use({
         if (/^(?:contents|table of contents)$/i.test(text)) return `<h2 class="contents-head">${inner}</h2>\n`;
       }
       if (depth === 3 || depth === 4) {
+        // practice questions and their answers: sections of their own, easy to find on the page
+        const part = text.replace(/[:.]$/, "").trim();
+        if (/^(?:practice(?: questions| problems)?|exercises?|check yourself|test yourself|try it yourself|quick quiz|questions)$/i.test(part)) {
+          return `<h${depth} class="practice-head">${inner}</h${depth}>\n`;
+        }
+        if (/^(?:answers?|worked answers|solutions?|answer key|answers and solutions|answers to practice)$/i.test(part)) {
+          return `<h${depth} class="answers-head">${inner}</h${depth}>\n`;
+        }
         const rv = text.match(/^Chapter\s+(\d{1,3})\s*(?:[:—–-]\s*)?(?:review|recap|summary)\b/i);
         if (rv) return `<h${depth} class="review-head" data-review="${+rv[1]}">${inner}</h${depth}>\n`;
         const tp = depth === 3 && text.match(/^(?:Topic\s+)?(\d{1,2})\.(\d{1,2})(?![\d.]\d)\.?\s*[:.—–-]?\s+(\S.*)$/i);

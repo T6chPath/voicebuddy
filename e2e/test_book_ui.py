@@ -26,9 +26,11 @@ Electrons carry a negative charge.
 
 ### Practice
 1. What charge does an electron carry?
+2. Why does a rubbed balloon stick to a wall?
 
 ### Answers
 1. Negative.
+2. Rubbing gives it extra electrons; it attracts the wall's charges.
 """
 CH2 = """## Chapter 2: Current and voltage
 Current is the flow of charge; voltage is the push.
@@ -68,11 +70,21 @@ def test_learn_a_topic_as_a_book(browser):
     expect(p.locator(".chat-title")).to_have_text("Book: Electricity")                # the chat is named after the topic
     req = ai.requests[0]
     assert "Learn as a book" in req["messages"][0]["content"] and "## Chapter N: Title" in req["messages"][0]["content"]
+    assert '"### Practice"' in req["messages"][0]["content"] and '"### Answers"' in req["messages"][0]["content"]
     assert req["messages"][-1]["content"] == "Teach me as a book: electricity" or "Teach me as a book: electricity" in json.dumps(req["messages"][-1])
     page1 = p.locator("article.msg-assistant").last
     expect(page1).to_have_class(re.compile(r"\bmsg-book\b"))
     font = page1.locator(".md p").first.evaluate("e => getComputedStyle(e).fontFamily")
     assert "serif" in font and "Georgia" in font, font
+    expect(page1.locator("h3.practice-head")).to_have_text("Practice")
+    expect(page1.locator("h3.answers-head")).to_have_text("Answers")
+    for sel in ["h3.practice-head + ol > li", "h3.answers-head + ol > li"]:
+        items = page1.locator(sel)
+        expect(items).to_have_count(2)
+        for i in range(2):
+            items.nth(i).scroll_into_view_if_needed()
+            expect(items.nth(i)).to_be_visible()
+            assert items.nth(i).evaluate("e => { const b = getComputedStyle(e, '::before'); return b.content.includes('counter') && e.getBoundingClientRect().height > 30 }"), sel
     bar = p.get_by_role("region", name="Book: Understanding Electricity")
     expect(bar).to_contain_text("Chapter 1 of 3 written")
     expect(bar.get_by_role("progressbar")).to_have_attribute("aria-valuenow", "1")
@@ -134,6 +146,16 @@ Electrons carry a negative charge; protons a positive one.
 > **Example:** An atom with 6 protons and 7 electrons has a charge of $-e$.
 
 > **Definition:** Charge is the property that makes particles push or pull on each other.
+
+#### Practice
+1. What charge does a proton carry?
+2. An atom has 8 protons and 10 electrons. What is its charge?
+3. Why is a neutral atom neutral?
+
+#### Answers
+1. $+e$.
+2. $(8-10)e = -2e$: it is a negative ion.
+3. It has as many electrons as protons, so the charges cancel.
 """
 DEEP2 = """### 1.2 Static electricity
 Rubbing moves electrons from one thing to another.
@@ -185,6 +207,7 @@ def test_learn_every_topic_in_depth(browser):
     system = ai.requests[0]["messages"][0]["content"]
     assert "Teach me as a book, every topic in depth:" in system and "### Chapter N review" in system
     assert "Never use fixed section labels" in system and '"**Example:**"' in system and "The big idea\" (" not in system
+    assert '"#### Practice"' in system and '"#### Answers"' in system                 # every topic ends with practice and answers
     expect(p.locator("article.msg-assistant").last).to_have_class(re.compile(r"\bmsg-book\b"))
     bar = p.get_by_role("region", name="Book: Electricity, Topic by Topic")
     expect(bar).to_contain_text("1 of 4 topics explained · Chapter 1 of 2")
@@ -233,6 +256,14 @@ def test_learn_every_topic_in_depth(browser):
     expect(first.locator('h3.topic-head[data-topic="1.1"] .topic-num')).to_have_text("1.1")
     expect(first.locator(".callout-example .callout-label")).to_have_text("Example")
     expect(first.locator(".callout-define .callout-label")).to_have_text("Definition")
+    expect(first.locator("h4.practice-head")).to_have_text("Practice")
+    expect(first.locator("h4.answers-head")).to_have_text("Answers")
+    expect(first.locator("h4.practice-head + ol > li")).to_have_count(3)
+    expect(first.locator("h4.answers-head + ol > li")).to_have_count(3)
+    last_answer = first.locator("h4.answers-head + ol > li").last
+    last_answer.scroll_into_view_if_needed()
+    expect(last_answer).to_be_visible()
+    expect(last_answer).to_contain_text("the charges cancel")
     expect(p.locator(".msg-book .review-head")).to_have_count(2)
     cover = first.locator(".md > h1:first-child").evaluate("e => getComputedStyle(e).backgroundImage")
     assert "gradient" in cover, cover
