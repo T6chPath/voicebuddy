@@ -146,7 +146,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     el.style.height = Math.min(h, window.innerHeight * 0.4) + "px";
     if (!text) setTall(false);
     else if (text.includes("\n") || h > 52) setTall(true);
-  }, [text, tall]);                                   // measured again once the box has changed shape
+  }, [text, tall, placeholder, files.length]);        // measured again once the box has changed shape or its hint changes
 
   const addFilesRef = useRef<(f: FileList | File[]) => void>(() => {});
   const addFiles = useCallback((list: FileList | File[]) => {

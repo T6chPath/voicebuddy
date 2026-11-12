@@ -15,6 +15,8 @@ import { NowSpeaking, SpeakControls } from "./SpeechViews";
 
 interface Props {
   m: Message;
+  /** a page of a "Learn as a book" book: shown in the reading style */
+  book?: boolean;
   isLast: boolean;
   busy: boolean;
   models: ModelInfo[];
@@ -79,13 +81,13 @@ async function playFromApk(id: string, name: string) {
   window.dispatchEvent(new CustomEvent("zc-play", { detail: page ? { html: page, icon } : { html: "", error: `${name} isn't an app made from a web page, so it can't be turned into a Google Play package here.` } }));
 }
 
-export const MessageView = memo(function MessageView({ m, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
+export const MessageView = memo(function MessageView({ m, book, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
   onImageAction, imageActions = false, numberOf = noNumber, request, imageOps }: Props) {
   const [copied, setCopied] = useState(false);
   const streaming = m.status === "streaming";
   const label = m.role === "user" ? "You" : models.find((x) => x.id === m.model)?.label || "Assistant";
   return (
-    <article className={`msg msg-${m.role}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
+    <article className={`msg msg-${m.role}${book ? " msg-book" : ""}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
       <header className="msg-head">
         {m.role === "assistant" && <Eye />}
         <span className="who">{label}</span>

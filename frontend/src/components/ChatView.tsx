@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, fileUrl, LOCAL_MODE, regenerate as apiRegenerate, sendMessage, type StreamHandlers, uploadFile } from "../api/client";
 import type { Attachment, Conversation, ImageCaps, ImageOptions, Message, UploadedFile } from "../api/types";
 import { useSession } from "../state/session";
@@ -8,6 +8,8 @@ import { Icon } from "./Icon";
 import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
 import { SitePreview } from "./SitePreview";
+import { BookBar } from "./BookViews";
+import { bookReplyIds, bookRequest, findBook } from "../lib/book";
 import { PlayDialog, type PlayTarget } from "./PlayDialog";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
@@ -84,6 +86,9 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [masking, setMasking] = useState<Attachment | null>(null);
   const [makeApp, setMakeApp] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
+  const [bookMode, setBookMode] = useState(false);                     // "Learn as a book": the next message is a topic to learn
+  const book = useMemo(() => findBook(messages), [messages]);
+  const bookPages = useMemo(() => bookReplyIds(messages), [messages]);
   const [ideas] = useState(() => [...IDEAS].sort(() => Math.random() - 0.5).slice(0, 3));
   const [play, setPlay] = useState<PlayTarget | null>(null);          // "Google Play package"              // "View site": the page shown full-screen         // "Make app": the page to turn into an APK
   // shared from WhatsApp, Gallery, Files… (Android share menu): into the message box of a new chat, like ChatGPT
@@ -474,12 +479,16 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
             </div>
           )}
           {loadState === "idle" && messages.map((m, i) => (
-            <MessageView key={m.id} m={m} isLast={i === messages.length - 1} busy={busy} models={models}
+            <MessageView key={m.id} m={m} book={bookPages.has(m.id)} isLast={i === messages.length - 1} busy={busy} models={models}
                          request={m.role === "assistant" ? [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content : undefined}
                          showTime={settings.show_timestamps} onRegenerate={regenerate}
                          onImageAction={imageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
                          fileHref={(a, d) => fileUrl(a.id, d) || null} imageOps={caps?.ops} />
           ))}
+          {loadState === "idle" && book && messages[messages.length - 1]?.id === book.replies[book.replies.length - 1]
+            && messages[messages.length - 1]?.status !== "streaming" && (
+            <BookBar book={book} messages={messages} busy={busy} onNext={(t) => void send(t, [])} />
+          )}
         </div>
       </div>
 
@@ -499,19 +508,32 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
       {masking && <MaskEditor a={masking} src={fileUrl(masking.id)} onCancel={() => setMasking(null)} onApply={(b, t) => applyMask(masking, b, t)} />}
       <div className="composer-wrap">
         <VoicePanel />
-        <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onSend={(t, f) => send(t, f)} onStop={stop}
-                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…" : undefined}
+        <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
+                  onSend={async (t, f) => {
+                    if (!bookMode || !t.trim()) return send(t, f);
+                    const ok = await send(bookRequest(t), f);
+                    if (ok) setBookMode(false);
+                    return ok;
+                  }}
+                  placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…"
+                    : bookMode ? "What do you want to learn?" : undefined}
                   menu={[
+                    { key: "book", icon: "book", label: "Learn as a book", hint: "Any topic in depth, chapter by chapter", on: bookMode,
+                      onSelect: () => { setBookMode((b) => !b); setImageOpts((o) => ({ ...o, op: undefined })); composer.current?.focus(); } },
                     { key: "voice", icon: "wave", label: "Voice conversation", hint: "Talk and listen, hands-free", ariaLabel: "Start voice conversation",
                       onSelect: () => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); } },
                     ...(imagesOn ? [
                     { key: "image", icon: "image", label: "Create image", hint: "Your next message makes a picture", on: imageOpts.op === "generate",
-                      onSelect: () => { setImageOpts((o) => ({ ...o, op: o.op === "generate" ? undefined : "generate" })); composer.current?.focus(); } },
+                      onSelect: () => { setImageOpts((o) => ({ ...o, op: o.op === "generate" ? undefined : "generate" })); setBookMode(false); composer.current?.focus(); } },
                     { key: "image-settings", icon: "sliders", label: "Image settings", hint: "Style, shape, size, how many", ariaLabel: "Image settings",
                       on: Object.keys(changedOpts({ ...imageOpts, op: undefined })).length > 0, onSelect: () => setShowImageSettings(true) },
                   ] : []),
                   ]}
-                  chips={imageOpts.op === "generate" ? (
+                  chips={bookMode ? (
+                    <span className="mode-chip book-chip" role="status">
+                      <Icon name="book" size={15} /><span>Book</span><span className="sr-only"> — your next message is a topic to learn as a book</span>
+                      <button type="button" aria-label="Cancel book mode" onClick={() => setBookMode(false)}><Icon name="close" size={13} /></button>
+                    </span>) : imageOpts.op === "generate" ? (
                     <span className="mode-chip" role="status">
                       <Icon name="image" size={15} /><span>Image</span><span className="sr-only"> — your next message will create an image</span>
                       <button type="button" aria-label="Cancel image mode" onClick={() => setImageOpts((o) => ({ ...o, op: undefined }))}><Icon name="close" size={13} /></button>
