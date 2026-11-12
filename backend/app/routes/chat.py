@@ -2,6 +2,7 @@
 
 POST /api/conversations/{id}/messages     {"content", "model"?, "file_ids"?, "image"?}   → text/event-stream
 POST /api/conversations/{id}/regenerate                                                   → text/event-stream
+POST /api/conversations/{id}/messages/{message_id}/regenerate   (one reply again, in place) → text/event-stream
 Events:
   meta {user_message, assistant_message} · delta {text} · done {status, title}
   tool {name, op, status, args}           — an image tool started (status "running") or finished ("done" / "failed")
@@ -163,7 +164,8 @@ def _caption(req: ImageRequest, atts: list[dict], notes: list[str]) -> str:
 
 
 def _stream(request: Request, db: Database, s: Settings, uid: str, cid: str, model_id: str, user_msg: dict | None,
-            s_user: dict, upto_id: str | None, opts: dict, user_text: str, attached: list[str]):
+            s_user: dict, upto_id: str | None, opts: dict, user_text: str, attached: list[str], into: dict | None = None):
+    """`into`: write that existing reply again, in its place, instead of adding a new one."""
     svc: ImageService = request.app.state.images
     cfg = s.model(model_id)
     provider = provider_for(cfg, s.echo_delay_s)
@@ -174,9 +176,14 @@ def _stream(request: Request, db: Database, s: Settings, uid: str, cid: str, mod
     rows = db.all("SELECT role, attachments FROM messages WHERE conversation_id = ? AND user_id = ? ORDER BY created_at", (cid, uid))
     prev_assist = next((r for r in reversed(rows[:-1]) if r["role"] == "assistant"), None)
     last_reply_has_image = bool(prev_assist and any(a.get("kind") == "image" for a in json.loads(prev_assist["attachments"])))
-    aid, t = new_id("msg"), now()
-    db.run("INSERT INTO messages (id, conversation_id, user_id, role, content, model, status, created_at) "
-           "VALUES (?,?,?,?,?,?,?,?)", (aid, cid, uid, "assistant", "", model_id, "streaming", t + 0.001))
+    if into:
+        aid = into["id"]
+        db.run("UPDATE messages SET content = '', model = ?, status = 'streaming', error = NULL, attachments = '[]' WHERE id = ? AND user_id = ?",
+               (model_id, aid, uid))
+    else:
+        aid, t = new_id("msg"), now()
+        db.run("INSERT INTO messages (id, conversation_id, user_id, role, content, model, status, created_at) "
+               "VALUES (?,?,?,?,?,?,?,?)", (aid, cid, uid, "assistant", "", model_id, "streaming", t + 0.001))
     temperature = float(s_user.get("temperature", 0.7))
 
     async def gen():
@@ -359,6 +366,27 @@ def send(cid: str, body: MessageIn, request: Request, user: dict = Depends(curre
     user_msg = msg_out(db.one("SELECT * FROM messages WHERE id = ?", (mid,)))
     attached = [a["id"] for a in atts if a["kind"] == "image"]
     return _stream(request, db, s, user["id"], cid, model_id, user_msg, user_settings(db, user["id"]), None, opts, body.content, attached)
+
+
+@router.post("/{cid}/messages/{mid}/regenerate")
+def regenerate_message(cid: str, mid: str, request: Request, user: dict = Depends(current_user), db: Database = Depends(get_db),
+                       s: Settings = Depends(get_settings)):
+    """Write one reply again, in its place (a page in the middle of a "Learn as a book" book), from the conversation up to
+    the question it answered; the replies after it stay as they are."""
+    conv = owned(db, cid, user["id"])
+    rows = db.all("SELECT id, role FROM messages WHERE conversation_id = ? AND user_id = ? ORDER BY created_at", (cid, user["id"]))
+    idx = next((i for i, r in enumerate(rows) if r["id"] == mid), -1)
+    if idx < 1 or rows[idx]["role"] != "assistant" or rows[idx - 1]["role"] != "user":
+        raise HTTPException(404, "That reply was not found.")
+    if not s.model(conv["model"]):
+        raise HTTPException(400, "Unknown model.")
+    question = db.one("SELECT * FROM messages WHERE id = ?", (rows[idx - 1]["id"],))
+    into = db.one("SELECT * FROM messages WHERE id = ?", (mid,))
+    opts = dict(json.loads(question.get("meta") or "{}").get("image") or {})
+    opts.pop("seed", None)
+    attached = [a["id"] for a in json.loads(question["attachments"]) if a.get("kind") == "image"]
+    return _stream(request, db, s, user["id"], cid, conv["model"], None, user_settings(db, user["id"]), question["id"],
+                   opts, question["content"], attached, into=into)
 
 
 @router.post("/{cid}/regenerate")

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, fileUrl, LOCAL_MODE, regenerate as apiRegenerate, sendMessage, type StreamHandlers, uploadFile } from "../api/client";
+import { api, ApiError, fileUrl, LOCAL_MODE, regenerate as apiRegenerate, regenerateMessage as apiRegenerateMessage, sendMessage, type StreamHandlers,
+  uploadFile } from "../api/client";
 import type { Attachment, Conversation, ImageCaps, ImageOptions, Message, UploadedFile } from "../api/types";
 import { useSession } from "../state/session";
 import { useToasts } from "../state/toasts";
@@ -9,7 +10,7 @@ import { Eye } from "./Brand";
 import { MakeAppDialog } from "./MakeAppDialog";
 import { SitePreview } from "./SitePreview";
 import { BookBar } from "./BookViews";
-import { bookReplyIds, bookRequest, findBook } from "../lib/book";
+import { bookReplyIds, bookRequest, findBook, type Book } from "../lib/book";
 import { PlayDialog, type PlayTarget } from "./PlayDialog";
 import { listenForShares, takeShared } from "../share/incoming";
 import { FilePreview, type PreviewTarget } from "./FilePreview";
@@ -98,7 +99,13 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     let q: string | undefined;
     return messages.map((m) => { const r = m.role === "assistant" ? q : undefined; if (m.role === "user") q = m.content; return r; });
   }, [messages]);
-  const book = useMemo(() => (lastStreaming ? null : findBook(messages)), [messages, lastStreaming]);
+  const rewriting = messages.some((m, i) => i < messages.length - 1 && m.status === "streaming");   // an earlier page written again
+  const lastBook = useRef<Book | null>(null);
+  const book = useMemo(() => {
+    if (lastStreaming) return null;
+    if (rewriting) return lastBook.current;                            // the bar stays as it was until the page is done
+    return (lastBook.current = findBook(messages));
+  }, [messages, lastStreaming, rewriting]);
   const bookPages = useMemo(() => bookReplyIds(messages), [messages]);
   const [ideas] = useState(() => [...IDEAS].sort(() => Math.random() - 0.5).slice(0, 3));
   const [play, setPlay] = useState<PlayTarget | null>(null);          // "Google Play package"              // "View site": the page shown full-screen         // "Make app": the page to turn into an APK
@@ -226,17 +233,22 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   };
   // follow the reply as it grows — when the page has been laid out anyway (a ResizeObserver), instead of forcing a
   // fresh layout of the whole conversation after every update (that was most of the lag on long replies)
+  // the reply being written: the last one — or a book page being written again in its place (then the view stays on that
+  // page instead of following the end of the conversation)
+  const streamTarget = useRef<string | null>(null);
   const atBottomRef = useRef(atBottom);
   atBottomRef.current = atBottom;
-  useLayoutEffect(() => { if (atBottom && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; }, [atBottom]);
+  useLayoutEffect(() => { if (atBottom && !streamTarget.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; }, [atBottom]);
   useEffect(() => {
     const el = scroller.current, inner = el?.firstElementChild;
     if (!el || !inner || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => { if (atBottomRef.current) el.scrollTop = el.scrollHeight; });
+    const ro = new ResizeObserver(() => { if (atBottomRef.current && !streamTarget.current) el.scrollTop = el.scrollHeight; });
     ro.observe(inner);
     return () => ro.disconnect();
   }, []);
   const regenerateRef = useRef<() => void>(() => {});
+  const regeneratePageRef = useRef<(id: string) => void>(() => {});
+  const onRegeneratePage = useCallback((id: string) => regeneratePageRef.current(id), []);
   const imageActionRef = useRef<(action: ImageAction, a: Attachment) => void>(() => {});
   const onRegenerate = useCallback(() => regenerateRef.current(), []);
   const onImageAction = useCallback((action: ImageAction, a: Attachment) => imageActionRef.current(action, a), []);
@@ -245,7 +257,11 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
 
   // ----- streaming helpers -----
   const patchLast = (fn: (m: Message) => Message) =>
-    setMessages((ms) => (ms.length && ms[ms.length - 1].role === "assistant" ? [...ms.slice(0, -1), fn(ms[ms.length - 1])] : ms));
+    setMessages((ms) => {
+      const t = streamTarget.current;
+      if (t) { const i = ms.findIndex((m) => m.id === t); return i < 0 ? ms : [...ms.slice(0, i), fn(ms[i]), ...ms.slice(i + 1)]; }
+      return ms.length && ms[ms.length - 1].role === "assistant" ? [...ms.slice(0, -1), fn(ms[ms.length - 1])] : ms;
+    });
 
   const flushDeltas = () => {
     raf.current = 0;
@@ -376,7 +392,24 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   }
 
   regenerateRef.current = () => { void regenerate(); };
+  regeneratePageRef.current = (id) => { void regeneratePage(id); };
   imageActionRef.current = (action, a) => { void imageAction(action, a); };
+  /** A page of a book written again, in its place: the pages after it stay as they are. */
+  async function regeneratePage(id: string) {
+    if (!conversationId || busy) return;
+    if (messages[messages.length - 1]?.id === id) return regenerate();
+    speech.stop();
+    streamTarget.current = id;
+    setAtBottom(false);
+    setMessages((ms) => ms.map((m) => (m.id === id ? { ...m, content: "", status: "streaming", error: null, attachments: [], tool: undefined } : m)));
+    requestAnimationFrame(() => document.getElementById("msg-" + id)?.scrollIntoView({ block: "start" }));   // stay with the page
+    const cid = conversationId;
+    try {
+      await runStream((signal) => apiRegenerateMessage(cid, id, handlers(cid), signal));
+    } catch { /* shown inline */ }
+    finally { flushDeltas(); streamTarget.current = null; }
+  }
+
   async function regenerate() {
     if (!conversationId || busy) return;
     speech.stop();
@@ -511,6 +544,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
             <MessageView key={m.id} m={m} book={bookPages.has(m.id)} isLast={i === messages.length - 1} busy={busy} models={models}
                          request={askedFor[i]}
                          showTime={settings.show_timestamps} onRegenerate={onRegenerate}
+                         onRegeneratePage={bookPages.has(m.id) ? onRegeneratePage : undefined}
                          onImageAction={onImageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
                          fileHref={messageFileHref} imageOps={caps?.ops} />
           ))}

@@ -23,6 +23,8 @@ interface Props {
   models: ModelInfo[];
   showTime: boolean;
   onRegenerate: () => void;
+  /** a book page: write it again in its place (every page of a book has the button, not just the last reply) */
+  onRegeneratePage?: (id: string) => void;
   /** link target for an attachment chip; null = not downloadable (standalone app keeps files only in the prompt) */
   fileHref?: (a: Attachment, download?: boolean) => string | null;
   onImageAction?: (action: ImageAction, a: Attachment) => void;
@@ -82,7 +84,7 @@ async function playFromApk(id: string, name: string) {
   window.dispatchEvent(new CustomEvent("zc-play", { detail: page ? { html: page, icon } : { html: "", error: `${name} isn't an app made from a web page, so it can't be turned into a Google Play package here.` } }));
 }
 
-export const MessageView = memo(function MessageView({ m, book, isLast, busy, models, showTime, onRegenerate, fileHref = serverHref,
+export const MessageView = memo(function MessageView({ m, book, isLast, busy, models, showTime, onRegenerate, onRegeneratePage, fileHref = serverHref,
   onImageAction, imageActions = false, numberOf = noNumber, request, imageOps }: Props) {
   const [copied, setCopied] = useState(false);
   const streaming = m.status === "streaming";
@@ -94,7 +96,7 @@ export const MessageView = memo(function MessageView({ m, book, isLast, busy, mo
     </article>
   );
   return (
-    <article className={`msg msg-${m.role}${book ? " msg-book" : ""}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
+    <article id={"msg-" + m.id} className={`msg msg-${m.role}${book ? " msg-book" : ""}`} aria-label={`${m.role === "user" ? "Your message" : "Assistant reply"}`} aria-busy={streaming}>
       <header className="msg-head">
         {m.role === "assistant" && <Eye />}
         <span className="who">{label}</span>
@@ -155,6 +157,12 @@ export const MessageView = memo(function MessageView({ m, book, isLast, busy, mo
           <PdfButton id={m.id} text={m.content} request={request} />
           {isLast && !busy && (
             <button type="button" className="icon-btn" aria-label="Regenerate reply" title="Regenerate" onClick={onRegenerate}>
+              <Icon name="refresh" size={16} />
+            </button>
+          )}
+          {!isLast && onRegeneratePage && (
+            <button type="button" className="icon-btn" aria-label="Regenerate this page" title="Write this page again" disabled={busy}
+                    onClick={() => onRegeneratePage(m.id)}>
               <Icon name="refresh" size={16} />
             </button>
           )}

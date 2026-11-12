@@ -163,6 +163,9 @@ export const sendMessage = (cid: string, body: { content: string; model?: string
   streamChat(`/api/conversations/${encodeURIComponent(cid)}/messages`, body, h, s);
 export const regenerate = (cid: string, h: StreamHandlers, s: AbortSignal) =>
   streamChat(`/api/conversations/${encodeURIComponent(cid)}/regenerate`, undefined, h, s);
+/** Write one reply again, in its place (a page in the middle of a book); the replies after it stay as they are. */
+export const regenerateMessage = (cid: string, mid: string, h: StreamHandlers, s: AbortSignal) =>
+  streamChat(`/api/conversations/${encodeURIComponent(cid)}/messages/${encodeURIComponent(mid)}/regenerate`, undefined, h, s);
 
 /** Upload with progress (fetch has no upload progress), abortable. */
 export function uploadFile(file: File, onProgress: (frac: number) => void): { promise: Promise<UploadedFile>; abort: () => void } {

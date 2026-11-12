@@ -279,3 +279,47 @@ def test_learn_every_topic_in_depth(browser):
     p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
     expect(p.locator(".book-mode").get_by_role("button", name="In depth")).to_have_attribute("aria-pressed", "true")
     assert not errors, errors
+
+
+def test_write_an_earlier_page_again(browser):
+    """Every page of a book has the refresh button (with copy, speaker and PDF); an earlier page is written again in its
+    place, from the conversation up to it, and the pages after it stay as they are."""
+    fresh = CH1.replace("Everything around you is made of atoms.", "Everything around you is made of atoms — even you.")
+    ai = BookAI([CH1, CH2, fresh])
+    p, errors = open_app(browser, ai)
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
+    p.locator("#composer-input").fill("electricity")
+    p.locator("#composer-input").press("Enter")
+    wait_reply(p, 1)
+    p.get_by_role("region", name="Book: Understanding Electricity").get_by_role("button", name=re.compile("^Next")).click()
+    wait_reply(p, 2)
+    pages = p.locator("article.msg-book")
+    expect(pages).to_have_count(2)
+    first, second = pages.nth(0), pages.nth(1)
+    for pg in (first, second):                                            # copy, speaker, PDF and refresh under every page
+        acts = pg.locator(".msg-actions")
+        expect(acts.get_by_role("button", name="Copy reply")).to_be_visible()
+        expect(acts.get_by_role("button", name="Read aloud")).to_be_visible()
+        expect(acts.get_by_role("button", name="Save as PDF")).to_be_visible()
+    expect(first.get_by_role("button", name="Regenerate this page")).to_be_visible()
+    expect(second.get_by_role("button", name="Regenerate reply")).to_be_visible()
+    first.get_by_role("button", name="Regenerate this page").click()
+    expect(first).to_contain_text("even you", timeout=20_000)
+    expect(first).to_have_attribute("aria-busy", "false", timeout=20_000)
+    sent = ai.requests[-1]["messages"]
+    assert sent[-1]["content"] == "Teach me as a book: electricity", sent[-1]            # only the conversation up to that page
+    assert not any("Continue the book" in json.dumps(m) for m in sent if m["role"] != "system")
+    assert len([m for m in sent if m["role"] == "assistant"]) == 0                       # not even the page itself
+    expect(p.locator("article.msg-assistant")).to_have_count(2)            # written again in its place, not added at the end
+    expect(pages.nth(0)).to_contain_text("even you")
+    expect(pages.nth(1)).to_contain_text("Current is the flow of charge")
+    bar = p.get_by_role("region", name="Book: Understanding Electricity")
+    expect(bar).to_have_count(1)
+    expect(bar).to_contain_text("Chapter 2 of 3 written")
+    # and it stays that way after the app is opened again
+    p.reload()
+    expect(p.locator("article.msg-book")).to_have_count(2)
+    expect(p.locator("article.msg-book").nth(0)).to_contain_text("even you")
+    expect(p.locator("article.msg-book").nth(1)).to_contain_text("Current is the flow of charge")
+    assert not errors, errors

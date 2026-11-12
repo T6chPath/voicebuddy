@@ -522,8 +522,9 @@ const BASE_SYSTEM = "You are zenvqo, a helpful assistant who explains things cle
 type Part = { type: string; text?: string; image_url?: { url: string }; input_audio?: { data: string; format: string } };
 type ChatMsg = { role: string; content: string | Part[] };
 
-async function buildHistory(cid: string, s: UserSettings, vision: boolean): Promise<ChatMsg[]> {
-  const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && !(m.role === "assistant" && !m.content));
+async function buildHistory(cid: string, s: UserSettings, vision: boolean, before?: number): Promise<ChatMsg[]> {
+  const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && !(m.role === "assistant" && !m.content) &&
+    (before === undefined || m.created_at < before));                // a reply written again: only what came before it
   const out: ChatMsg[] = [];
   let used = 0;
   let i = rows.length - 1;
@@ -1213,10 +1214,11 @@ function bestModelFor(need: { see: boolean; hear: boolean }): string | null {
   return null;
 }
 
-async function runTurn(cid: string, modelId: string, userMsg: Message | null, h: StreamHandlers, signal: AbortSignal) {
+/** `into`: write an existing reply again, in its place (from the conversation up to it) instead of adding a new one. */
+async function runTurn(cid: string, modelId: string, userMsg: Message | null, h: StreamHandlers, signal: AbortSignal, into?: MsgRow) {
   const s = loadSettings();
   const vision = modelId.startsWith("srv:");
-  let history = await buildHistory(cid, s, vision);
+  let history = await buildHistory(cid, s, vision, into?.created_at);
   // photos (or pictures from files/videos) or recordings the chosen model can't take: use this service's best model that can
   const parts = history.flatMap((m) => (Array.isArray(m.content) ? m.content : []));
   const need = { see: parts.some((p) => p.type === "image_url"), hear: parts.some((p) => p.type === "input_audio") };
@@ -1237,8 +1239,9 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
       });
     }
   }
-  const aid = uid("msg");
-  const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };
+  const aid = into?.id || uid("msg");
+  const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [],
+    created_at: into ? into.created_at : now() + 0.001 };
   await put("messages", row);
   h.onMeta?.({ user_message: userMsg, assistant_message: { id: aid, model: modelId } });
   const gen = modelId === "echo" ? echoStream(history, s.temperature, signal) : longStream(modelId.replace(/^srv:/, ""), history, s, signal);
@@ -1314,6 +1317,16 @@ export async function regenerate(cid: string, h: StreamHandlers, signal: AbortSi
   const plan = last.role === "user" ? await imagePlan(cid, last.content, last.attachments) : null;
   if (plan) await runImageTurn(cid, c.model, null, { ...plan, seed: undefined, fresh: true }, undefined, h, signal);   // a new picture
   else await runTurn(cid, c.model, null, h, signal);
+}
+
+/** Write one reply again, in its place — a page in the middle of a "Learn as a book" book — from the conversation up to
+ *  the question it answered; the replies after it stay as they are. */
+export async function regenerateMessage(cid: string, mid: string, h: StreamHandlers, signal: AbortSignal) {
+  const c = await get<Conversation>("conversations", cid);
+  if (!c) throw new ApiError(404, "Conversation not found.");
+  const row = await get<MsgRow>("messages", mid);
+  if (!row || row.conversation_id !== cid || row.role !== "assistant") throw new ApiError(404, "That reply was not found.");
+  await runTurn(cid, c.model, null, h, signal, row);
 }
 
 export async function request<T>(): Promise<T> { throw new ApiError(400, "not available in the standalone app"); }
