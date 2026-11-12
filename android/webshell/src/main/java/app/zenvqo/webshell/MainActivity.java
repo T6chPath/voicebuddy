@@ -32,13 +32,6 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         Window w = getWindow();
         if (Build.VERSION.SDK_INT < 35) w.setStatusBarColor(Color.WHITE);
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = w.getInsetsController();
-            if (c != null) c.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
-        } else {
-            w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        }
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
         web = new WebView(this);
@@ -78,6 +71,16 @@ public class MainActivity extends Activity {
             return insets.consumeSystemWindowInsets();
         });
         setContentView(root);
+        // dark icons on the light bars — only once the window has its views (asking earlier crashes on Android 11+)
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                WindowInsetsController c = w.getDecorView().getWindowInsetsController();
+                if (c != null) c.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            } else {
+                w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            }
+        } catch (RuntimeException e) { /* the bars keep their default look */ }
         if (state != null) web.restoreState(state);
         else web.loadUrl("file:///android_asset/index.html");
     }
