@@ -841,3 +841,37 @@ button.fc-body:hover { background: var(--bg-soft); }
 /* a code block that is still being written: plain text until its closing ``` arrives (then colours and buttons) */
 .code-writing { font-size: .95em; color: #8cc4ff; padding: 0 8px; min-height: 28px; display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
 .code-more { padding: 8px 14px 0; font-size: .8em; color: #8f9bb3; background: var(--code-bg, #0f1b2d); }
+
+/* "Learn as a book" in the message box: chapter by chapter, or every topic in depth */
+.book-mode { display: grid; gap: 2px; padding: 2px 2px 6px 6px; }
+.book-mode-row { display: flex; align-items: center; gap: 6px; }
+.book-mode-ico { width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--grad); }
+.book-mode-label { flex: 1 1 auto; min-width: 0; font: 600 .92em/1.2 var(--display); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book-depth { display: inline-flex; flex: none; gap: 2px; padding: 3px; border-radius: 999px; background: var(--accent-soft); }
+.book-depth button { height: 30px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: .84em; font-weight: 600; line-height: 1; color: var(--text-soft); white-space: nowrap; }
+.book-depth button[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0, 40, 120, .25); }
+.book-depth button[aria-pressed="false"]:hover { color: var(--text); }
+.book-depth button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.book-mode-row > .icon-btn { flex: none; }
+.book-mode-hint { margin: 0; padding: 0 8px 0 36px; font-size: .8em; line-height: 1.35; color: var(--text-soft); }
+/* an in-depth book's pages: each topic's parts ("The big idea", "Step by step", "Worked examples" …) */
+.msg-book .md h4 { font: 650 1.01em/1.3 var(--display); color: var(--text); margin: 1.5em 0 .45em; }
+/* its contents: chapters with their topics; topics not explained yet can be explained now */
+.book-toc li li { font-size: 1em; }
+.book-toc.deep > ol { gap: 4px; }
+.book-toc .toc-ch { display: flex; gap: 8px; align-items: center; padding: 6px 8px; font-weight: 600; }
+.book-toc .toc-chapter > button.toc-ch { font-weight: 600; }
+.book-toc.deep ol ol { display: grid; gap: 1px; margin: 0 0 4px 14px; padding: 0 0 0 8px; border-left: 2px solid var(--accent-soft); list-style: none; }
+.book-toc .toc-explain { color: var(--text-soft); }
+.book-toc .toc-explain .toc-id, .book-toc li.done .toc-id { font-variant-numeric: tabular-nums; }
+.book-toc .toc-explain em { margin-left: auto; padding-left: 8px; font-style: normal; font-size: .86em; font-weight: 600; color: var(--accent); opacity: .8; }
+.book-toc li.next .toc-explain { color: var(--accent); font-weight: 600; }
+.book-toc li.next .toc-explain em { opacity: 1; }
+.book-toc li button:disabled { cursor: default; opacity: .6; }
+.book-tip { margin: -2px 0 0; }
+/* after a question asked between pages: just the way back into the book */
+.book-bar.compact { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 14px; border-radius: 18px; }
+.book-bar.compact .book-head { flex: 1 1 220px; min-width: 0; }
+.book-bar.compact .book-ico { width: 36px; height: 36px; border-radius: 11px; }
+.book-bar.compact .book-actions { flex: 1 1 240px; }

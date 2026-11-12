@@ -54,8 +54,9 @@ def test_learn_a_topic_as_a_book(browser):
     p, errors = open_app(browser, ai)
     p.get_by_role("button", name="Add photos, files and more").click()
     p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    chip = p.locator(".mode-chip.book-chip")
-    expect(chip).to_contain_text("Book")
+    chip = p.locator(".book-mode")
+    expect(chip).to_contain_text("Learn as a book")
+    expect(chip.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "true")
     box = p.locator("#composer-input")
     expect(box).to_have_attribute("placeholder", re.compile("What do you want to learn"))
     box.fill("electricity")
@@ -63,6 +64,7 @@ def test_learn_a_topic_as_a_book(browser):
     wait_reply(p, 1)
     expect(chip).to_have_count(0)                                         # book mode is for one message
     expect(p.locator("article.msg-user").last).to_contain_text("Teach me as a book: electricity")
+    expect(p.locator(".chat-title")).to_have_text("Book: Electricity")                # the chat is named after the topic
     req = ai.requests[0]
     assert "Learn as a book" in req["messages"][0]["content"] and "## Chapter N: Title" in req["messages"][0]["content"]
     assert req["messages"][-1]["content"] == "Teach me as a book: electricity" or "Teach me as a book: electricity" in json.dumps(req["messages"][-1])
@@ -98,12 +100,138 @@ def test_book_mode_and_image_mode_switch_each_other_off(browser):
     p, errors = open_app(browser, FakeAI("ok"))
     p.get_by_role("button", name="Add photos, files and more").click()
     p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
-    expect(p.locator(".book-chip")).to_be_visible()
+    expect(p.locator(".book-mode")).to_be_visible()
     p.get_by_role("button", name="Cancel book mode").click()
-    expect(p.locator(".book-chip")).to_have_count(0)
+    expect(p.locator(".book-mode")).to_have_count(0)
     p.locator("#composer-input").fill("hello")
     p.locator("#composer-input").press("Enter")
     wait_reply(p, 1)
     expect(p.locator("article.msg-user .plain").last).to_have_text("hello")
     expect(p.locator(".book-bar")).to_have_count(0)
+    assert not errors, errors
+
+
+DEEP1 = """# Electricity, Topic by Topic
+*For beginners — by the end you'll understand every idea behind your home's wiring.*
+
+## Contents
+1. What is electric charge? — atoms, electrons and static
+   - 1.1 Atoms and electrons
+   - 1.2 Static electricity
+2. Current and voltage — what flows and what pushes it
+   - 2.1 What current is
+   - 2.2 Voltage
+
+## Chapter 1: What is electric charge?
+Everything around you is made of atoms.
+
+### 1.1 Atoms and electrons
+#### The big idea
+An atom is a nucleus with electrons around it.
+
+#### Step by step
+Electrons carry a negative charge; protons a positive one.
+
+#### Check yourself
+1. What charge does an electron carry?
+
+#### Answers
+1. Negative.
+"""
+DEEP2 = """### 1.2 Static electricity
+#### The big idea
+Rubbing moves electrons from one thing to another.
+
+### Chapter 1 review
+Like charges repel; unlike charges attract.
+"""
+DOUBT = "Because combing moves electrons onto your hair, and like charges repel."
+DEEP3 = """## Chapter 2: Current and voltage
+Now the charges start to move.
+
+### 2.1 What current is
+#### The big idea
+Current is charge flowing past a point each second.
+"""
+DEEP4 = """### 2.2 Voltage
+#### The big idea
+Voltage is the push that makes charge flow.
+
+### Chapter 2 review
+Current flows; voltage pushes.
+
+## What to learn next
+Resistance and Ohm's law.
+"""
+
+
+def test_learn_every_topic_in_depth(browser):
+    """'In depth': every topic of every chapter gets its own page; Next goes topic by topic, opening and ending
+    chapters on the way; a doubt asked between pages keeps the way back into the book."""
+    ai = BookAI([DEEP1, DEEP2, DOUBT, DEEP3, DEEP4])
+    p, errors = open_app(browser, ai)
+    p.get_by_role("button", name="Add photos, files and more").click()
+    expect(p.get_by_role("menuitem", name=re.compile("^Learn as a book"))).to_contain_text("every topic in depth")
+    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
+    depth = p.get_by_role("group", name="Learn as a book").get_by_role("group", name="How the book is written")
+    expect(depth.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "true")
+    depth.get_by_role("button", name="In depth").click()
+    expect(depth.get_by_role("button", name="In depth")).to_have_attribute("aria-pressed", "true")
+    expect(depth.get_by_role("button", name="Chapters")).to_have_attribute("aria-pressed", "false")
+    box = p.locator("#composer-input")
+    expect(box).to_have_attribute("placeholder", "What do you want to learn in depth?")
+    expect(box).to_be_focused()
+    expect(p.locator(".book-mode")).to_contain_text("Every topic of every chapter explained in depth")
+    box.fill("electricity")
+    box.press("Enter")
+    wait_reply(p, 1)
+    expect(p.locator("article.msg-user").last).to_contain_text("Teach me as a book, every topic in depth: electricity")
+    expect(p.locator(".chat-title")).to_have_text("Book in depth: Electricity")
+    system = ai.requests[0]["messages"][0]["content"]
+    assert "Teach me as a book, every topic in depth:" in system and "#### The big idea" in system and "### Chapter N review" in system
+    expect(p.locator("article.msg-assistant").last).to_have_class(re.compile(r"\bmsg-book\b"))
+    bar = p.get_by_role("region", name="Book: Electricity, Topic by Topic")
+    expect(bar).to_contain_text("1 of 4 topics explained · Chapter 1 of 2")
+    expect(bar.get_by_role("progressbar", name="Topics explained")).to_have_attribute("aria-valuenow", "1")
+    expect(bar.get_by_role("progressbar")).to_have_attribute("aria-valuemax", "4")
+    expect(bar).to_contain_text("Stuck on something? Ask about it in the message box")
+    bar.get_by_role("button", name="Next: 1.2 — Static electricity").click()
+    wait_reply(p, 2)
+    assert ai.requests[-1]["messages"][-1]["content"] == "Continue the book: explain topic 1.2 — Static electricity, then end Chapter 1 with its review"
+    # a doubt between pages: answered normally, and the book is still a tap away
+    box.fill("why does my hair stand up after combing?")
+    box.press("Enter")
+    wait_reply(p, 3)
+    expect(p.locator("article.msg-assistant").last).not_to_have_class(re.compile(r"\bmsg-book\b"))
+    compact = p.locator(".book-bar.compact")
+    expect(compact).to_have_count(1)
+    expect(compact).to_contain_text("Back to your book — 2 of 4 topics explained")
+    compact.get_by_role("button", name="Next: Chapter 2 · 2.1 — What current is").click()
+    wait_reply(p, 4)
+    assert ai.requests[-1]["messages"][-1]["content"] == "Continue the book: start Chapter 2 — Current and voltage, and explain topic 2.1 — What current is"
+    expect(p.locator("article.msg-assistant").last).to_have_class(re.compile(r"\bmsg-book\b"))
+    expect(p.locator(".book-bar")).to_have_count(1)                      # only under the latest page
+    bar = p.get_by_role("region", name="Book: Electricity, Topic by Topic")
+    expect(bar).to_contain_text("3 of 4 topics explained · Chapter 2 of 2")
+    bar.locator("summary").click()
+    expect(bar.get_by_role("button", name="Go to 1.1 Atoms and electrons")).to_be_visible()
+    expect(bar.get_by_role("button", name="Go to 2.1 What current is")).to_be_visible()
+    expect(bar.get_by_role("button", name="Explain 2.2 Voltage (next)")).to_be_visible()
+    bar.get_by_role("button", name="Go to 1.2 Static electricity").click()
+    p.wait_for_function("""() => { const h = [...document.querySelectorAll('.msg-book .md h3')].find((x) => x.textContent.startsWith('1.2'));
+        const r = h.getBoundingClientRect(); return r.top > -5 && r.top < innerHeight / 2; }""", timeout=5000)
+    bar.get_by_role("button", name="Next: 2.2 — Voltage").click()
+    wait_reply(p, 5)
+    assert ai.requests[-1]["messages"][-1]["content"] == "Continue the book: explain topic 2.2 — Voltage, then end Chapter 2 with its review (the last topic of the book)"
+    bar = p.get_by_role("region", name="Book: Electricity, Topic by Topic")
+    expect(bar).to_contain_text("All 4 topics explained — book complete")
+    expect(bar.get_by_role("button", name=re.compile("^Next"))).to_have_count(0)
+    expect(bar.get_by_role("button", name="Save book as PDF")).to_have_class(re.compile(r"\bprimary\b"))
+    # the topic pages read like a book: the parts of each topic are headings of their own
+    h4 = p.locator("article.msg-book .md h4").first
+    expect(h4).to_have_text("The big idea")
+    # the choice is remembered for the next book
+    p.get_by_role("button", name="Add photos, files and more").click()
+    p.get_by_role("menuitem", name=re.compile("^Learn as a book")).click()
+    expect(p.locator(".book-mode").get_by_role("button", name="In depth")).to_have_attribute("aria-pressed", "true")
     assert not errors, errors

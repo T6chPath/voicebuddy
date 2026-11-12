@@ -87,6 +87,12 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
   const [makeApp, setMakeApp] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
   const [bookMode, setBookMode] = useState(false);                     // "Learn as a book": the next message is a topic to learn
+  const [bookDeep, setBookDeepState] = useState(() => { try { return localStorage.getItem("zc.book.depth") === "deep"; } catch { return false; } });
+  const setBookDeep = (deep: boolean) => {                             // chapter by chapter, or every topic in depth (remembered)
+    setBookDeepState(deep);
+    try { localStorage.setItem("zc.book.depth", deep ? "deep" : "chapters"); } catch { /* private mode: just for now */ }
+    composer.current?.focus();
+  };
   const lastStreaming = messages[messages.length - 1]?.status === "streaming";
   const askedFor = useMemo(() => {                                     // each reply's question, in one pass
     let q: string | undefined;
@@ -399,7 +405,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
     const n = numberOf(a.id);
     const label = n ? `image #${n}` : "this image";
     if (action === "open") setViewing(a);
-    else if (action === "edit") { setTarget(a); composer.current?.focus(); }
+    else if (action === "edit") { setTarget(a); setBookMode(false); composer.current?.focus(); }
     else if (action === "mask") setMasking(a);
     else if (action === "variations") await send(`Make variations of ${label}`, [], { op: "variations", source_id: a.id, n: imageOpts.n && imageOpts.n > 1 ? imageOpts.n : 3 });
     else if (action === "remove_background") await send(`Remove the background of ${label}`, [], { op: "remove_background", source_id: a.id, output_format: "png" });
@@ -508,10 +514,12 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                          onImageAction={onImageAction} imageActions={imagesOn && !busy} numberOf={numberOf}
                          fileHref={messageFileHref} imageOps={caps?.ops} />
           ))}
-          {loadState === "idle" && book && messages[messages.length - 1]?.id === book.replies[book.replies.length - 1]
-            && messages[messages.length - 1]?.status !== "streaming" && (
+          {loadState === "idle" && book && (messages[messages.length - 1]?.id === book.replies[book.replies.length - 1] ? (
             <BookBar book={book} messages={messages} busy={busy} onNext={(t) => void send(t, [])} />
-          )}
+          ) : messages[messages.length - 1]?.role === "assistant" && !book.complete && (
+            // a question asked between pages: the way back into the book stays at hand
+            <BookBar compact book={book} messages={messages} busy={busy} onNext={(t) => void send(t, [])} />
+          ))}
         </div>
       </div>
 
@@ -534,15 +542,15 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
         <Composer ref={composer} busy={busy} sendOnEnter={settings.send_on_enter} onStop={stop}
                   onSend={async (t, f) => {
                     if (!bookMode || !t.trim()) return send(t, f);
-                    const ok = await send(bookRequest(t), f);
+                    const ok = await send(bookRequest(t, bookDeep), f);
                     if (ok) setBookMode(false);
                     return ok;
                   }}
                   placeholder={target ? `Describe the change to image #${numberOf(target.id) ?? ""}…` : imageOpts.op === "generate" ? "Describe the image to create…"
-                    : bookMode ? "What do you want to learn?" : undefined}
+                    : bookMode ? (bookDeep ? "What do you want to learn in depth?" : "What do you want to learn?") : undefined}
                   menu={[
-                    { key: "book", icon: "book", label: "Learn as a book", hint: "Any topic in depth, chapter by chapter", on: bookMode,
-                      onSelect: () => { setBookMode((b) => !b); setImageOpts((o) => ({ ...o, op: undefined })); composer.current?.focus(); } },
+                    { key: "book", icon: "book", label: "Learn as a book", hint: "Chapter by chapter, or every topic in depth", on: bookMode,
+                      onSelect: () => { setBookMode((b) => !b); setTarget(null); setImageOpts((o) => ({ ...o, op: undefined })); composer.current?.focus(); } },
                     { key: "voice", icon: "wave", label: "Voice conversation", hint: "Talk and listen, hands-free", ariaLabel: "Start voice conversation",
                       onSelect: () => { speech.unlock(); void voice.start({ send: (t) => send(t, []), stopReply: stop, busy: () => busyRef.current }); } },
                     ...(imagesOn ? [
@@ -552,11 +560,7 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                       on: Object.keys(changedOpts({ ...imageOpts, op: undefined })).length > 0, onSelect: () => setShowImageSettings(true) },
                   ] : []),
                   ]}
-                  chips={bookMode ? (
-                    <span className="mode-chip book-chip" role="status">
-                      <Icon name="book" size={15} /><span>Book</span><span className="sr-only"> — your next message is a topic to learn as a book</span>
-                      <button type="button" aria-label="Cancel book mode" onClick={() => setBookMode(false)}><Icon name="close" size={13} /></button>
-                    </span>) : imageOpts.op === "generate" ? (
+                  chips={imageOpts.op === "generate" ? (
                     <span className="mode-chip" role="status">
                       <Icon name="image" size={15} /><span>Image</span><span className="sr-only"> — your next message will create an image</span>
                       <button type="button" aria-label="Cancel image mode" onClick={() => setImageOpts((o) => ({ ...o, op: undefined }))}><Icon name="close" size={13} /></button>
@@ -567,6 +571,19 @@ export function ChatView({ conversationId, navigate, onConversationChange, onOpe
                       <img src={fileUrl(target.id)} alt="" />
                       <span>Editing <strong>image #{numberOf(target.id)}</strong> — describe the change</span>
                       <button type="button" className="icon-btn small" aria-label="Stop editing this image" onClick={() => setTarget(null)}><Icon name="close" size={14} /></button>
+                    </div>) : bookMode ? (
+                    <div className="book-mode" role="group" aria-label="Learn as a book">
+                      <div className="book-mode-row">
+                        <span className="book-mode-ico" aria-hidden="true"><Icon name="book" size={16} /></span>
+                        <span className="book-mode-label">Learn as a book<span className="sr-only"> — your next message is the topic</span></span>
+                        <span className="book-depth" role="group" aria-label="How the book is written">
+                          <button type="button" aria-pressed={!bookDeep} onClick={() => setBookDeep(false)}>Chapters</button>
+                          <button type="button" aria-pressed={bookDeep} onClick={() => setBookDeep(true)}>In depth</button>
+                        </span>
+                        <button type="button" className="icon-btn small" aria-label="Cancel book mode" onClick={() => setBookMode(false)}><Icon name="close" size={14} /></button>
+                      </div>
+                      <p className="book-mode-hint">{bookDeep ? "Every topic of every chapter explained in depth — one topic per page, with examples and practice."
+                        : "A full chapter on each page, with key points and practice."}</p>
                     </div>) : undefined} />
       </div>
     </main>
