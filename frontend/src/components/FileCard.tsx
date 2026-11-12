@@ -40,10 +40,14 @@ interface Props {
   note?: string;
   onRemove?: () => void;
   onOpen?: () => void;
+  /** what tapping the card does, for screen readers (default "Open <name>") */
+  openLabel?: string;
+  /** show a small crop mark on a photo (tapping it crops) */
+  cropBadge?: boolean;
 }
 
 /** One attachment: a square photo thumbnail, or a card with a coloured type tile, the name and the type. */
-export function FileCard({ name, mime = "", kind = "", size, picture, progress, error, note, onRemove, onOpen }: Props) {
+export function FileCard({ name, mime = "", kind = "", size, picture, progress, error, note, onRemove, onOpen, openLabel, cropBadge }: Props) {
   const t = fileType(name, mime, kind);
   const objUrl = useObjectUrl(picture instanceof Blob ? picture : undefined);
   const src = typeof picture === "string" ? picture : objUrl;
@@ -57,8 +61,9 @@ export function FileCard({ name, mime = "", kind = "", size, picture, progress, 
     const Tag = onOpen ? "button" : "div";
     return (
       <div className={`file-card fc-photo${busy ? " busy" : ""}`}>
-        <Tag {...(onOpen ? { type: "button" as const, onClick: onOpen, "aria-label": `Open ${name}` } : {})} className="fc-thumb">
+        <Tag {...(onOpen ? { type: "button" as const, onClick: onOpen, "aria-label": openLabel || `Open ${name}` } : {})} className="fc-thumb">
           <img className="chip-thumb" src={src} alt="" />
+          {cropBadge && !busy && <span className="fc-crop" aria-hidden="true"><Icon name="crop" size={12} /></span>}
           <span className="sr-only">{name}</span>
           {ring}
         </Tag>

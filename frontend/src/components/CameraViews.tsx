@@ -1,8 +1,10 @@
-// Take a photo with the phone/laptop camera, inside the app: live viewfinder, switch front/back, capture, retake, use.
+// Take a photo with the phone/laptop camera, inside the app: live viewfinder, switch front/back, capture, then crop, resize
+// or rotate it (PhotoCrop) — retake or use it.
 // The photo goes into the message like an attached image; the AI explains it when the message is sent.
 // Nothing is recorded or kept: the camera runs only while this window is open, and only the photo you choose is used.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { PhotoCrop } from "./PhotoCrop";
 
 type Facing = "environment" | "user";
 type Phase = "starting" | "live" | "preview" | "error";
@@ -64,7 +66,7 @@ export function CameraDialog({ onPhoto, onClose }: { onPhoto: (f: File) => void;
 
   useEffect(() => { void start(facing); }, [facing, start]);
   useEffect(() => () => stop(), [stop]);
-  useEffect(() => () => { if (shot) URL.revokeObjectURL(shot.url); }, [shot]);
+  useEffect(() => () => { if (shot?.url) URL.revokeObjectURL(shot.url); }, [shot]);
   useEffect(() => {                                   // Escape closes; focus starts inside the dialog
     dialog.current?.focus();
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -90,10 +92,9 @@ export function CameraDialog({ onPhoto, onClose }: { onPhoto: (f: File) => void;
     }, "image/jpeg", 0.9);
   }
 
-  function use() {
-    if (!shot) return;
+  function use(b: Blob) {
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    onPhoto(new File([shot.blob], `photo-${stamp}.jpg`, { type: "image/jpeg" }));
+    onPhoto(new File([b], `photo-${stamp}.jpg`, { type: "image/jpeg" }));
     onClose();
   }
 
@@ -105,38 +106,35 @@ export function CameraDialog({ onPhoto, onClose }: { onPhoto: (f: File) => void;
   return (
     <div className="camera-backdrop" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="camera" role="dialog" aria-modal="true" aria-label="Take a photo" ref={dialog} tabIndex={-1}>
+        {phase === "preview" && shot ? (
+          <>
+            <PhotoCrop photo={shot.blob} alt="The photo you took" backLabel="Retake" onBack={retake} onUse={(b) => use(b)} />
+            <p className="camera-note">Drag the corners to crop to just your question, then tap <strong>Use photo</strong>.</p>
+          </>
+        ) : <>
         <div className="camera-view">
           <video ref={video} playsInline muted aria-label="Camera preview" className={facing === "user" ? "mirror" : ""}
-                 hidden={phase === "preview" || phase === "error"} />
-          {phase === "preview" && shot && <img src={shot.url} alt="The photo you took" />}
+                 hidden={phase === "error"} />
           {phase === "starting" && <p className="camera-msg" role="status">Starting the camera…</p>}
           {phase === "error" && (
             <div className="camera-msg" role="alert">
               <p>{error}</p>
               <button type="button" className="btn" onClick={() => fallback.current?.click()}>Choose a photo instead</button>
               <input ref={fallback} type="file" accept="image/*" capture="environment" hidden
-                     onChange={(e) => { const f = e.target.files?.[0]; if (f) { onPhoto(f); onClose(); } }} />
+                     onChange={(e) => { const f = e.target.files?.[0]; if (f) { setShot({ url: "", blob: f }); setPhase("preview"); } }} />
             </div>
           )}
         </div>
         <div className="camera-bar">
           <button type="button" className="icon-btn" aria-label="Close camera" onClick={onClose}><Icon name="close" /></button>
-          {phase === "preview" ? (
-            <>
-              <button type="button" className="btn" onClick={retake}>Retake</button>
-              <button type="button" className="btn primary" onClick={use}>Use photo</button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="shutter" aria-label="Take photo" onClick={capture} disabled={phase !== "live"} />
-              <button type="button" className="icon-btn" aria-label={facing === "environment" ? "Switch to front camera" : "Switch to back camera"}
-                      onClick={() => setFacing((f) => (f === "environment" ? "user" : "environment"))} disabled={phase === "starting" || cameras === 1}>
-                <Icon name="flip" />
-              </button>
-            </>
-          )}
+          <button type="button" className="shutter" aria-label="Take photo" onClick={capture} disabled={phase !== "live"} />
+          <button type="button" className="icon-btn" aria-label={facing === "environment" ? "Switch to front camera" : "Switch to back camera"}
+                  onClick={() => setFacing((f) => (f === "environment" ? "user" : "environment"))} disabled={phase === "starting" || cameras === 1}>
+            <Icon name="flip" />
+          </button>
         </div>
-        <p className="camera-note">The camera is on only while this window is open. Nothing is saved until you tap <strong>Use photo</strong>.</p>
+        <p className="camera-note">Point at your question. The camera is on only while this window is open; nothing is saved until you tap <strong>Use photo</strong>.</p>
+        </>}
       </div>
     </div>
   );

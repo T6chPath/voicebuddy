@@ -3,6 +3,7 @@ import { api, ApiError, LOCAL_MODE, uploadFile } from "../api/client";
 import type { UploadedFile } from "../api/types";
 import { isMac } from "../lib/format";
 import { CameraDialog } from "./CameraViews";
+import { CropDialog } from "./PhotoCrop";
 import { FileCard } from "./FileCard";
 import { dictation, type DictState } from "../voice/dictation";
 import { Icon } from "./Icon";
@@ -125,6 +126,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
   const [camera, setCamera] = useState(false);
+  const [cropping, setCropping] = useState<Pending | null>(null);     // a photo in the message box, opened to crop
   const ta = useRef<HTMLTextAreaElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const hintId = useId();
@@ -166,6 +168,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     });
   }, []);
   addFilesRef.current = addFiles;
+
+  /** a cropped photo takes the place of the original, in the same spot */
+  function replaceFile(old: Pending, file: File) {
+    old.abort?.();
+    if (old.uploaded) discard(old.uploaded);
+    const p: Pending = { key: `${file.name}-${file.size}-${Math.random()}`, file, progress: 0 };
+    setFiles((xs) => xs.map((x) => (x.key === old.key ? p : x)));
+    const up = upload(file, (fr) => setFiles((xs) => xs.map((x) => (x.key === p.key ? { ...x, progress: fr } : x))));
+    p.abort = up.abort;
+    up.promise
+      .then((u) => setFiles((xs) => xs.map((x) => (x.key === p.key ? { ...x, uploaded: u, progress: 1 } : x))))
+      .catch((e) => { if ((e as Error).name !== "AbortError") setFiles((xs) => xs.map((x) => (x.key === p.key ? { ...x, error: (e as Error).message || "Upload failed" } : x))); });
+  }
 
   function remove(p: Pending) {
     p.abort?.();
@@ -220,6 +235,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
           aria-label="Message composer">
       {popover}
+      {cropping && <CropDialog photo={cropping.file} name={cropping.file.name} onClose={() => { setCropping(null); ta.current?.focus(); }}
+                               onDone={(f) => { const old = cropping; replaceFile(old, f); }} />}
       {camera && <CameraDialog onPhoto={(f) => addFiles([f])} onClose={() => { setCamera(false); ta.current?.focus(); }} />}
       {banner}
       {files.length > 0 && (
@@ -230,7 +247,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                         kind={p.uploaded?.kind || (p.file.type.startsWith("image/") ? "image" : "")}
                         picture={p.file.type.startsWith("image/") && !p.error ? p.file : null}
                         progress={p.uploaded || p.error ? null : p.progress} error={p.error}
-                        note={p.uploaded?.truncated ? "Long file — the start is used" : undefined} onRemove={() => remove(p)} />
+                        note={p.uploaded?.truncated ? "Long file — the start is used" : undefined} onRemove={() => remove(p)}
+                        {...(p.file.type.startsWith("image/") && !p.error && /^image\/(jpeg|png|webp|bmp|gif)$/.test(p.file.type)
+                          ? { onOpen: () => setCropping(p), openLabel: `Crop or rotate ${p.file.name}`, cropBadge: true } : {})} />
             </li>
           ))}
         </ul>
