@@ -187,9 +187,16 @@ final class NativeApk {
     public void open(String id) {
         final String pkg = pkgs.get(id);
         activity.runOnUiThread(() -> {
-            Intent i = pkg == null ? null : activity.getPackageManager().getLaunchIntentForPackage(pkg);
-            if (i == null) { toast("Install the app first."); return; }
-            activity.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            if (pkg == null) { toast("Make the app again first."); return; }
+            Intent i = activity.getPackageManager().getLaunchIntentForPackage(pkg);
+            // the made app's screen is always the template's (ApkMaker keeps its full class name)
+            if (i == null) i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setClassName(pkg, "app.zenvqo.webshell.MainActivity");
+            try {
+                activity.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+            } catch (Exception e) {
+                Log.w(TAG, "open " + pkg + " failed", e);
+                toast("Couldn't open the app — find it with your other apps.");
+            }
         });
     }
 

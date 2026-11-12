@@ -1,0 +1,54 @@
+# "Make app" on real Android: builds an app from a web page the way the phone does (ApkMaker on the web-app template),
+# installs it on emulators (Android 11, 14, 15) and checks it opens from its icon and runs its page.
+name: zenvqo made apps open on Android (emulator)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 34, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Make an app from a web page (like the phone does)
+        run: |
+          set -e
+          cd android && echo "sdk.dir=$ANDROID_HOME" > local.properties && gradle :webshell:assembleRelease --console=plain -q && cd ..
+          T=$(mktemp -d)
+          javac -d "$T/cls" android/app/src/main/java/app/zenvqo/chat/ApkMaker.java
+          keytool -genkeypair -keystore k.p12 -storetype PKCS12 -storepass secret1 -keypass secret1 -alias a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=zenvqo web apps" >/dev/null 2>&1
+          cat > page.html <<'HTML'
+          <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Chai Counter</title>
+          <style>body{font:22px sans-serif;margin:0;padding:24px;background:#fff7e6}</style></head>
+          <body><h1>Chai Counter</h1><p id="t">waiting</p>
+          <script>document.getElementById('t').textContent='Made on CI ' + (6*7); localStorage.setItem('x','1');</script></body></html>
+          HTML
+          java -cp "$T/cls" app.zenvqo.chat.ApkMaker android/webshell/build/outputs/apk/release/*.apk page.html "Chai Counter" app.zenvqo.web.chaicounter_ci k.p12 secret1 made.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and open it on Android ${{ matrix.api }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          ram-size: 3072M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: bash e2e/android/made_app_check.sh made.apk app.zenvqo.web.chaicounter_ci "Made on CI 42"
