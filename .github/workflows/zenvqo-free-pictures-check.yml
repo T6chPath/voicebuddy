@@ -1,0 +1,67 @@
+# Which picture models the free online service (Pollinations) makes today without a key, how fast, and whether the
+# result is a real picture (not a "sign in" placeholder): the app picks the best of these for free pictures.
+name: zenvqo free pictures check
+
+on:
+  push:
+    paths:
+      - ".github/workflows/zenvqo-free-pictures-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Tools
+        run: pip install -q pillow
+      - name: The service's model lists
+        run: |
+          echo "--- image.pollinations.ai/models"; curl -sS -m 30 https://image.pollinations.ai/models | head -c 3000; echo
+          echo "--- gen.pollinations.ai/image/models"; curl -sS -m 30 https://gen.pollinations.ai/image/models | python3 -c "
+          import json,sys
+          try:
+              d=json.load(sys.stdin)
+          except Exception as e:
+              print('not json', e); sys.exit(0)
+          for m in (d if isinstance(d,list) else d.get('data',d.get('models',[]))):
+              if isinstance(m,dict):
+                  keep={k:m.get(k) for k in ('name','id','description','aliases','pricing','paid_only','tier','output_modalities','input_modalities','reasoning') if k in m}
+                  print(json.dumps(keep)[:400])
+              else: print(m)
+          "
+      - name: Make the same picture with each model, no key
+        run: |
+          mkdir -p out
+          P="a red apple on a white plate next to a cup of chai, studio photo, soft light"
+          ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$P")
+          for m in flux turbo zimage klein klein-large flux-2-dev imagen-4 gptimage gptimage-2 nanobanana seedream kontext; do
+            t0=$(date +%s.%N)
+            code=$(curl -sS -m 150 -o out/$m.bin -D out/$m.h -w "%{http_code}" \
+              "https://image.pollinations.ai/prompt/$ENC?width=1024&height=1024&seed=7&model=$m&nologo=true&safe=true&referrer=zenvqo")
+            t1=$(date +%s.%N)
+            python3 - "$m" "$code" "$t0" "$t1" <<'PY'
+          import sys
+          from PIL import Image, ImageStat
+          m, code, t0, t1 = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
+          b = open(f"out/{m}.bin", "rb").read()
+          h = open(f"out/{m}.h").read().lower()
+          used = [l.strip() for l in h.splitlines() if l.startswith(("x-model", "x-request", "content-type", "x-cache", "retry-after"))]
+          try:
+              im = Image.open(f"out/{m}.bin").convert("RGB")
+              st = ImageStat.Stat(im.resize((64, 64)))
+              g = im.resize((10, 10), Image.BOX)
+              red = sum(1 for p in im.resize((64, 64)).getdata() if p[0] > p[1] + 50 and p[0] > p[2] + 50) / 4096
+              desc = f"picture {im.size[0]}x{im.size[1]}, {len(b)//1024} KB, mean {[round(x) for x in st.mean]}, spread {[round(x) for x in st.stddev]}, red {red:.2f}"
+          except Exception:
+              desc = "not a picture: " + b[:300].decode("utf-8", "replace").replace("\n", " ")
+          print(f"MODEL {m:12s} {code}  {float(t1)-float(t0):6.1f} s  {desc}  {used}")
+          PY
+            sleep 17
+          done
+      - name: The newer API without a key
+        run: |
+          curl -sS -m 60 -o /dev/null -w "gen.pollinations.ai/image without key: %{http_code}\n" "https://gen.pollinations.ai/image/a%20cat?model=zimage" || true
