@@ -75,12 +75,14 @@ jobs:
             local steps=$(tr '\r' '\n' < out/$name.log | grep -oE '[0-9]+/[0-9]+ - [0-9.]+(s/it|it/s)' | tail -1)
             echo "RESULT $name: exit $code, $((t1-t0)) s, max memory $((${rss:-0}/1024)) MB, last step: $steps" | tee -a out/results.txt
           }
-          run small               sd_turbo-q4_0.gguf       none   --mmap
-          run better              sd_turbo-f16-q8_0.gguf   none   --mmap
-          run small-2.6G          sd_turbo-q4_0.gguf       2600M  --mmap
-          run better-2.6G         sd_turbo-f16-q8_0.gguf   2600M  --mmap
-          run small-1.8G          sd_turbo-q4_0.gguf       1800M  --mmap
-          run better-no-mmap-2.6G sd_turbo-f16-q8_0.gguf   2600M
+          # what makes "SD-Turbo — better detail" faster on a phone-like ARM computer (same settings as the app)
+          B=sd_turbo-f16-q8_0.gguf
+          run better-2steps         $B none --mmap
+          run better-1step          $B none --mmap --steps 1
+          run better-1step-fa-off   $B none --mmap --steps 1 --flash-attn off
+          run better-1step-direct   $B none --mmap --steps 1 --conv-direct on
+          run better-1step-448      $B none --mmap --steps 1 -W 448 -H 448
+          run small-1step           sd_turbo-q4_0.gguf none --mmap --steps 1
           echo; cat out/results.txt
       - name: What was drawn
         if: always()
