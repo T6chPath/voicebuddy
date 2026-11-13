@@ -13,7 +13,7 @@ import { parseSpec } from "../plot/spec";
 import { BOOK_PREFIX, DEEP_PREFIX, isBookMessage, isBookRequest, isDeepRequest } from "../lib/book";
 import { bookSpeed } from "../lib/bookModel";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
-import { gemini, GEMINI_IMAGE_MODEL, ImageEngineError, measure, openai, OPENAI_IMAGE_MODEL, openrouterImage, pollinations, type ImageJob, type MadeImage } from "../images/engines";
+import { gemini, GEMINI_IMAGE_MODEL, ImageEngineError, measure, openai, OPENAI_IMAGE_MODEL, openrouterImage, pollinations, pollinationsKeyed, type ImageJob, type MadeImage } from "../images/engines";
 import { cleanWrittenPrompt, FREE_PICTURE_MODEL, FREE_PICTURES, isPictureModel, pictureEngine, pictureName, pictureWriterMessages } from "../images/pictureModels";
 import { DEVICE_MODELS, device, deviceModel, type DeviceModel } from "../images/device";
 import { blendUnder, composite, cutOut, drawText, fillArea, padFor, placeOn, upscale, type Side } from "../images/canvas";
@@ -878,7 +878,21 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
   const devEdit: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model, true);   // changing a photo
   const onPhone = (j: Partial<ImageJob>, m = dev) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality, size: s.device_size }, signal, c.progress);
   const online = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
+  // with a free pollinations.ai key: Z-Image Turbo first — sharper, closer to the request, quick and no waiting
+  const keyed = async (j: Partial<ImageJob>): Promise<MadeImage | null> => {
+    if (!s.pollinations_key?.trim() || s.image_engine === "device") return null;
+    try { return await pollinationsKeyed({ ...job, ...j, op: "generate" } as ImageJob, s.pollinations_key, net, signal, c.progress); }
+    catch (err) {
+      if ((err as Error).name === "AbortError") throw err;
+      if (err instanceof ImageEngineError && err.code === "blocked") throw err;
+      const why = (err as Error).message.replace(/\.$/, "");
+      notes.add(`Z-Image Turbo couldn't make it (${why.charAt(0).toLowerCase() + why.slice(1)}), so ${dev ? "your phone" : "the free image service"} made it.`);
+      return null;
+    }
+  };
   const free = async (j: Partial<ImageJob>): Promise<MadeImage> => {
+    const best = await keyed(j);
+    if (best) return best;
     if (!dev) {
       if (s.image_engine === "device") throw new ImageEngineError("Pictures are set to be made only on this phone, but the picture model isn't downloaded yet. " +
         "Open Settings → Pictures on this phone and tap Download.", "unsupported");

@@ -176,6 +176,8 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     }
   }
   let prompt = styledPrompt(job.prompt, job.style);
+  // small phone models draw better-looking pictures when asked for quality (with a style, the style's own words do it)
+  if (normStyle(job.style) === "none") prompt += ", highly detailed, sharp focus, beautiful lighting, vibrant colors, high quality";
   if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters" : ", empty space for a title, no text, no letters, no watermark";
   else if (job.text) prompt += `, with the text "${job.text}"`;
   const base = o.model.oneStep ? 1 : QUALITY[o.quality || "fast"]?.steps ?? 1;    // SD-Turbo and SDXS are made to draw in one step

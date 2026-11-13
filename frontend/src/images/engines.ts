@@ -74,22 +74,60 @@ let lastPolli = 0;
 /** Minimum time between requests to the free service (tests set window.__zcPolliGap). */
 const polliGap = (): number => {
   const g = typeof window !== "undefined" ? (window as unknown as { __zcPolliGap?: number }).__zcPolliGap : undefined;
-  return typeof g === "number" ? g : 15000;
+  return typeof g === "number" ? g : 45000;                    // the service's free limit: one picture every 45 s
 };
+const NO_WAIT_TIP = " (a free pollinations.ai key in Settings → Pictures removes the wait)";
 
-export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSignal, progress: Progress): Promise<MadeImage> {
-  const [w, h] = sizeFor(job.aspect, Math.min(job.resolution, 1024), 64);
+/** The prompt the online services draw from: the style's words, the text to leave room for or to write, what to avoid. */
+function onlinePrompt(job: ImageJob): string {
   let prompt = styledPrompt(job.prompt, job.style);
   if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters, no words" : ", clean empty space for a title, no text, no letters, no words, no watermark";
   else if (job.text) prompt += `, with the text "${job.text}" written clearly`;
   if (job.negative) prompt += `. Avoid: ${job.negative}`;
+  return prompt.slice(0, 1500);
+}
+
+/* ---------------- with a free pollinations.ai key: Z-Image Turbo, no waiting ---------------- */
+export const POLLEN_API = "https://gen.pollinations.ai/image/";
+export const POLLEN_MODEL = "zimage";
+
+export async function pollinationsKeyed(job: ImageJob, key: string, net: Fetcher, signal: AbortSignal, progress: Progress): Promise<MadeImage> {
+  const [w, h] = sizeFor(job.aspect, Math.min(job.resolution, 1024), 64);
+  const q = new URLSearchParams({ model: POLLEN_MODEL, width: String(w), height: String(h), seed: String(job.seed), nologo: "true", safe: "true", referrer: "zenvqo" });
+  progress(0.1, "Drawing with Z-Image Turbo…");
+  let r: Response;
+  try {
+    r = await net(POLLEN_API + encodeURIComponent(onlinePrompt(job)) + "?" + q.toString(),
+      { headers: { Accept: "image/*", Authorization: `Bearer ${key.trim()}`, "X-Zenvqo-Binary": "1" }, signal });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ImageEngineError("Couldn't reach pollinations.ai. Check your internet connection.", "network");
+  }
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (!r.ok) {
+    const text = new TextDecoder().decode(bytes.slice(0, 600));
+    if (/nsfw|safety|blocked|inappropriate|content polic/i.test(text)) throw new ImageEngineError("The image service declined this request under its safety rules.", "blocked");
+    if (r.status === 401 || r.status === 403) throw new ImageEngineError("pollinations.ai didn't accept the key (check it in Settings → Pictures).", "auth");
+    if (r.status === 402) throw new ImageEngineError("the pollinations.ai key has no pollen left for today.", "quota");
+    if (r.status === 429) throw new ImageEngineError("pollinations.ai is busy right now.", "rate_limited");
+    throw new ImageEngineError(`pollinations.ai failed (${r.status}).`, "failed");
+  }
+  const mime = sniffMime(bytes);
+  if (!mime) throw new ImageEngineError("pollinations.ai sent something that isn't a picture.", "failed");
+  const dataUrl = bytesToDataUrl(bytes, mime);
+  const { width, height } = await measure(dataUrl);
+  return { dataUrl, mime, width, height, engine: "pollinations", model: "Z-Image Turbo", notes: [] };
+}
+
+export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSignal, progress: Progress): Promise<MadeImage> {
+  const [w, h] = sizeFor(job.aspect, Math.min(job.resolution, 1024), 64);
   const q = new URLSearchParams({ width: String(w), height: String(h), seed: String(job.seed), model: "flux", nologo: "true", safe: "true", referrer: "zenvqo" });
-  const url = POLLINATIONS + encodeURIComponent(prompt.slice(0, 1500)) + "?" + q.toString();
+  const url = POLLINATIONS + encodeURIComponent(onlinePrompt(job)) + "?" + q.toString();
   const tries = 4;
   for (let attempt = 0; attempt < tries; attempt++) {
     // anonymous use allows about one picture every 15 s: space requests out instead of being turned away
     const gap = polliGap() - (Date.now() - lastPolli);
-    for (let s = Math.ceil(gap / 1000); s > 0; s--) { progress(0.05, `Waiting for the free image service — ${s} s…`); await sleep(1000, signal); }
+    for (let s = Math.ceil(gap / 1000); s > 0; s--) { progress(0.05, `Waiting for the free image service — ${s} s…${NO_WAIT_TIP}`); await sleep(1000, signal); }
     lastPolli = Date.now();
     let r: Response;
     try {
@@ -99,11 +137,12 @@ export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSig
       throw new ImageEngineError("Couldn't reach the free image service. Check your internet connection.", "network");
     }
     if (r.status === 429 || r.status === 503 || r.status === 502 || r.status === 402) {
-      // busy, or (402) the anonymous tier's limit for now: wait and try again
-      const wait = Math.min(30, Number(r.headers.get("retry-after")) || (r.status === 402 ? 20 : 16));
+      // busy, or (402) the free limit for now ("Retry after 20s"): wait as long as it says, then try again
+      const said = Number((await r.text().catch(() => "")).match(/retry after (\d+)\s*s/i)?.[1]);
+      const wait = Math.min(60, Number(r.headers.get("retry-after")) || said || (r.status === 402 ? 45 : 16)) + 1;
       lastPolli = Date.now();
       if (attempt === tries - 1) throw new ImageEngineError("The free image service is busy. Wait a minute and try again.", "rate_limited", wait);
-      for (let s = wait; s > 0; s--) { progress(0.05, `The free image service is busy — trying again in ${s} s…`); await sleep(1000, signal); }
+      for (let s = wait; s > 0; s--) { progress(0.05, `The free image service is busy — trying again in ${s} s…${r.status === 402 ? NO_WAIT_TIP : ""}`); await sleep(1000, signal); }
       continue;
     }
     const bytes = new Uint8Array(await r.arrayBuffer());
@@ -116,7 +155,7 @@ export async function pollinations(job: ImageJob, net: Fetcher, signal: AbortSig
     if (!mime) throw new ImageEngineError("The free image service sent something that isn't a picture. Try again.", "failed");
     const dataUrl = bytesToDataUrl(bytes, mime);
     const { width, height } = await measure(dataUrl);
-    return { dataUrl, mime, width, height, engine: "pollinations", model: "flux", notes: [] };
+    return { dataUrl, mime, width, height, engine: "pollinations", model: r.headers.get("x-model-used") || "flux", notes: [] };
   }
   throw new ImageEngineError("The free image service is busy. Wait a minute and try again.", "rate_limited");
 }

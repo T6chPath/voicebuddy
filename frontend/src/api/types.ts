@@ -76,6 +76,8 @@ export interface UserSettings {
   device_model?: string;
   device_quality?: "fast" | "balanced" | "best";
   device_size?: "auto" | "full";
+  /** standalone app: a free pollinations.ai key — online pictures by Z-Image Turbo, without the free tier's wait */
+  pollinations_key?: string;
 }
 
 export interface UploadedFile extends Attachment { chars: number; truncated: boolean }

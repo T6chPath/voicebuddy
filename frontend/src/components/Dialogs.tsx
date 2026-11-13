@@ -121,6 +121,19 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           </label>
           <label className="check"><input type="checkbox" checked={draft.send_on_enter} onChange={(e) => set("send_on_enter", e.target.checked)} /> Enter sends the message (otherwise {mod}+Enter)</label>
         </fieldset>
+        {LOCAL_MODE && (
+          <fieldset>
+            <legend>Pictures</legend>
+            <label className="field">
+              <span>pollinations.ai key (free)</span>
+              <input type="password" value={draft.pollinations_key ?? ""} placeholder="sk_…" autoComplete="off" spellCheck={false}
+                     onChange={(e) => set("pollinations_key", e.target.value)} />
+              <small className="hint">With a key, pictures made online come from Z-Image Turbo: sharper, closer to what you ask for, and
+                with no 45-second wait between pictures. Get one free at <a href="https://enter.pollinations.ai" target="_blank" rel="noreferrer">enter.pollinations.ai</a>:
+                sign in, open the Keys page, create a secret key and paste it here. Stored only on this device.</small>
+            </label>
+          </fieldset>
+        )}
         {LOCAL_MODE && <DevicePicturesPanel draft={draft} set={set} />}
         <VoiceSettingsPanel />
         <VoiceInputPanel />
