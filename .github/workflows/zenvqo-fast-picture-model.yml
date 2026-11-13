@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   fast:
@@ -39,56 +39,38 @@ jobs:
             -DSD_WEBP=OFF -DSD_WEBM=OFF -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_SHARED_LIBS=OFF -DSD_BUILD_SHARED_GGML_LIB=ON > /dev/null
           cmake --build b --target sd-cli -j$(nproc) > /dev/null
           mkdir -p ../engine && cp b/bin/sd-cli ../engine/ && find b -name 'libggml*.so' -exec cp {} ../engine/ \;
-      - name: The SDXS models (and SD-Turbo to compare)
+      - name: The fast model (as the app downloads it)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p models && cd models
-          gh release download zenvqo-image-engine -R ${{ github.repository }} -p sd_turbo-q4_0.gguf -p taesd.safetensors
-          for repo in akleine/sdxs-512 concedo/sdxs-512-tinySDdistilled-GGUF akleine/sdxs-09; do
-            echo "--- $repo"
-            curl -sS -m 60 "https://huggingface.co/api/models/$repo/tree/main" | python3 -c "
-          import json,sys
-          for f in json.load(sys.stdin):
-              if f.get('type')=='file': print(f['path'], f.get('size'))
-          " | tee /tmp/files.txt
-            grep -E '\.(safetensors|gguf)\b' /tmp/files.txt | while read -r name size; do
-              [ "$size" -lt 1600000000 ] || continue
-              out="$(echo $repo | tr '/' '_')__$(basename $name)"
-              curl -sSfL -m 600 -o "$out" "https://huggingface.co/$repo/resolve/main/$name" && echo "got $out ($size)"
-            done
-          done
+          gh release download zenvqo-image-engine -R ${{ github.repository }} -p sdxs512-dreamshaper-sdxs-q8_0.gguf -p taesd.safetensors
           ls -la
-      - name: Make phone-sized GGUF files
+      - name: What makes it faster (picture size, convolution and attention settings)
         run: |
-          cd models
-          for f in akleine_*.safetensors; do
-            [ -f "$f" ] || continue
-            b=${f%.safetensors}
-            LD_LIBRARY_PATH=../engine ../engine/sd-cli -M convert -m "$f" -o "$b-q8_0.gguf" --type q8_0 2>&1 | tail -2
-          done
-          ls -la
-      - name: Time each one like the phone does (512×512, one step, 4 threads)
-        run: |
-          D=$PWD/engine; mkdir -p out
-          run() {   # name, model, extra args
-            local name=$1 model=$2; shift 2
+          D=$PWD/engine; M=$PWD/models/sdxs512-dreamshaper-sdxs-q8_0.gguf; mkdir -p out
+          run() {   # name, extra args
+            local name=$1; shift
             local t0=$(date +%s.%N)
-            LD_LIBRARY_PATH=$D timeout 600 /usr/bin/time -v $D/sd-cli -m $model -p "a red apple on a white plate, studio photo" \
-              -W 512 -H 512 --steps 1 --cfg-scale 1 --sampling-method euler_a -s 42 -t 4 --mmap -o out/$name.png "$@" > out/$name.log 2>&1
+            LD_LIBRARY_PATH=$D timeout 600 /usr/bin/time -v $D/sd-cli -m $M -p "a red apple on a white plate, studio photo" \
+              --steps 1 --cfg-scale 1 --sampling-method euler_a -s 42 -t 4 --mmap -o out/$name.png "$@" > out/$name.log 2>&1
             local code=$? t1=$(date +%s.%N)
             local rss=$(grep -oP 'Maximum resident set size \(kbytes\): \K\d+' out/$name.log)
-            local parts=$(grep -oE '(get_learned_condition completed|sampling completed|decode_first_stage completed|generate_image completed in)[^-]*' out/$name.log | tr '\n' ' ')
-            printf "RESULT %-40s exit %s  %5.1f s  max memory %5d MB  %s\n" "$name" "$code" "$(awk "BEGIN{print $t1 - $t0}")" "$((${rss:-0}/1024))" "$parts" | tee -a out/results.txt
+            local parts=$(grep -oE '(get_learned_condition completed|sampling completed|decode_first_stage completed|generate_image completed in)[^-]*' out/$name.log | sed -E 's/completed,? (taking|in) //' | tr '\n' ' ')
+            printf "RESULT %-22s exit %s  %5.1f s  max memory %5d MB  %s\n" "$name" "$code" "$(awk "BEGIN{print $t1 - $t0}")" "$((${rss:-0}/1024))" "$parts" | tee -a out/results.txt
             [ "$code" = 0 ] || tail -15 out/$name.log
           }
-          run sd-turbo models/sd_turbo-q4_0.gguf --taesd models/taesd.safetensors
-          for m in models/*sdxs*.gguf; do
-            n=$(basename $m .gguf)
-            run "$n" "$m"
-            run "$n+taesd" "$m" --taesd models/taesd.safetensors
-          done
-          for m in models/*sdxs*.safetensors; do run "$(basename $m .safetensors)" "$m"; done
+          run 512             -W 512 -H 512
+          run 448             -W 448 -H 448
+          run 384             -W 384 -H 384
+          run 320             -W 320 -H 320
+          run 256             -W 256 -H 256
+          run 512-direct      -W 512 -H 512 --conv-direct on
+          run 512-direct-vae  -W 512 -H 512 --conv-direct auto,vae=on
+          run 512-fa-off      -W 512 -H 512 --flash-attn off
+          run 384-direct      -W 384 -H 384 --conv-direct on
+          run 512-3threads    -W 512 -H 512 -t 3
+          run 512-2threads    -W 512 -H 512 -t 2
           echo; cat out/results.txt
       - name: What was drawn
         if: always()
@@ -113,18 +95,3 @@ jobs:
               for y in range(12):
                   print("   " + " ".join(name(*g.getpixel((x, y))) for x in range(12)))
           PY
-      - name: Put the fast models on the release
-        run: |
-          mkdir -p publish
-          for m in models/*sdxs*-q8_0.gguf models/concedo_*.gguf; do
-            [ -f "$m" ] || continue
-            n=$(basename $m | sed -E 's/^akleine_sdxs-512__/sdxs512-dreamshaper-/; s/^akleine_sdxs-09__/sdxs09-/; s/^concedo_sdxs-512-tinySDdistilled-GGUF__/sdxs512-tinysd-/')
-            cp "$m" "publish/$n"
-          done
-          ls -la publish; sha256sum publish/*.gguf
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: zenvqo-image-engine
-          prerelease: true
-          make_latest: false
-          files: publish/*
