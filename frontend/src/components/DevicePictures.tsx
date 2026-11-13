@@ -91,7 +91,7 @@ export function DevicePicturesPanel({ draft, set }: { draft: UserSettings; set: 
           </label>
         )}
         <label className="field"><span>Quality</span>
-          <select value={draft.device_quality || "balanced"} onChange={(e) => set("device_quality", e.target.value as UserSettings["device_quality"])}>
+          <select value={draft.device_quality || "fast"} onChange={(e) => set("device_quality", e.target.value as UserSettings["device_quality"])}>
             {Object.entries(QUALITY).map(([k, q]) => <option key={k} value={k}>{q.label}</option>)}
           </select>
         </label>

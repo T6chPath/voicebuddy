@@ -35,7 +35,7 @@ export const MAX_MS = 600_000;
 const limit = (k: "__zigStallMs" | "__zigMaxMs", d: number) => (typeof window !== "undefined" && (window as unknown as Record<string, number | undefined>)[k]) || d;
 
 export const QUALITY: Record<string, { steps: number; label: string }> = {
-  fast: { steps: 1, label: "Fast (1 step)" },
+  fast: { steps: 1, label: "Fast (1 step) — about twice as quick" },
   balanced: { steps: 2, label: "Balanced (2 steps)" },
   best: { steps: 4, label: "Best (4 steps)" },
 };
@@ -119,7 +119,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   let prompt = styledPrompt(job.prompt, job.style);
   if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters" : ", empty space for a title, no text, no letters, no watermark";
   else if (job.text) prompt += `, with the text "${job.text}"`;
-  const base = QUALITY[o.quality || "balanced"]?.steps ?? 2;
+  const base = QUALITY[o.quality || "fast"]?.steps ?? 1;              // SD-Turbo is made to draw in one step: the quickest
   const args: Record<string, unknown> = { model: o.model.file, prompt: prompt.slice(0, 900), width: w, height: h, steps: base, cfg: 1, sampler: "euler_a",
     seed: job.seed % 2147483647, taesd: TAESD.file };
   if (o.threads) args.threads = o.threads;

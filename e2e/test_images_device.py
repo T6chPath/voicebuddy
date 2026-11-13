@@ -98,7 +98,7 @@ def test_pictures_are_made_on_the_phone(browser):
     expect(reply.locator("img").first).to_be_visible()
     a = calls(p)[0]
     assert a["model"] == "sd_turbo-q4_0.gguf" and a["taesd"] == "taesd.safetensors"
-    assert a["prompt"].startswith("a red apple on a wooden table") and a["steps"] == 2 and a["cfg"] == 1
+    assert a["prompt"].startswith("a red apple on a wooden table") and a["steps"] == 1 and a["cfg"] == 1
     assert (a["width"], a["height"]) == (512, 512) and "init" not in a
     assert not polli.calls, "nothing goes to the online service"
     im = img_of(reply).convert("RGB")
