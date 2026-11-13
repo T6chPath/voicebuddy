@@ -233,6 +233,10 @@ final class NativeImageGen {
             if (!model.exists()) throw new IllegalStateException("The picture model isn't downloaded yet.");
             if (!engine().exists()) throw new IllegalStateException("This copy of the app has no picture engine for this phone.");
             List<String> cmd = new ArrayList<>();
+            // a lower priority than the app itself: the chat stays smooth while the phone draws (it uses the cores
+            // the app isn't using, so the picture is hardly slower)
+            File nice = new File("/system/bin/nice");
+            if (nice.canExecute()) { cmd.add(nice.getAbsolutePath()); cmd.add("-n"); cmd.add("10"); }
             cmd.add(engine().getAbsolutePath());
             cmd.add("-m"); cmd.add(model.getAbsolutePath());
             cmd.add("-p"); cmd.add(a.getString("prompt"));
