@@ -75,6 +75,7 @@ export interface UserSettings {
   image_engine?: "auto" | "device" | "online";
   device_model?: string;
   device_quality?: "fast" | "balanced" | "best";
+  device_size?: "auto" | "full";
 }
 
 export interface UploadedFile extends Attachment { chars: number; truncated: boolean }

@@ -227,3 +227,30 @@ def test_a_picture_cut_off_by_closing_the_app_can_be_made_again(browser):
     expect(p.locator("article.msg-assistant").last.locator("img").first).to_be_visible()
     assert not polli.calls
     assert not errors, errors
+
+
+def test_a_slow_phone_draws_smaller_to_stay_under_10_seconds(browser):
+    """This phone took 35 s for a full-size picture: the next one is drawn smaller (then enlarged), so it's quick; the
+    reply says how long it took and where the time went. "Full size" in Settings keeps 512×512."""
+    files = {**MODEL, SDXS_FILE: SDXS_MB * 1048576}
+    slow = json.dumps(json.dumps({SDXS_FILE: [[512 * 512, 35000]]}))
+    p, errors, polli = phone(browser, {"default_model": "echo", "device_model": "sdxs"}, files,
+                             extra=f"localStorage.setItem('zc.phone.speed', {slow});")
+    reply = say(p, "Generate an image of a red apple", 1)
+    expect(reply.locator("img").first).to_be_visible()
+    a = calls(p)[0]
+    assert (a["width"], a["height"]) == (256, 256), a
+    expect(reply).to_contain_text(re.compile(r"Made on your phone in \d+ s \(getting ready \d+ s, drawing \d+ s, finishing \d+ s\)"))
+    expect(reply).to_contain_text("To be quick, your phone drew it at 256×256 and enlarged it.")
+    assert img_of(reply).size == (512, 512)
+    speed = json.loads(p.evaluate("localStorage.getItem('zc.phone.speed')"))[SDXS_FILE]
+    assert speed[-1][0] == 256 * 256 and len(speed) == 2                    # it learns this phone's speed
+    # full size, always
+    p2, errors2, _ = phone(browser, {"default_model": "echo", "device_model": "sdxs", "device_size": "full"}, files,
+                           extra=f"localStorage.setItem('zc.phone.speed', {slow});")
+    r2 = say(p2, "Generate an image of a red apple", 1)
+    expect(r2.locator("img").first).to_be_visible()
+    assert (calls(p2)[0]["width"], calls(p2)[0]["height"]) == (512, 512)
+    expect(r2).not_to_contain_text("To be quick")
+    assert not polli.calls
+    assert not errors and not errors2, (errors, errors2)

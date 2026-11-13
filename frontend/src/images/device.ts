@@ -2,6 +2,7 @@
 // user downloads a small image model once (SD-Turbo). No service, no key, no internet after the download.
 import { normStyle, sizeFor, styledPrompt } from "./intent";
 import { ImageEngineError, measure, type ImageJob, type MadeImage } from "./engines";
+import { upscale } from "./canvas";
 
 export interface DeviceBridge {
   info(): string;
@@ -108,11 +109,53 @@ async function fitTo(src: string, w: number, h: number, mask = false): Promise<s
   return c.toDataURL("image/png");
 }
 
-export interface DeviceOptions { model: DeviceModel; quality?: string; threads?: number; strength?: number }
+export interface DeviceOptions { model: DeviceModel; quality?: string; threads?: number; strength?: number; size?: "auto" | "full" }
+
+/* ---------- pictures in under 10 seconds: draw smaller on a slow phone ---------- */
+/** How long this phone took for its recent pictures, per model: [pixels, milliseconds] (the whole picture, start to end). */
+const SPEED_KEY = "zc.phone.speed";
+export const TARGET_MS = 9000;
+const SIDES = [512, 448, 384, 320, 256];
+type Samples = Record<string, [number, number][]>;
+function samples(): Samples {
+  try { return JSON.parse(localStorage.getItem(SPEED_KEY) || "{}") as Samples; } catch { return {}; }
+}
+export function rememberSpeed(file: string, px: number, ms: number) {
+  const all = samples();
+  all[file] = [...(all[file] || []), [px, ms] as [number, number]].slice(-6);
+  try { localStorage.setItem(SPEED_KEY, JSON.stringify(all)); } catch { /* private mode */ }
+}
+/** The time a picture of `px` pixels will take: a part that grows with the picture (drawing, finishing) and a fixed
+ *  part (starting, reading the description) — from this phone's own recent pictures; null before the first. */
+export function predictMs(file: string, px: number): number | null {
+  const xs = samples()[file];
+  if (!xs?.length) return null;
+  const sizes = new Set(xs.map(([p]) => p));
+  if (sizes.size >= 2) {                                       // a straight line through the samples
+    const n = xs.length, mx = xs.reduce((a, [p]) => a + p, 0) / n, my = xs.reduce((a, [, m]) => a + m, 0) / n;
+    const b = xs.reduce((a, [p, m]) => a + (p - mx) * (m - my), 0) / xs.reduce((a, [p]) => a + (p - mx) ** 2, 0);
+    if (b > 0) return Math.max(0, my - b * mx) + b * px;
+  }
+  const [p0, m0] = [xs.reduce((a, [p]) => a + p, 0) / xs.length, xs.reduce((a, [, m]) => a + m, 0) / xs.length];
+  return 0.2 * m0 + (0.8 * m0 * px) / p0;                       // one size so far: about a fifth of it is fixed
+}
+/** The side (of a square picture) this phone can draw in under 10 seconds: full size (512) when it's quick enough. */
+export function quickSide(file: string): number {
+  for (const side of SIDES) { const t = predictMs(file, side * side); if (t === null || t <= TARGET_MS) return side; }
+  return SIDES[SIDES.length - 1];
+}
 
 /** Size the phone engine works at: SD-Turbo is made for 512×512; other shapes keep about the same area. */
 export function deviceSize(aspect: string): [number, number] {
   return aspect === "1:1" ? [512, 512] : sizeFor(aspect, 640, 64);
+}
+
+/** "Made on your phone in 9 s (getting ready 2 s, drawing 4 s, finishing 3 s)." — where the time went. */
+export function timeNote(t0: number, began: Record<string, number>, end: number): string {
+  const s = (ms: number) => `${Math.max(0, Math.round(ms / 1000))} s`;
+  const draw = began.sample ?? began.decode ?? end, fin = began.decode ?? end;
+  const parts = [`getting ready ${s(draw - t0)}`, `drawing ${s(fin - draw)}`, `finishing ${s(end - fin)}`];
+  return `Made on your phone in ${s(end - t0)} (${parts.join(", ")}).`;
 }
 
 export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSignal, progress: (f: number, t: string) => void): Promise<MadeImage> {
@@ -124,7 +167,14 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     const s = await measure(src);
     const k = Math.sqrt((512 * 512) / (s.width * s.height));
     w = Math.max(256, Math.round((s.width * k) / 64) * 64); h = Math.max(256, Math.round((s.height * k) / 64) * 64);
-  } else [w, h] = deviceSize(job.aspect);
+  } else {
+    [w, h] = deviceSize(job.aspect);
+    const side = o.size === "full" ? 512 : quickSide(o.model.file);
+    if (side < 512) {                                          // the same shape, smaller
+      const k = side / 512;
+      w = Math.max(192, Math.round((w * k) / 64) * 64); h = Math.max(192, Math.round((h * k) / 64) * 64);
+    }
+  }
   let prompt = styledPrompt(job.prompt, job.style);
   if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters" : ", empty space for a title, no text, no letters, no watermark";
   else if (job.text) prompt += `, with the text "${job.text}"`;
@@ -141,6 +191,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   }
   const id = `g${++seq}_${Date.now()}`;
   const t0 = Date.now();
+  const began: Record<string, number> = {};                     // when each part started: to say where the time went
   const png = await new Promise<string>((resolve, reject) => {
     const parts: string[] = [];
     let alive = Date.now();                                  // the engine's last sign of life
@@ -172,6 +223,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
       if (k === "gen") {
         const step = Number(d.step), steps = Number(d.steps);
         const phase = String(d.phase);
+        if (!(phase in began)) began[phase] = Date.now();
         if (phase === "load") show(0.03 + 0.1 * (steps ? step / steps : 0), (n) => `Loading the picture model on your phone${steps ? ` — ${Math.round((100 * step) / steps)}%` : "…"} ${n} s`);
         else if (phase === "text") show(0.15, (n) => `Reading your description… ${n} s`);
         else if (phase === "sample") show(0.2 + 0.65 * (steps ? step / steps : 0), (n) => `Drawing on your phone${steps ? ` — step ${step} of ${steps}` : "…"} ${n} s`);
@@ -192,7 +244,16 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     show(0.03, shown[1]);
     if (!b.generate(id, JSON.stringify(args))) { finish(); reject(new ImageEngineError("The phone is still making another picture. Try again when it's done.", "rate_limited")); }
   });
-  const dataUrl = "data:image/png;base64," + png;
-  const size = await measure(dataUrl);
-  return { dataUrl, mime: "image/png", width: size.width, height: size.height, engine: "on-device", model: o.model.label, notes: [] };
+  const end = Date.now();
+  if (!src) rememberSpeed(o.model.file, w * h, end - t0);
+  let dataUrl = "data:image/png;base64," + png;
+  let size = await measure(dataUrl);
+  const notes = [timeNote(t0, began, end)];
+  if (!src && Math.max(size.width, size.height) < 512) {        // drawn small to be quick: shown at full size
+    const big = await upscale(dataUrl, 512);
+    notes.push(`To be quick, your phone drew it at ${size.width}×${size.height} and enlarged it. For full size every time (slower): Settings → Pictures on this phone → Picture size.`);
+    dataUrl = big.dataUrl;
+    size = { width: big.w, height: big.h };
+  }
+  return { dataUrl, mime: "image/png", width: size.width, height: size.height, engine: "on-device", model: o.model.label, notes };
 }

@@ -876,7 +876,7 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
   // the picture maker for the free route: this phone (once its model is downloaded), else the free online service
   const dev: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model);
   const devEdit: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model, true);   // changing a photo
-  const onPhone = (j: Partial<ImageJob>, m = dev) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality }, signal, c.progress);
+  const onPhone = (j: Partial<ImageJob>, m = dev) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality, size: s.device_size }, signal, c.progress);
   const online = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
   const free = async (j: Partial<ImageJob>): Promise<MadeImage> => {
     if (!dev) {
@@ -1117,7 +1117,9 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
   }
   const say = async (t: string) => { row!.content += t; h.onDelta(t); };
   const op = (opts?.op || plan.op) as ImageOp;
-  if (modelId === FREE_PICTURES && op === "generate" && !plan.clarify && !plan.text) {
+  // the free picture AI words the picture first — not when the phone draws it: that is about speed (seconds count)
+  const phoneDraws = s.image_engine !== "online" && !!deviceModel(s.device_model);
+  if (modelId === FREE_PICTURES && op === "generate" && !plan.clarify && !plan.text && !phoneDraws) {
     h.onTool?.({ name: "generate_image", op, status: "running" });
     h.onProgress?.({ fraction: 0.02, text: "Writing the picture…" });
     const written = await writePicturePrompt(cid, plan.prompt, s, signal);

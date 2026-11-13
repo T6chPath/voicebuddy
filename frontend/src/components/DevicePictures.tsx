@@ -90,6 +90,12 @@ export function DevicePicturesPanel({ draft, set }: { draft: UserSettings; set: 
             </select>
           </label>
         )}
+        <label className="field"><span>Picture size</span>
+          <select value={draft.device_size || "auto"} onChange={(e) => set("device_size", e.target.value as UserSettings["device_size"])}>
+            <option value="auto">Quick — under 10 seconds (smaller on a slow phone)</option>
+            <option value="full">Full size, 512×512 — slower</option>
+          </select>
+        </label>
         {!chosen?.oneStep && <label className="field"><span>Quality</span>
           <select value={draft.device_quality || "fast"} onChange={(e) => set("device_quality", e.target.value as UserSettings["device_quality"])}>
             {Object.entries(QUALITY).map(([k, q]) => <option key={k} value={k}>{q.label}</option>)}
