@@ -48,7 +48,9 @@ jobs:
           ls -la
       - name: What makes it faster (picture size, convolution and attention settings)
         run: |
+          set +e
           D=$PWD/engine; M=$PWD/models/sdxs512-dreamshaper-sdxs-q8_0.gguf; mkdir -p out
+          ls -la $D; command -v /usr/bin/time || sudo apt-get install -y -q time
           run() {   # name, extra args
             local name=$1; shift
             local t0=$(date +%s.%N)
@@ -58,7 +60,7 @@ jobs:
             local rss=$(grep -oP 'Maximum resident set size \(kbytes\): \K\d+' out/$name.log)
             local parts=$(grep -oE '(get_learned_condition completed|sampling completed|decode_first_stage completed|generate_image completed in)[^-]*' out/$name.log | sed -E 's/completed,? (taking|in) //' | tr '\n' ' ')
             printf "RESULT %-22s exit %s  %5.1f s  max memory %5d MB  %s\n" "$name" "$code" "$(awk "BEGIN{print $t1 - $t0}")" "$((${rss:-0}/1024))" "$parts" | tee -a out/results.txt
-            [ "$code" = 0 ] || tail -15 out/$name.log
+            [ "$code" = 0 ] || tail -20 out/$name.log
           }
           run 512             -W 512 -H 512
           run 448             -W 448 -H 448
