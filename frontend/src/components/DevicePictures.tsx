@@ -90,6 +90,12 @@ export function DevicePicturesPanel({ draft, set }: { draft: UserSettings; set: 
             </select>
           </label>
         )}
+        {chosen?.oneStep && (
+          <label className="check">
+            <input type="checkbox" checked={draft.device_best !== false} onChange={(e) => set("device_best", e.target.checked)} />
+            Best of 2: draw two pictures and keep the one that matches your words best (needs your chat AI; about twice as long)
+          </label>
+        )}
         <label className="field"><span>Picture size</span>
           <select value={draft.device_size || "auto"} onChange={(e) => set("device_size", e.target.value as UserSettings["device_size"])}>
             <option value="auto">Quick — under 10 seconds (smaller on a slow phone)</option>

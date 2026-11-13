@@ -223,6 +223,7 @@ final class NativeImageGen {
         work.mkdirs();
         File out = new File(work, "out-" + id.replaceAll("[^A-Za-z0-9_-]", "") + ".png");
         File init = new File(work, "init.png"), mask = new File(work, "mask.png");
+        List<File> outs = new ArrayList<>();
         ArrayDeque<String> tail = new ArrayDeque<>();
         keepScreenOn(true);
         try {
@@ -249,6 +250,9 @@ final class NativeImageGen {
             cmd.add("--sampling-method"); cmd.add(a.optString("sampler", "euler_a"));
             cmd.add("-s"); cmd.add(num(a, "seed", 42));
             cmd.add("-t"); cmd.add(String.valueOf(a.optInt("threads", threads())));
+            // several pictures in one go (the app keeps the best): the model is loaded and the description read once
+            int batch = Math.max(1, Math.min(4, a.optInt("batch", 1)));
+            if (batch > 1) { cmd.add("-b"); cmd.add(String.valueOf(batch)); }
             cmd.add("--mmap");
             String tae = a.optString("taesd", "");
             if (!tae.isEmpty() && SAFE_NAME.matcher(tae).matches() && new File(dir, tae).exists()) {
@@ -261,8 +265,10 @@ final class NativeImageGen {
                 if (a.has("mask")) { write(mask, a.getString("mask")); cmd.add("--mask"); cmd.add(mask.getAbsolutePath()); }
             }
             cmd.add("-o"); cmd.add(out.getAbsolutePath());
-            if (out.exists()) //noinspection ResultOfMethodCallIgnored
-                out.delete();
+            // one picture: out-<id>.png; several: out-<id>_0.png, out-<id>_1.png…
+            for (int i = 0; i < batch; i++) outs.add(batch > 1 ? new File(work, out.getName().replace(".png", "_" + i + ".png")) : out);
+            for (File f : outs) if (f.exists()) //noinspection ResultOfMethodCallIgnored
+                f.delete();
 
             ProcessBuilder pb = new ProcessBuilder(cmd).directory(work).redirectErrorStream(true);
             pb.environment().put("LD_LIBRARY_PATH", activity.getApplicationInfo().nativeLibraryDir);
@@ -324,15 +330,17 @@ final class NativeImageGen {
                 }
             }
             int code = p.waitFor();
-            if (code != 0 || !out.exists()) {
+            if (code != 0 || !outs.get(0).exists()) {
                 String why = code == 137 || code == 9 ? "The phone ran out of memory (close other apps and try again)."
                         : code == 143 || code == 15 ? "cancelled" : "The picture engine stopped (code " + code + ").";
                 throw new IllegalStateException(why);
             }
-            byte[] png = readAll(out);
-            String b64 = Base64.encodeToString(png, Base64.NO_WRAP);
-            for (int i = 0; i < b64.length(); i += 262144)
-                emit("img", "{\"id\":" + JSONObject.quote(id) + ",\"chunk\":" + JSONObject.quote(b64.substring(i, Math.min(b64.length(), i + 262144))) + "}");
+            for (int k = 0; k < outs.size(); k++) {
+                if (!outs.get(k).exists()) continue;
+                String b64 = Base64.encodeToString(readAll(outs.get(k)), Base64.NO_WRAP);
+                for (int i = 0; i < b64.length(); i += 262144)
+                    emit("img", "{\"id\":" + JSONObject.quote(id) + ",\"i\":" + k + ",\"chunk\":" + JSONObject.quote(b64.substring(i, Math.min(b64.length(), i + 262144))) + "}");
+            }
             emit("genend", "{\"id\":" + JSONObject.quote(id) + ",\"ms\":" + (System.currentTimeMillis() - t0) + "}");
         } catch (Exception e) {
             String msg = e.getMessage();
@@ -345,6 +353,8 @@ final class NativeImageGen {
             keepScreenOn(false);
             //noinspection ResultOfMethodCallIgnored
             out.delete();
+            for (File f : outs) //noinspection ResultOfMethodCallIgnored
+                f.delete();
             //noinspection ResultOfMethodCallIgnored
             init.delete();
             //noinspection ResultOfMethodCallIgnored

@@ -852,6 +852,61 @@ async function describeImage(dataUrl: string, modelId: string, s: UserSettings, 
   }
 }
 
+/** A smaller JPEG of a picture, for asking an AI about it quickly. */
+async function smallJpeg(dataUrl: string, side = 384): Promise<string> {
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+    const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85);
+  } catch { return dataUrl; }
+}
+
+/** The chat model that can look at pictures, to judge them (the chat's own model when it can see). */
+function seeingModel(s: UserSettings): string | null {
+  const own = chatModelFor(s);
+  if (own && canSee(own.replace(/^srv:/, ""))) return own;
+  const alt = bestModelFor({ see: true, hear: false });
+  return alt ? "srv:" + alt.replace(/^srv:/, "") : null;
+}
+
+/** Best of 2: the chat's AI looks at the pictures and says which shows the request most exactly and looks best.
+ *  Quick (a few seconds at most); when it can't tell, the first one. */
+async function chooseBest(pictures: string[], request: string, s: UserSettings, signal: AbortSignal): Promise<number> {
+  const judge = seeingModel(s);
+  if (!judge || !base(s)) return 0;
+  const small = await Promise.all(pictures.map((p) => smallJpeg(p)));
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  signal.addEventListener("abort", stop, { once: true });
+  const timer = setTimeout(stop, 8_000);
+  try {
+    const content = [
+      { type: "text", text: `These ${pictures.length} pictures were drawn for this request: "${request.slice(0, 400)}". Which one shows it most exactly ` +
+        `(the right things, how many, their colours and where they are) and looks best (clear, well drawn, no broken shapes)? ` +
+        `Reply with only its number, 1 to ${pictures.length}.` },
+      ...small.flatMap((u, i) => [{ type: "text", text: `Picture ${i + 1}:` }, { type: "image_url", image_url: { url: u } }]),
+    ];
+    const quick = bookSpeed(base(s), judge.replace(/^srv:/, ""));
+    const ask = (extra?: Record<string, unknown>) => net(base(s) + "/chat/completions", { method: "POST", signal: ctl.signal, headers: headers(s),
+      body: JSON.stringify({ model: judge.replace(/^srv:/, ""), stream: false, temperature: 0, max_tokens: 200, messages: [{ role: "user", content }], ...(extra || {}) }) });
+    let r = await ask(quick);
+    if (quick && (r.status === 400 || r.status === 422)) r = await ask();
+    if (!r.ok) return 0;
+    const j = await r.json() as { choices?: { message?: { content?: string } }[] };
+    const n = Number((j.choices?.[0]?.message?.content || "").match(/\b([1-4])\b/)?.[1]);
+    return n >= 1 && n <= pictures.length ? n - 1 : 0;
+  } catch (e) {
+    if (signal.aborted) throw e;
+    return 0;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+}
+
 interface Pic { n: number; file: FileRow }
 interface ProduceCtx {
   op: ImageOp; plan: Plan; job: ImageJob; source?: Pic; refs: Pic[];
@@ -876,7 +931,10 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
   // the picture maker for the free route: this phone (once its model is downloaded), else the free online service
   const dev: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model);
   const devEdit: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model, true);   // changing a photo
-  const onPhone = (j: Partial<ImageJob>, m = dev) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality, size: s.device_size }, signal, c.progress);
+  const onPhone = (j: Partial<ImageJob>, m = dev, pick = 1) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality, size: s.device_size,
+    pick, choose: pick > 1 ? (pics) => chooseBest(pics, plan.say || plan.prompt, s, signal) : undefined }, signal, c.progress);
+  // best of 2 (SDXS on the phone, with a chat AI that can look at pictures): two pictures, the one that matches best kept
+  const pickBest = dev?.oneStep && s.device_best !== false && !!seeingModel(s) ? 2 : 1;
   const online = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
   // with a free pollinations.ai key: Z-Image Turbo first — sharper, closer to the request, quick and no waiting
   const keyed = async (j: Partial<ImageJob>): Promise<MadeImage | null> => {
@@ -898,7 +956,7 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
         "Open Settings → Pictures on this phone and tap Download.", "unsupported");
       return online(j);
     }
-    try { return await onPhone({ ...j, op: "generate", source: undefined, mask: undefined }); }
+    try { return await onPhone({ ...j, op: "generate", source: undefined, mask: undefined }, dev, pickBest); }
     catch (err) {
       if ((err as Error).name === "AbortError") throw err;
       // short of memory (or too slow to finish): say so, and point to the smaller model

@@ -109,12 +109,19 @@ async function fitTo(src: string, w: number, h: number, mask = false): Promise<s
   return c.toDataURL("image/png");
 }
 
-export interface DeviceOptions { model: DeviceModel; quality?: string; threads?: number; strength?: number; size?: "auto" | "full" }
+export interface DeviceOptions {
+  model: DeviceModel; quality?: string; threads?: number; strength?: number; size?: "auto" | "full";
+  /** draw this many pictures in one go and keep the one `choose` says matches the request best (new pictures only) */
+  pick?: number;
+  choose?: (pictures: string[]) => Promise<number>;
+}
 
 /* ---------- pictures in under 10 seconds: draw smaller on a slow phone ---------- */
 /** How long this phone took for its recent pictures, per model: [pixels, milliseconds] (the whole picture, start to end). */
 const SPEED_KEY = "zc.phone.speed";
 export const TARGET_MS = 9000;
+/** with "best of 2": about this long for both pictures together */
+export const TARGET_PICK_MS = 16000;
 const SIDES = [512, 448, 384, 320, 256];
 type Samples = Record<string, [number, number][]>;
 function samples(): Samples {
@@ -139,9 +146,11 @@ export function predictMs(file: string, px: number): number | null {
   const [p0, m0] = [xs.reduce((a, [p]) => a + p, 0) / xs.length, xs.reduce((a, [, m]) => a + m, 0) / xs.length];
   return 0.2 * m0 + (0.8 * m0 * px) / p0;                       // one size so far: about a fifth of it is fixed
 }
-/** The side (of a square picture) this phone can draw in under 10 seconds: full size (512) when it's quick enough. */
-export function quickSide(file: string): number {
-  for (const side of SIDES) { const t = predictMs(file, side * side); if (t === null || t <= TARGET_MS) return side; }
+/** The side (of a square picture) this phone can draw in under 10 seconds: full size (512) when it's quick enough.
+ *  `count` pictures at once (best of 2) get a little longer together. */
+export function quickSide(file: string, count = 1): number {
+  const budget = count > 1 ? TARGET_PICK_MS : TARGET_MS;
+  for (const side of SIDES) { const t = predictMs(file, count * side * side); if (t === null || t <= budget) return side; }
   return SIDES[SIDES.length - 1];
 }
 
@@ -162,6 +171,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   const b = deviceBridge();
   if (!b) throw new ImageEngineError("Only the Android app can make pictures on the phone.", "config");
   const src = job.op === "generate" ? undefined : job.source;
+  const count = !src && o.choose && (o.pick || 1) > 1 ? Math.min(4, o.pick!) : 1;      // best of 2: new pictures only
   let w: number, h: number;
   if (src) {                                   // keep the picture's own shape
     const s = await measure(src);
@@ -169,7 +179,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     w = Math.max(256, Math.round((s.width * k) / 64) * 64); h = Math.max(256, Math.round((s.height * k) / 64) * 64);
   } else {
     [w, h] = deviceSize(job.aspect);
-    const side = o.size === "full" ? 512 : quickSide(o.model.file);
+    const side = o.size === "full" ? 512 : quickSide(o.model.file, count);
     if (side < 512) {                                          // the same shape, smaller
       const k = side / 512;
       w = Math.max(192, Math.round((w * k) / 64) * 64); h = Math.max(192, Math.round((h * k) / 64) * 64);
@@ -184,6 +194,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   const args: Record<string, unknown> = { model: o.model.file, prompt: prompt.slice(0, 900), width: w, height: h, steps: base, cfg: 1, sampler: "euler_a",
     seed: job.seed % 2147483647, taesd: TAESD.file };
   if (o.threads) args.threads = o.threads;
+  if (count > 1) args.batch = count;
   if (src) {
     const strength = o.strength ?? (job.mask ? 0.92 : job.op === "style" ? 0.75 : job.op === "variations" ? 0.6 : 0.75);
     args.init = await fitTo(src, w, h);
@@ -194,8 +205,8 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   const id = `g${++seq}_${Date.now()}`;
   const t0 = Date.now();
   const began: Record<string, number> = {};                     // when each part started: to say where the time went
-  const png = await new Promise<string>((resolve, reject) => {
-    const parts: string[] = [];
+  const pngs = await new Promise<string[]>((resolve, reject) => {
+    const parts: string[][] = [];
     let alive = Date.now();                                  // the engine's last sign of life
     let shown: [number, (secs: number) => string] = [0.03, (n) => `Starting the picture maker on your phone… ${n} s`];
     const secs = () => Math.round((Date.now() - t0) / 1000);
@@ -230,8 +241,8 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
         else if (phase === "text") show(0.15, (n) => `Reading your description… ${n} s`);
         else if (phase === "sample") show(0.2 + 0.65 * (steps ? step / steps : 0), (n) => `Drawing on your phone${steps ? ` — step ${step} of ${steps}` : "…"} ${n} s`);
         else if (phase === "decode") show(0.9, (n) => `Finishing the picture… ${n} s`);
-      } else if (k === "img") parts.push(String(d.chunk));
-      else if (k === "genend") { finish(); resolve(parts.join("")); }
+      } else if (k === "img") (parts[Number(d.i) || 0] ||= []).push(String(d.chunk));
+      else if (k === "genend") { finish(); resolve(parts.filter(Boolean).map((p) => p.join(""))); }
       else if (k === "generr") {
         finish();
         const err = String(d.error);
@@ -247,10 +258,18 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
     if (!b.generate(id, JSON.stringify(args))) { finish(); reject(new ImageEngineError("The phone is still making another picture. Try again when it's done.", "rate_limited")); }
   });
   const end = Date.now();
-  if (!src) rememberSpeed(o.model.file, w * h, end - t0);
-  let dataUrl = "data:image/png;base64," + png;
+  if (!src) rememberSpeed(o.model.file, count * w * h, end - t0);
+  // best of 2: the chat's AI looks at them and keeps the one that shows the request most exactly and looks best
+  let chosen = 0;
+  if (pngs.length > 1 && o.choose) {
+    progress(0.95, "Choosing the picture that matches best…");
+    chosen = await o.choose(pngs.map((p) => "data:image/png;base64," + p)).catch(() => 0);
+    if (!(chosen >= 0 && chosen < pngs.length)) chosen = 0;
+  }
+  let dataUrl = "data:image/png;base64," + pngs[chosen];
   let size = await measure(dataUrl);
-  const notes = [timeNote(t0, began, end)];
+  const notes = [timeNote(t0, began, Date.now())];
+  if (pngs.length > 1) notes.push(`Your phone drew ${pngs.length} pictures and kept the one that matches your words best. To be about twice as quick: Settings → Pictures on this phone → Best of 2.`);
   if (!src) dataUrl = await enhance(dataUrl, Math.max(size.width, size.height) >= 512);   // a finishing touch: crisper, livelier
   if (!src && Math.max(size.width, size.height) < 512) {        // drawn small to be quick: shown at full size
     const big = await upscale(dataUrl, 512);

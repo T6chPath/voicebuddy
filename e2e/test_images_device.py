@@ -37,11 +37,13 @@ window.ZenvqoImageGen = {
       if (window.__fake.stall) { window.__zig("gen", { id, phase: "load", step: 0, steps: 0 }); return; }   // then nothing: stuck
       if (window.__fake.fail) { window.__zig("generr", { id, error: "boom", log: ["x"] }); return; }
       window.__zig("gen", { id, phase: "sample", step: 1, steps: 2 });
-      const c = document.createElement("canvas"); c.width = a.width; c.height = a.height;
-      const x = c.getContext("2d"); x.fillStyle = a.init ? "rgb(30,200,60)" : "rgb(220,30,30)"; x.fillRect(0, 0, c.width, c.height);
-      const b64 = c.toDataURL("image/png").split(",")[1];
-      window.__zig("img", { id, chunk: b64.slice(0, 500) });
-      window.__zig("img", { id, chunk: b64.slice(500) });
+      for (let i = 0; i < (a.batch || 1); i++) {               // several at once: the first red, the second blue
+        const c = document.createElement("canvas"); c.width = a.width; c.height = a.height;
+        const x = c.getContext("2d"); x.fillStyle = a.init ? "rgb(30,200,60)" : i ? "rgb(30,60,220)" : "rgb(220,30,30)"; x.fillRect(0, 0, c.width, c.height);
+        const b64 = c.toDataURL("image/png").split(",")[1];
+        window.__zig("img", { id, i, chunk: b64.slice(0, 500) });
+        window.__zig("img", { id, i, chunk: b64.slice(500) });
+      }
       window.__zig("genend", { id, ms: 5 });
     }, 150);
     return true;
@@ -268,11 +270,49 @@ def test_the_chat_ai_describes_the_picture_exactly_for_the_phone(browser):
     p.context.route("http://fake-ai.test/v1/**", ai.handle)
     reply = say(p, "Generate an image of two orange cats on a blue sofa with a red ball", 1)
     expect(reply.locator("img").first).to_be_visible()
-    asked = ai.requests[-1]
-    assert "CLIP" in asked["messages"][0]["content"] and "Keep EVERY detail" in asked["messages"][0]["content"]
+    asked = [r for r in ai.requests if isinstance(r["messages"][0]["content"], str) and "CLIP" in r["messages"][0]["content"]][0]
+    assert "Keep EVERY detail" in asked["messages"][0]["content"]
     assert asked["max_tokens"] == 300 and asked["stream"] is False
     a = calls(p)[0]
     assert a["prompt"].startswith(written) and "beautiful lighting, vibrant colors, high quality" not in a["prompt"], a["prompt"]
     expect(reply).to_contain_text("two orange cats on a blue sofa with a red ball")
     assert not polli.calls
     assert not errors, errors
+
+
+
+def test_best_of_2_keeps_the_picture_that_matches(browser):
+    """SDXS draws two pictures in one go; the chat's AI looks at both and only the one that matches best is shown."""
+    from test_picture_models import WriterAI
+
+    class JudgeAI(WriterAI):
+        def handle(self, route):
+            req = route.request
+            if req.method == "POST" and not req.url.endswith("/models") and "Reply with only its number" in (req.post_data or ""):
+                self.requests.append(json.loads(req.post_data))
+                return route.fulfill(status=200, headers={"access-control-allow-origin": "*", "access-control-allow-headers": "*"},
+                                     content_type="application/json", body=json.dumps({"choices": [{"message": {"content": "2"}}]}))
+            return super().handle(route)
+
+    ai = JudgeAI("a red apple, highly detailed, sharp focus")
+    files = {**MODEL, SDXS_FILE: SDXS_MB * 1048576}
+    settings = {"server_url": "http://fake-ai.test/v1", "api_key": "k", "default_model": "srv:vision-1", "device_model": "sdxs"}
+    p, errors, polli = phone(browser, settings, files)
+    p.context.route("http://fake-ai.test/v1/**", ai.handle)
+    reply = say(p, "Generate an image of a red apple", 1)
+    expect(reply.locator("img")).to_have_count(1)                              # only one picture is shown
+    a = calls(p)[0]
+    assert a["batch"] == 2 and a["steps"] == 1, a
+    judge = [r for r in ai.requests if "Reply with only its number" in json.dumps(r)][0]
+    parts = judge["messages"][0]["content"]
+    assert sum(1 for x in parts if x.get("type") == "image_url") == 2
+    assert img_of(reply).convert("RGB").getpixel((5, 5))[2] > 180            # the second (blue) one was kept
+    expect(reply).to_contain_text("Your phone drew 2 pictures and kept the one that matches your words best.")
+    # turned off in Settings: one picture, no judging
+    p2, errors2, _ = phone(browser, {**settings, "device_best": False}, files)
+    p2.context.route("http://fake-ai.test/v1/**", ai.handle)
+    r2 = say(p2, "Generate an image of a red apple", 1)
+    expect(r2.locator("img")).to_have_count(1)
+    assert "batch" not in calls(p2)[0]
+    assert not polli.calls
+    assert not errors and not errors2, (errors, errors2)

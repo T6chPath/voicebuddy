@@ -76,6 +76,8 @@ export interface UserSettings {
   device_model?: string;
   device_quality?: "fast" | "balanced" | "best";
   device_size?: "auto" | "full";
+  /** the phone draws 2 pictures and keeps the one that matches best (SDXS, with a chat AI that can see) — default on */
+  device_best?: boolean;
   /** standalone app: a free pollinations.ai key — online pictures by Z-Image Turbo, without the free tier's wait */
   pollinations_key?: string;
 }
