@@ -50,6 +50,7 @@ window.ZenvqoImageGen = {
 };
 """
 MODEL = {"sd_turbo-q4_0.gguf": 1700 * 1048576, "taesd.safetensors": 10 * 1048576}
+SDXS_FILE, SDXS_MB = "sdxs512-dreamshaper-sdxs-q8_0.gguf", 652
 
 
 def phone(browser, settings, files=None, fail=False, stall=False, extra=""):
@@ -77,18 +78,42 @@ def test_download_the_model_in_settings(browser):
     panel = p.locator("fieldset.device-pictures")
     expect(panel).to_contain_text("Pictures on this phone")
     expect(panel).to_contain_text("6.0 GB memory")
-    small = panel.locator("li").first
-    small.get_by_role("button", name="Download").click()
-    expect(small.locator("progress")).to_be_visible()
-    expect(small).to_contain_text("Downloaded", timeout=10_000)
+    fastest = panel.locator("li").first                                    # the fastest model comes first
+    expect(fastest).to_contain_text("SDXS — fastest")
+    expect(fastest).to_contain_text("A picture in about 5–10 seconds")
+    fastest.get_by_role("button", name="Download").click()
+    expect(fastest.locator("progress")).to_be_visible()
+    expect(fastest).to_contain_text("Downloaded", timeout=10_000)
     downloads = [c for c in calls(p) if "download" in c]
-    assert [d["download"] for d in downloads] == ["sd_turbo-q4_0.gguf", "taesd.safetensors"]
+    assert [d["download"] for d in downloads] == [SDXS_FILE, "taesd.safetensors"]
     assert downloads[0]["url"].startswith("https://github.com/T6chPath/voicebuddy/releases/download/zenvqo-image-engine/")
-    expect(panel.get_by_label("Quality")).to_be_visible()
+    expect(panel.get_by_label("Quality")).to_have_count(0)                 # it always draws in one step
+    # SD-Turbo too: then both can be chosen, and SD-Turbo has quality steps
+    small = panel.locator("li").filter(has_text="SD-Turbo — small")
+    small.get_by_role("button", name="Download").click()
+    expect(small).to_contain_text("Downloaded", timeout=10_000)
+    expect(panel.get_by_label("Model to use")).to_have_value("sd-turbo-small")
+    expect(panel.get_by_label("Quality")).to_have_value("fast")
+    panel.get_by_label("Model to use").select_option("sdxs")
     p.get_by_role("button", name="Save").click()
     expect(p.get_by_text("Saved", exact=True)).to_be_visible()
     saved = json.loads(p.evaluate("localStorage.getItem('zc.local.settings')"))
-    assert saved["device_model"] == "sd-turbo-small" and saved["image_engine"] == "auto"
+    assert saved["device_model"] == "sdxs" and saved["image_engine"] == "auto"
+    assert not errors, errors
+
+
+def test_the_fastest_model_draws_and_sd_turbo_changes_photos(browser, tmp_path):
+    """SDXS draws new pictures in one step with its own tiny decoder; changing a photo uses SD-Turbo when it's there."""
+    files = {**MODEL, SDXS_FILE: SDXS_MB * 1048576}
+    p, errors, polli = phone(browser, {"default_model": "echo", "device_model": "sdxs", "device_quality": "best"}, files)
+    reply = say(p, "Generate an image of a red apple on a wooden table", 1)
+    expect(reply.locator("img").first).to_be_visible()
+    a = calls(p)[0]
+    assert a["model"] == SDXS_FILE and a["steps"] == 1 and a["cfg"] == 1, a       # one step, whatever the quality setting
+    edit = send_with_photo(p, photo_file(tmp_path), "turn this into anime style", 2)
+    expect(edit.locator("img").first).to_be_visible()
+    assert calls(p)[1]["model"] == "sd_turbo-q4_0.gguf"
+    assert not polli.calls
     assert not errors, errors
 
 
@@ -166,7 +191,7 @@ def test_a_stuck_phone_engine_is_stopped(browser):
     reply = say_wait(p, 1)
     expect(reply.locator("img").first).to_be_visible()
     expect(reply).to_contain_text("Your phone ran short of memory making it with SD-Turbo — better detail, so the free online service made it.")
-    expect(reply).to_contain_text("SD-Turbo — small (Settings → Pictures on this phone) needs less memory.")
+    expect(reply).to_contain_text("SDXS — fastest (Settings → Pictures on this phone) needs less memory.")
     assert any("cancel" in c for c in calls(p)), calls(p)
     assert len(polli.calls) == 1
     # only on this phone: says what happened and what to do, never goes online
@@ -175,7 +200,7 @@ def test_a_stuck_phone_engine_is_stopped(browser):
     p2.locator("#composer-input").fill("Generate an image of a red apple")
     p2.locator("#composer-input").press("Enter")
     expect(p2.locator("article.msg-assistant").last).to_contain_text("it made no progress for several minutes", timeout=15_000)
-    expect(p2.locator("article.msg-assistant").last).to_contain_text("SD-Turbo — small (Settings → Pictures on this phone) needs less memory.")
+    expect(p2.locator("article.msg-assistant").last).to_contain_text("SDXS — fastest (Settings → Pictures on this phone) needs less memory.")
     assert not polli2.calls
     assert not errors and not errors2, (errors, errors2)
 

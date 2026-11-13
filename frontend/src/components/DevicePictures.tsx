@@ -53,7 +53,7 @@ export function DevicePicturesPanel({ draft, set }: { draft: UserSettings; set: 
       <legend>Pictures on this phone</legend>
       <p className="muted small-text">
         Download a picture model once and your phone makes pictures by itself — no internet, nothing sent anywhere.
-        A picture takes about 20–60 seconds depending on the phone. This phone: {mb(info.ramMB)} memory, {mb(info.freeMB)} free space.
+        SDXS makes a picture in seconds; SD-Turbo takes longer and draws more detail. This phone: {mb(info.ramMB)} memory, {mb(info.freeMB)} free space.
       </p>
       <ul className="device-models">
         {DEVICE_MODELS.map((m) => {
@@ -90,11 +90,11 @@ export function DevicePicturesPanel({ draft, set }: { draft: UserSettings; set: 
             </select>
           </label>
         )}
-        <label className="field"><span>Quality</span>
+        {!chosen?.oneStep && <label className="field"><span>Quality</span>
           <select value={draft.device_quality || "fast"} onChange={(e) => set("device_quality", e.target.value as UserSettings["device_quality"])}>
             {Object.entries(QUALITY).map(([k, q]) => <option key={k} value={k}>{q.label}</option>)}
           </select>
-        </label>
+        </label>}
       </>}
       <div className="field">
         <span id="engine-label">Make pictures</span>

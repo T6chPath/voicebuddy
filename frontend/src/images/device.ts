@@ -18,8 +18,15 @@ export interface DeviceInfo {
 }
 
 const RELEASE = "https://github.com/T6chPath/voicebuddy/releases/download/zenvqo-image-engine/";
-export interface DeviceModel { id: string; file: string; label: string; url: string; mb: number; minRamMB: number; note: string }
+export interface DeviceModel {
+  id: string; file: string; label: string; url: string; mb: number; minRamMB: number; note: string;
+  /** made to draw in exactly one step, with its own tiny decoder (SDXS): a picture in seconds. Changes to a photo are
+   *  made with SD-Turbo when that is on the phone too. */
+  oneStep?: boolean;
+}
 export const DEVICE_MODELS: DeviceModel[] = [
+  { id: "sdxs", file: "sdxs512-dreamshaper-sdxs-q8_0.gguf", label: "SDXS — fastest", url: RELEASE + "sdxs512-dreamshaper-sdxs-q8_0.gguf", mb: 652, minRamMB: 2500, oneStep: true,
+    note: "A picture in about 5–10 seconds — simpler pictures than SD-Turbo. Works on phones with 3 GB of memory or more." },
   { id: "sd-turbo-small", file: "sd_turbo-q4_0.gguf", label: "SD-Turbo — small", url: RELEASE + "sd_turbo-q4_0.gguf", mb: 1700, minRamMB: 3500,
     note: "For phones with 4 GB of memory or more." },
   { id: "sd-turbo", file: "sd_turbo-f16-q8_0.gguf", label: "SD-Turbo — better detail", url: "https://huggingface.co/Green-Sky/SD-Turbo-GGUF/resolve/main/sd_turbo-f16-q8_0.gguf",
@@ -50,12 +57,14 @@ export function deviceInfo(): DeviceInfo | null {
   try { return JSON.parse(b.info()) as DeviceInfo; } catch { return null; }
 }
 
-/** The model to use: the chosen one if it's downloaded, else any downloaded one. */
-export function deviceModel(chosen?: string): DeviceModel | null {
+/** The model to use: the chosen one if it's downloaded, else any downloaded one. To change a photo (`edit`), a
+ *  one-step model gives way to SD-Turbo when that is downloaded too. */
+export function deviceModel(chosen?: string, edit = false): DeviceModel | null {
   const i = deviceInfo();
   if (!i?.engine) return null;
   const have = (m: DeviceModel) => (i.files[m.file] || 0) > m.mb * 0.5 * 1048576;
-  return DEVICE_MODELS.find((m) => m.id === chosen && have(m)) || DEVICE_MODELS.find(have) || null;
+  const pick = DEVICE_MODELS.find((m) => m.id === chosen && have(m)) || DEVICE_MODELS.find(have) || null;
+  return edit && pick?.oneStep ? DEVICE_MODELS.find((m) => !m.oneStep && have(m)) || pick : pick;
 }
 
 /* ---------- events from the app: window.__zig(kind, data) ---------- */
@@ -119,7 +128,7 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   let prompt = styledPrompt(job.prompt, job.style);
   if (job.noText) prompt += normStyle(job.style) === "logo" ? ", icon mark only, no text, no letters" : ", empty space for a title, no text, no letters, no watermark";
   else if (job.text) prompt += `, with the text "${job.text}"`;
-  const base = QUALITY[o.quality || "fast"]?.steps ?? 1;              // SD-Turbo is made to draw in one step: the quickest
+  const base = o.model.oneStep ? 1 : QUALITY[o.quality || "fast"]?.steps ?? 1;    // SD-Turbo and SDXS are made to draw in one step
   const args: Record<string, unknown> = { model: o.model.file, prompt: prompt.slice(0, 900), width: w, height: h, steps: base, cfg: 1, sampler: "euler_a",
     seed: job.seed % 2147483647, taesd: TAESD.file };
   if (o.threads) args.threads = o.threads;

@@ -875,7 +875,8 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
   const src = source?.file.dataUrl;
   // the picture maker for the free route: this phone (once its model is downloaded), else the free online service
   const dev: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model);
-  const onPhone = (j: Partial<ImageJob>) => device({ ...job, ...j } as ImageJob, { model: dev!, quality: s.device_quality }, signal, c.progress);
+  const devEdit: DeviceModel | null = s.image_engine === "online" ? null : deviceModel(s.device_model, true);   // changing a photo
+  const onPhone = (j: Partial<ImageJob>, m = dev) => device({ ...job, ...j } as ImageJob, { model: m!, quality: s.device_quality }, signal, c.progress);
   const online = (j: Partial<ImageJob>) => pollinations({ ...job, ...j, op: "generate" } as ImageJob, net, signal, c.progress);
   const free = async (j: Partial<ImageJob>): Promise<MadeImage> => {
     if (!dev) {
@@ -888,7 +889,8 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
       if ((err as Error).name === "AbortError") throw err;
       // short of memory (or too slow to finish): say so, and point to the smaller model
       const short = err instanceof ImageEngineError && (err.code === "stalled" || err.code === "memory");
-      const tip = short && dev.id !== DEVICE_MODELS[0].id ? ` ${DEVICE_MODELS[0].label} (Settings → Pictures on this phone) needs less memory.` : "";
+      const light = [...DEVICE_MODELS].sort((a, b) => a.mb - b.mb)[0];
+      const tip = short && dev.id !== light.id ? ` ${light.label} (Settings → Pictures on this phone) needs less memory.` : "";
       if (s.image_engine === "device") throw short ? new ImageEngineError((err as Error).message + tip, (err as ImageEngineError).code) : err;
       notes.add(short ? `Your phone ran short of memory making it with ${dev.label}, so the free online service made it.${tip}`
         : "Making it on your phone didn't work this time, so the free online service made it.");
@@ -972,16 +974,16 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
     switch (op) {
       case "style": case "edit": {
         const base0 = made || (await scene()) || "";
-        return keep(await onPhone({ op, source: src, mask: job.mask, prompt: op === "edit" ? mergeEdit(base0, plan.prompt) : base0 || plan.prompt, style: job.style }));
+        return keep(await onPhone({ op, source: src, mask: job.mask, prompt: op === "edit" ? mergeEdit(base0, plan.prompt) : base0 || plan.prompt, style: job.style }, devEdit));
       }
       case "variations":
-        return keep(await onPhone({ op, source: src, prompt: (await what()) || plan.prompt || "the same picture" }));
+        return keep(await onPhone({ op, source: src, prompt: (await what()) || plan.prompt || "the same picture" }, devEdit));
       case "inpaint": case "replace_object":
-        if (job.mask) return keep(await onPhone({ op, source: src, mask: job.mask, prompt: plan.prompt }));
+        if (job.mask) return keep(await onPhone({ op, source: src, mask: job.mask, prompt: plan.prompt }, devEdit));
         break;
       case "outpaint": {
         const pad = await padFor(src, plan.aspect_ratio || null, (plan.side || "center") as Side);
-        const wide = await onPhone({ op: "inpaint", source: pad.padded, mask: pad.mask, prompt: await what(plan.prompt ? plan.prompt : "wide view, the scene continues") });
+        const wide = await onPhone({ op: "inpaint", source: pad.padded, mask: pad.mask, prompt: await what(plan.prompt ? plan.prompt : "wide view, the scene continues") }, devEdit);
         const big = await upscale(wide.dataUrl, Math.max(pad.w, pad.h));
         return keep({ ...(await localImg(await placeOn(big.dataUrl, src, (plan.side || "center") as Side, pad.w, pad.h))), engine: wide.engine, model: wide.model });
       }
