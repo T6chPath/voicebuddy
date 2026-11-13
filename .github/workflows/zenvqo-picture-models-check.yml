@@ -31,12 +31,16 @@ jobs:
           git remote add origin https://github.com/leejet/stable-diffusion.cpp
           git fetch -q --depth 1 origin $COMMIT && git checkout -q FETCH_HEAD
           git submodule update -q --init --depth 1 ggml
-          cmake -S . -B b -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF -DGGML_LLAMAFILE=ON \
-            -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DBUILD_SHARED_LIBS=ON \
-            -DSD_WEBP=OFF -DSD_WEBM=OFF -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_SHARED_LIBS=OFF -DSD_BUILD_SHARED_GGML_LIB=ON > /dev/null
-          cmake --build b --target sd-cli -j$(nproc) > /dev/null
+          set -o pipefail
+          # clang, like the Android NDK
+          cmake -S . -B b -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF -DGGML_LLAMAFILE=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DBUILD_SHARED_LIBS=ON \
+            -DSD_WEBP=OFF -DSD_WEBM=OFF -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_SHARED_LIBS=OFF -DSD_BUILD_SHARED_GGML_LIB=ON 2>&1 | tail -5
+          cmake --build b --target sd-cli -j$(nproc) 2>&1 | grep -E "error|FAILED|warning: unused" -A3 | head -60 || true
+          test -x b/bin/sd-cli
           targets=$(ninja -C b -t targets all | grep -oE '^ggml-cpu-[A-Za-z0-9_.]+:' | tr -d ':' | sort -u || true)
-          [ -n "$targets" ] && cmake --build b --target $targets -j$(nproc) > /dev/null
+          echo "CPU variants: $targets"
+          for t in $targets; do cmake --build b --target $t -j$(nproc) > b/$t.log 2>&1 || { echo "variant $t didn't build:"; grep -E "error" b/$t.log | head -5; }; done
           mkdir -p ../engine && cp b/bin/sd-cli ../engine/ && find b -name 'libggml*.so' -exec cp {} ../engine/ \;
           ls -la ../engine
       - name: The models (as the app downloads them)
