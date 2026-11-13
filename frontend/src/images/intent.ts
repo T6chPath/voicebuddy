@@ -18,6 +18,7 @@ export interface Plan {
   clarify?: string;                  // ask this instead of making an image
   fresh?: boolean;                   // "regenerate": a new seed even when changing an AI-made picture
   text?: string;                     // exact words to show in the picture
+  described?: boolean;               // the prompt was written for the picture model by the chat's AI
   textLayout?: "poster" | "logo" | "caption" | "banner";
   references?: string[];             // pictures to follow: "attached" | "#3" | "latest" | "last-made"
   refMode?: "style" | "subject";     // follow the reference's look, or keep its character/object

@@ -254,3 +254,25 @@ def test_a_slow_phone_draws_smaller_to_stay_under_10_seconds(browser):
     expect(r2).not_to_contain_text("To be quick")
     assert not polli.calls
     assert not errors and not errors2, (errors, errors2)
+
+
+def test_the_chat_ai_describes_the_picture_exactly_for_the_phone(browser):
+    """With a chat AI connected, it first writes the request as a short, exact prompt for SDXS (subject first, every detail,
+    the key ones weighted); the reply still names the picture in the user's words."""
+    from test_picture_models import WriterAI
+    written = "(two orange cats:1.3) sitting on a blue sofa, (red ball:1.2) between them, cozy living room, warm evening light, photo, highly detailed, sharp focus"
+    ai = WriterAI(written)
+    files = {**MODEL, SDXS_FILE: SDXS_MB * 1048576}
+    p, errors, polli = phone(browser, {"server_url": "http://fake-ai.test/v1", "api_key": "k", "default_model": "srv:vision-1", "device_model": "sdxs"},
+                             files)
+    p.context.route("http://fake-ai.test/v1/**", ai.handle)
+    reply = say(p, "Generate an image of two orange cats on a blue sofa with a red ball", 1)
+    expect(reply.locator("img").first).to_be_visible()
+    asked = ai.requests[-1]
+    assert "CLIP" in asked["messages"][0]["content"] and "Keep EVERY detail" in asked["messages"][0]["content"]
+    assert asked["max_tokens"] == 300 and asked["stream"] is False
+    a = calls(p)[0]
+    assert a["prompt"].startswith(written) and "beautiful lighting, vibrant colors, high quality" not in a["prompt"], a["prompt"]
+    expect(reply).to_contain_text("two orange cats on a blue sofa with a red ball")
+    assert not polli.calls
+    assert not errors, errors

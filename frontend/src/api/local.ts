@@ -1131,9 +1131,15 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
   }
   const say = async (t: string) => { row!.content += t; h.onDelta(t); };
   const op = (opts?.op || plan.op) as ImageOp;
-  // the free picture AI words the picture first — not when the phone draws it: that is about speed (seconds count)
-  const phoneDraws = s.image_engine !== "online" && !!deviceModel(s.device_model);
-  if (modelId === FREE_PICTURES && op === "generate" && !plan.clarify && !plan.text && !phoneDraws) {
+  // the free picture AI words the picture first; when the phone draws it (and no pollinations.ai key goes first), the chat's
+  // AI words it for the phone's small model — short, the subject first, every detail asked for — in a few seconds at most
+  const phoneDraws = s.image_engine !== "online" && !!deviceModel(s.device_model) && !(s.pollinations_key?.trim() && s.image_engine !== "device");
+  if (phoneDraws && op === "generate" && !plan.clarify && !plan.text) {
+    h.onTool?.({ name: "generate_image", op, status: "running" });
+    h.onProgress?.({ fraction: 0.02, text: "Describing the picture for your phone…" });
+    const written = await writePicturePrompt(cid, plan.prompt, s, signal, true);
+    if (written) plan = { ...plan, say: plan.say || plan.prompt, prompt: written, described: true };
+  } else if (modelId === FREE_PICTURES && op === "generate" && !plan.clarify && !plan.text) {
     h.onTool?.({ name: "generate_image", op, status: "running" });
     h.onProgress?.({ fraction: 0.02, text: "Writing the picture…" });
     const written = await writePicturePrompt(cid, plan.prompt, s, signal);
@@ -1180,7 +1186,7 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
       h.onProgress?.({ fraction: i / n, text: n > 1 ? `Making image ${i + 1} of ${n}…` : op === "generate" ? "Making your image…" : "Changing the image…" });
       const job: ImageJob = { op, prompt: plan.prompt, style, aspect, resolution: opts?.resolution ?? plan.resolution ?? 1024, seed: seed0 + i * 7919,
         negative: opts?.negative_prompt ?? plan.negative_prompt, source: source?.file.dataUrl, mask, background: plan.background,
-        references: refs.map((r) => r.file.dataUrl!), refMode: plan.refMode, text: plan.text, target: plan.target };
+        references: refs.map((r) => r.file.dataUrl!), refMode: plan.refMode, text: plan.text, target: plan.target, described: plan.described };
       let img: MadeImage = await produce({ op, plan, job, source, refs, s, modelId, signal, notes,
         progress: (f, t) => h.onProgress?.({ fraction: (i + f) / n, text: t }) });
       // asked for a bigger picture than the engine gave: enlarge on the phone
@@ -1268,18 +1274,23 @@ function picturePlan(text: string, atts: Attachment[]): Plan {
 
 /** The free picture AI: the chat's own AI turns the request (and the conversation around it) into a detailed picture
  *  description for the free picture service. null when there's no chat AI to ask, or it doesn't answer in time. */
-async function writePicturePrompt(cid: string, request: string, s: UserSettings, signal: AbortSignal): Promise<string | null> {
+async function writePicturePrompt(cid: string, request: string, s: UserSettings, signal: AbortSignal, phone = false): Promise<string | null> {
   const writer = chatModelFor(s);
   if (!writer || !base(s)) return null;
+  // for the phone: a quick answer (the picture is waiting), with the model's thinking turned down where it can be
+  const quick = phone ? bookSpeed(base(s), writer.replace(/^srv:/, "")) : undefined;
   const rows = (await messagesOf(cid)).filter((m) => m.status !== "error" && m.content);
   const history = rows.slice(0, -1).map((m) => ({ role: m.role, text: m.content }));        // the request itself is the last one
   const ctl = new AbortController();
   const stop = () => ctl.abort();
   signal.addEventListener("abort", stop, { once: true });
-  const timer = setTimeout(stop, 20_000);
+  const timer = setTimeout(stop, phone ? 5_000 : 20_000);
   try {
-    const r = await net(base(s) + "/chat/completions", { method: "POST", signal: ctl.signal, headers: headers(s), body: JSON.stringify({
-      model: writer.replace(/^srv:/, ""), stream: false, temperature: 0.7, max_tokens: 400, messages: pictureWriterMessages(history, request) }) });
+    const ask = (extra?: Record<string, unknown>) => net(base(s) + "/chat/completions", { method: "POST", signal: ctl.signal, headers: headers(s), body: JSON.stringify({
+      model: writer.replace(/^srv:/, ""), stream: false, temperature: phone ? 0.4 : 0.7, max_tokens: phone ? 300 : 400,
+      messages: pictureWriterMessages(history, request, phone), ...(extra || {}) }) });
+    let r = await ask(quick);
+    if (quick && (r.status === 400 || r.status === 422)) r = await ask();          // a service that doesn't take the setting
     if (!r.ok) return null;
     const j = await r.json() as { choices?: { message?: { content?: string } }[] };
     return cleanWrittenPrompt(j.choices?.[0]?.message?.content || "") || null;

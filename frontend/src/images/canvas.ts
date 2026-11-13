@@ -307,6 +307,48 @@ export async function roomForName(src: string): Promise<string> {
   return c.toDataURL("image/png");
 }
 
+/* ---------------- a finishing touch ---------------- */
+/** Gentle "photo finishing" for pictures from the phone's small models, which come out a little soft and flat: levels
+ *  a little more contrast, colours a touch richer, and — unless it will be enlarged,
+ *  which sharpens anyway — a light unsharp mask. Subtle on purpose: it never changes what the picture shows. */
+export async function enhance(src: string, sharpen = true): Promise<string> {
+  const img = await loadImg(src);
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const [c, x] = canvas(w, h);
+  x.drawImage(img, 0, 0);
+  const d = x.getImageData(0, 0, w, h);
+  const px = d.data;
+  // contrast: a little more (at most 12%), when the picture doesn't already use the whole range — around its own average
+  // brightness, so it gets neither darker nor lighter
+  const hist = new Uint32Array(256);
+  let sum = 0;
+  for (let i = 0; i < px.length; i += 4) { const v = (px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8; hist[v]++; sum += v; }
+  const n = px.length / 4, mid = sum / n;
+  let lo = 0, hi = 255, acc = 0;
+  for (; lo < 255; lo++) { acc += hist[lo]; if (acc > n * 0.005) break; }
+  acc = 0;
+  for (; hi > 0; hi--) { acc += hist[hi]; if (acc > n * 0.005) break; }
+  const k = Math.max(1, Math.min(1.12, 255 / Math.max(1, hi - lo)));
+  let blur: Uint8ClampedArray | null = null;
+  if (sharpen) {
+    const [, bx] = canvas(w, h);
+    bx.filter = "blur(1px)";
+    bx.drawImage(img, 0, 0);
+    blur = bx.getImageData(0, 0, w, h).data;
+  }
+  for (let i = 0; i < px.length; i += 4) {
+    let r = px[i], g = px[i + 1], bl = px[i + 2];
+    if (blur) { r += 0.35 * (r - blur[i]); g += 0.35 * (g - blur[i + 1]); bl += 0.35 * (bl - blur[i + 2]); }
+    r = mid + (r - mid) * k; g = mid + (g - mid) * k; bl = mid + (bl - mid) * k;
+    const y = 0.299 * r + 0.587 * g + 0.114 * bl;                     // colours 8% richer around their brightness
+    px[i] = Math.max(0, Math.min(255, y + (r - y) * 1.08));
+    px[i + 1] = Math.max(0, Math.min(255, y + (g - y) * 1.08));
+    px[i + 2] = Math.max(0, Math.min(255, y + (bl - y) * 1.08));
+  }
+  x.putImageData(d, 0, 0);
+  return c.toDataURL("image/png");
+}
+
 /* ---------------- bigger ---------------- */
 /** High-quality upscaling in 2× steps with a light unsharp mask (it can't invent detail; it makes edges crisp). */
 export async function upscale(src: string, longest: number): Promise<{ dataUrl: string; w: number; h: number }> {

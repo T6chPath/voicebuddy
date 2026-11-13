@@ -27,6 +27,7 @@ export interface ImageJob {
   text?: string;            // exact words to show
   target?: string;          // replace_object: what to replace
   noText?: boolean;         // ask for a picture without lettering (the app adds the words itself)
+  described?: boolean;      // the prompt was written for the picture model (already has its quality words)
 }
 
 export interface MadeImage { dataUrl: string; mime: string; width: number; height: number; engine: string; model: string; notes: string[] }

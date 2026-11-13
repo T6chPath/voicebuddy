@@ -62,12 +62,24 @@ const WRITER = "You write prompts for an image generator. From the conversation 
   "another language. Words that must appear in the picture go in double quotes. Reply with the prompt only — one paragraph " +
   "of 30 to 90 words, no title, no explanation.";
 
-/** What the chat's AI is asked: the recent conversation (text) and the request. */
-export function pictureWriterMessages(history: { role: string; text: string }[], request: string): { role: string; content: string }[] {
+/** For the phone's small, fast picture model (Stable Diffusion with a CLIP text reader: it reads about 60 words, and
+ *  the first ones count most): short phrases, the subject first, every detail the user asked for, the key details
+ *  weighted so they come out exactly. */
+const PHONE_WRITER = "You write prompts for a small, fast image model (Stable Diffusion 1.5 with a CLIP text encoder) that reads " +
+  "only about 60 words and pays most attention to the first ones. From the conversation and the user's latest request, write " +
+  "ONE prompt for the picture to make now, as comma-separated phrases: first the main subject with its exact attributes (how " +
+  "many, colours, size, clothing, expression), then what it is doing and where, then composition and camera angle, lighting, " +
+  "and the style (photo, anime, 3D render, watercolor…), ending with: highly detailed, sharp focus, beautiful lighting. Keep " +
+  "EVERY detail the user asked for, word for word where possible, and nothing that contradicts it. Put the 1 to 3 details " +
+  "that matter most in brackets with a weight, like (red ball:1.3) or (two cats:1.2). Write it in English even when the user " +
+  "writes in another language. At most 55 words. Reply with the prompt only.";
+
+/** What the chat's AI is asked: the recent conversation (text) and the request. `phone`: a prompt for the phone's model. */
+export function pictureWriterMessages(history: { role: string; text: string }[], request: string, phone = false): { role: string; content: string }[] {
   const recent = history.filter((m) => m.text.trim()).slice(-6)
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text.replace(/\s+/g, " ").trim().slice(0, 500)}`).join("\n");
   return [
-    { role: "system", content: WRITER },
+    { role: "system", content: phone ? PHONE_WRITER : WRITER },
     { role: "user", content: (recent ? `The conversation so far:\n${recent}\n\n` : "") + `The picture to make now: ${request.trim()}` },
   ];
 }
