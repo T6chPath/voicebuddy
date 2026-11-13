@@ -33,35 +33,32 @@ jobs:
                   print(json.dumps(keep)[:400])
               else: print(m)
           "
-      - name: Make the same picture with each model, no key
+      - name: The newer API (gen.pollinations.ai) without a key, model by model
         run: |
           mkdir -p out
           P="a red apple on a white plate next to a cup of chai, studio photo, soft light"
           ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$P")
-          for m in flux turbo zimage klein klein-large flux-2-dev imagen-4 gptimage gptimage-2 nanobanana seedream kontext; do
+          for m in zimage tongyi-mai/z-image-turbo microsoft/mai-image-2.6-flash black-forest-labs/flux.1-schnell flux sana; do
+            f=$(echo $m | tr '/' '_')
             t0=$(date +%s.%N)
-            code=$(curl -sS -m 150 -o out/$m.bin -D out/$m.h -w "%{http_code}" \
-              "https://image.pollinations.ai/prompt/$ENC?width=1024&height=1024&seed=7&model=$m&nologo=true&safe=true&referrer=zenvqo")
+            code=$(curl -sS -m 150 -o out/$f.bin -D out/$f.h -w "%{http_code}" \
+              "https://gen.pollinations.ai/image/$ENC?model=$m&width=1024&height=1024&seed=7&nologo=true&safe=true&referrer=zenvqo")
             t1=$(date +%s.%N)
-            python3 - "$m" "$code" "$t0" "$t1" <<'PY'
+            python3 - "$f" "$code" "$t0" "$t1" <<'PY'
           import sys
           from PIL import Image, ImageStat
           m, code, t0, t1 = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
           b = open(f"out/{m}.bin", "rb").read()
           h = open(f"out/{m}.h").read().lower()
-          used = [l.strip() for l in h.splitlines() if l.startswith(("x-model", "x-request", "content-type", "x-cache", "retry-after"))]
+          used = [l.strip() for l in h.splitlines() if l.startswith(("x-model", "content-type", "retry-after", "x-ratelimit", "x-tier"))]
           try:
               im = Image.open(f"out/{m}.bin").convert("RGB")
               st = ImageStat.Stat(im.resize((64, 64)))
-              g = im.resize((10, 10), Image.BOX)
               red = sum(1 for p in im.resize((64, 64)).getdata() if p[0] > p[1] + 50 and p[0] > p[2] + 50) / 4096
               desc = f"picture {im.size[0]}x{im.size[1]}, {len(b)//1024} KB, mean {[round(x) for x in st.mean]}, spread {[round(x) for x in st.stddev]}, red {red:.2f}"
           except Exception:
               desc = "not a picture: " + b[:300].decode("utf-8", "replace").replace("\n", " ")
-          print(f"MODEL {m:12s} {code}  {float(t1)-float(t0):6.1f} s  {desc}  {used}")
+          print(f"GEN {m:40s} {code}  {t1-t0:6.1f} s  {desc}  {used}")
           PY
-            sleep 17
+            sleep 50
           done
-      - name: The newer API without a key
-        run: |
-          curl -sS -m 60 -o /dev/null -w "gen.pollinations.ai/image without key: %{http_code}\n" "https://gen.pollinations.ai/image/a%20cat?model=zimage" || true
