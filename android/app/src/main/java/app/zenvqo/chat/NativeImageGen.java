@@ -266,6 +266,8 @@ final class NativeImageGen {
             Process p = pb.start();
             running = p;
             String phase = "load";
+            String step = "0", steps = "0";
+            long lastEmit = 0;
             try (Reader r = new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)) {
                 StringBuilder line = new StringBuilder();
                 int ch;
@@ -274,23 +276,46 @@ final class NativeImageGen {
                     String s = line.toString().trim();
                     line.setLength(0);
                     if (s.isEmpty()) continue;
-                    if (tail.size() >= 30) tail.removeFirst();
-                    tail.addLast(s);
+                    long now = System.currentTimeMillis();
+                    Matcher m = STEP.matcher(s);
+                    boolean bar = m.find();
+                    if (s.contains("MB/s") || s.contains("GB/s")) {
+                        // reading the model file: how far it got while loading, else just a sign of life
+                        if (bar && "load".equals(phase) && now - lastEmit >= 1000) {
+                            lastEmit = now;
+                            gen(id, "load", m.group(1), m.group(2));
+                        } else if (now - lastEmit >= 5000) {
+                            lastEmit = now;
+                            gen(id, phase, step, steps);
+                        }
+                        continue;
+                    }
+                    if (!bar) {
+                        if (tail.size() >= 30) tail.removeFirst();
+                        tail.addLast(s);
+                    }
                     String low = s.toLowerCase(Locale.US);
                     String next = phase;
-                    if (low.contains("get_learned_condition") || low.contains("conditioning") || low.contains("text encoder")) next = "text";
-                    if (low.contains("sampling") || low.contains("generating image")) next = "sample";
-                    if (low.contains("decod")) next = "decode";
-                    Matcher m = STEP.matcher(s);
-                    if (m.find() && !s.contains("MB/s") && !s.contains("GB/s")) {
+                    // sd-cli's log: "clip build…" (reading the description), "get_learned_condition completed" and "unet
+                    // build…" (drawing starts), "decoding 1 latents" / "taesd build…" (finishing)
+                    if (low.contains("clip build") || low.contains("text encoder") || low.contains("conditioning")) next = "text";
+                    if (low.contains("get_learned_condition completed") || low.contains("generating image") || low.contains("unet build")
+                            || low.contains("sampling completed")) next = "sample";
+                    if (low.contains("decod") || low.contains("taesd build") || low.contains("vae build")) next = "decode";
+                    if (bar) {
                         if (!"decode".equals(phase)) next = "sample";
-                        emit("gen", "{\"id\":" + JSONObject.quote(id) + ",\"phase\":\"" + next + "\",\"step\":" + m.group(1) + ",\"steps\":" + m.group(2) + "}");
-                        phase = next;
+                        phase = next; step = m.group(1); steps = m.group(2);
+                        lastEmit = now;
+                        gen(id, phase, step, steps);
                         continue;
                     }
                     if (!next.equals(phase)) {
-                        phase = next;
-                        emit("gen", "{\"id\":" + JSONObject.quote(id) + ",\"phase\":\"" + phase + "\",\"step\":0,\"steps\":0}");
+                        phase = next; step = "0"; steps = "0";
+                        lastEmit = now;
+                        gen(id, phase, step, steps);
+                    } else if (now - lastEmit >= 5000) {     // still working: a sign of life for the app
+                        lastEmit = now;
+                        gen(id, phase, step, steps);
                     }
                 }
             }
@@ -321,6 +346,10 @@ final class NativeImageGen {
             //noinspection ResultOfMethodCallIgnored
             mask.delete();
         }
+    }
+
+    private void gen(String id, String phase, String step, String steps) {
+        emit("gen", "{\"id\":" + JSONObject.quote(id) + ",\"phase\":\"" + phase + "\",\"step\":" + step + ",\"steps\":" + steps + "}");
     }
 
     private void keepScreenOn(boolean on) {

@@ -31,7 +31,7 @@ export interface ImageJob {
 
 export interface MadeImage { dataUrl: string; mime: string; width: number; height: number; engine: string; model: string; notes: string[] }
 
-export type EngineErrorCode = "quota" | "rate_limited" | "blocked" | "auth" | "network" | "unsupported" | "failed" | "config";
+export type EngineErrorCode = "quota" | "rate_limited" | "blocked" | "auth" | "network" | "unsupported" | "failed" | "config" | "stalled" | "memory";
 export class ImageEngineError extends Error {
   constructor(message: string, public code: EngineErrorCode, public retryAfter = 0) { super(message); this.name = "ImageEngineError"; }
 }

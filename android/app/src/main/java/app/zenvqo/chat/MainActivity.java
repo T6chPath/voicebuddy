@@ -9,8 +9,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -42,6 +44,7 @@ public class MainActivity extends Activity {
     private NativeShare share;
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingCamera;
+    private boolean pageGone;                               // the page's process stopped: this WebView can't be used again
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,6 +94,21 @@ public class MainActivity extends Activity {
                 openExternally(u);                                  // links in answers open in the browser
                 return true;
             }
+
+            /** The page's own process stopped: Android needed its memory (a picture made on the phone uses a lot) or it
+             *  crashed. Open the page again instead of letting Android close the whole app; an unfinished reply then
+             *  says so, with Retry. */
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                if (view != web) return true;
+                pageGone = true;
+                if (images != null) images.shutdown();                // the picture it was waiting for can't reach it now
+                ViewGroup parent = (ViewGroup) view.getParent();
+                if (parent != null) parent.removeView(view);
+                view.destroy();
+                recreate();
+                return true;
+            }
         });
 
         web.setWebChromeClient(new WebChromeClient() {
@@ -134,8 +152,7 @@ public class MainActivity extends Activity {
 
         web.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> openExternally(Uri.parse(url)));
 
-        if (savedInstanceState != null) web.restoreState(savedInstanceState);
-        else web.loadUrl(START_URL);
+        if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) web.loadUrl(START_URL);
         share.take(getIntent());                            // opened from another app's Share menu
     }
 
@@ -204,19 +221,19 @@ public class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        web.saveState(outState);
+        if (!pageGone) web.saveState(outState);
     }
 
     @Override
     protected void onPause() {
-        web.onPause();
+        if (!pageGone) web.onPause();
         super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        web.onResume();
+        if (!pageGone) web.onResume();
     }
 
     @Override
@@ -226,7 +243,7 @@ public class MainActivity extends Activity {
         if (speech != null) speech.shutdown();
         if (ears != null) ears.shutdown();
         if (images != null) images.shutdown();
-        web.destroy();
+        if (!pageGone) web.destroy();
         super.onDestroy();
     }
 

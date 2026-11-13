@@ -28,6 +28,12 @@ export const DEVICE_MODELS: DeviceModel[] = [
 /** the tiny decoder: turns the model's result into a picture about 10× faster */
 export const TAESD = { file: "taesd.safetensors", url: RELEASE + "taesd.safetensors", mb: 10 };
 
+/** An engine that shows no sign of life for this long has stopped working (out of memory, frozen), and one that takes
+ *  longer than this for one picture is too slow for the phone (short of memory): it is stopped. Tests set shorter times. */
+export const STALL_MS = 180_000;
+export const MAX_MS = 600_000;
+const limit = (k: "__zigStallMs" | "__zigMaxMs", d: number) => (typeof window !== "undefined" && (window as unknown as Record<string, number | undefined>)[k]) || d;
+
 export const QUALITY: Record<string, { steps: number; label: string }> = {
   fast: { steps: 1, label: "Fast (1 step)" },
   balanced: { steps: 2, label: "Balanced (2 steps)" },
@@ -128,27 +134,54 @@ export async function device(job: ImageJob, o: DeviceOptions, signal: AbortSigna
   const t0 = Date.now();
   const png = await new Promise<string>((resolve, reject) => {
     const parts: string[] = [];
+    let alive = Date.now();                                  // the engine's last sign of life
+    let shown: [number, (secs: number) => string] = [0.03, (n) => `Starting the picture maker on your phone… ${n} s`];
+    const secs = () => Math.round((Date.now() - t0) / 1000);
+    const show = (f: number, text: (n: number) => string) => { shown = [f, text]; progress(f, text(secs())); };
+    let settled = false;
+    const finish = () => { settled = true; clearInterval(tick); off(); };
+    // the time on screen keeps counting, so a slow phone never looks stuck; an engine that stops working is stopped.
+    // Time the app spent closed or in the background (Android pauses it, and the engine with it) doesn't count.
+    let lastTick = Date.now(), away = 0;
+    const tick = setInterval(() => {
+      if (settled) return;
+      const now = Date.now();
+      if (now - lastTick > 5000) { away += now - lastTick - 1000; alive += now - lastTick - 1000; }
+      lastTick = now;
+      progress(shown[0], shown[1](secs()));
+      const quiet = now - alive > limit("__zigStallMs", STALL_MS), slow = now - t0 - away > limit("__zigMaxMs", MAX_MS);
+      if (quiet || slow) {
+        finish();
+        b.cancel(id);
+        reject(new ImageEngineError(`Making the picture on your phone was stopped: ${quiet ? "it made no progress for several minutes" : "it was taking more than 10 minutes"} — ` +
+          "the phone is probably short of free memory for this picture model.", "stalled"));
+      }
+    }, 1000);
     const off = onDeviceEvent((k, d) => {
-      if (d.id !== id) return;
+      if (d.id !== id || settled) return;
+      alive = Date.now();
       if (k === "gen") {
         const step = Number(d.step), steps = Number(d.steps);
         const phase = String(d.phase);
-        const secs = Math.round((Date.now() - t0) / 1000);
-        if (phase === "load") progress(0.05, `Getting the picture maker ready on your phone… ${secs} s`);
-        else if (phase === "text") progress(0.15, `Reading your description… ${secs} s`);
-        else if (phase === "sample") progress(0.2 + 0.65 * (steps ? step / steps : 0), `Drawing on your phone${steps ? ` — step ${step} of ${steps}` : "…"} ${secs} s`);
-        else if (phase === "decode") progress(0.9, `Finishing the picture… ${secs} s`);
+        if (phase === "load") show(0.03 + 0.1 * (steps ? step / steps : 0), (n) => `Loading the picture model on your phone${steps ? ` — ${Math.round((100 * step) / steps)}%` : "…"} ${n} s`);
+        else if (phase === "text") show(0.15, (n) => `Reading your description… ${n} s`);
+        else if (phase === "sample") show(0.2 + 0.65 * (steps ? step / steps : 0), (n) => `Drawing on your phone${steps ? ` — step ${step} of ${steps}` : "…"} ${n} s`);
+        else if (phase === "decode") show(0.9, (n) => `Finishing the picture… ${n} s`);
       } else if (k === "img") parts.push(String(d.chunk));
-      else if (k === "genend") { off(); resolve(parts.join("")); }
+      else if (k === "genend") { finish(); resolve(parts.join("")); }
       else if (k === "generr") {
-        off();
+        finish();
         const err = String(d.error);
         if (err === "cancelled") reject(new DOMException("aborted", "AbortError"));
-        else { console.warn("on-phone picture failed:", err, d.log); reject(new ImageEngineError(`Making the picture on your phone failed: ${err}`, "failed")); }
+        else {
+          console.warn("on-phone picture failed:", err, d.log);
+          reject(new ImageEngineError(`Making the picture on your phone failed: ${err}`, /memory/i.test(err) ? "memory" : "failed"));
+        }
       }
     });
-    signal.addEventListener("abort", () => b.cancel(id), { once: true });
-    if (!b.generate(id, JSON.stringify(args))) { off(); reject(new ImageEngineError("The phone is still making another picture. Try again when it's done.", "rate_limited")); }
+    signal.addEventListener("abort", () => { if (settled) return; finish(); b.cancel(id); reject(new DOMException("aborted", "AbortError")); }, { once: true });
+    show(0.03, shown[1]);
+    if (!b.generate(id, JSON.stringify(args))) { finish(); reject(new ImageEngineError("The phone is still making another picture. Try again when it's done.", "rate_limited")); }
   });
   const dataUrl = "data:image/png;base64," + png;
   const size = await measure(dataUrl);

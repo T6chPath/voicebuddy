@@ -15,7 +15,7 @@ import { bookSpeed } from "../lib/bookModel";
 import { detect, MARKER, safetyCheck, ASPECTS, STYLES, type Plan } from "../images/intent";
 import { gemini, GEMINI_IMAGE_MODEL, ImageEngineError, measure, openai, OPENAI_IMAGE_MODEL, openrouterImage, pollinations, type ImageJob, type MadeImage } from "../images/engines";
 import { cleanWrittenPrompt, FREE_PICTURE_MODEL, FREE_PICTURES, isPictureModel, pictureEngine, pictureName, pictureWriterMessages } from "../images/pictureModels";
-import { device, deviceModel, type DeviceModel } from "../images/device";
+import { DEVICE_MODELS, device, deviceModel, type DeviceModel } from "../images/device";
 import { blendUnder, composite, cutOut, drawText, fillArea, padFor, placeOn, upscale, type Side } from "../images/canvas";
 import type { TTSCatalog, Attachment, Conversation, ConversationDetail, ImageCaps, ImageOp, ImageOptions, Message, ModelInfo, UploadedFile, User, UserSettings } from "./types";
 
@@ -174,6 +174,12 @@ const uid = (p: string) => `${p}_${(crypto.randomUUID?.() ?? Math.random().toStr
 const now = () => Date.now() / 1000;
 const strip = ({ conversation_id: _c, ...m }: MsgRow): Message => m; // eslint-disable-line @typescript-eslint/no-unused-vars
 
+/** Replies being written right now, in this run of the app. A reply still marked as being written that isn't one of these
+ *  was cut off when the app was closed (Android closes apps that are short of memory): it is shown as unfinished, with
+ *  Retry, instead of loading forever. */
+const live = new Set<string>();
+export const INTERRUPTED = "This wasn't finished: the app was closed (or the phone ran short of memory) while it was being made. Tap Retry to make it again.";
+
 // ---------------- settings & models ----------------
 const SETTINGS_KEY = "zc.local.settings";
 const DEFAULTS: UserSettings = { theme: "system", default_model: "echo", temperature: 0.7, system_prompt: "", font_size: "medium",
@@ -280,6 +286,12 @@ export const api = {
     const c = await get<Conversation>("conversations", id);
     if (!c) throw new ApiError(404, "Conversation not found.");
     const rows = await messagesOf(id);
+    for (const r of rows) {
+      if (r.status !== "streaming" || live.has(r.id)) continue;
+      r.status = "error";
+      r.error = INTERRUPTED;
+      await put("messages", r);
+    }
     for (const r of rows) for (const a of r.attachments) {
       if (a.kind === "image" && !pictures.has(a.id)) { const f = await get<FileRow>("files", a.id); if (f?.dataUrl) pictures.set(a.id, f.dataUrl); }
     }
@@ -873,8 +885,13 @@ async function produce(c: ProduceCtx): Promise<MadeImage> {
     }
     try { return await onPhone({ ...j, op: "generate", source: undefined, mask: undefined }); }
     catch (err) {
-      if ((err as Error).name === "AbortError" || s.image_engine === "device") throw err;
-      notes.add("Making it on your phone didn't work this time, so the free online service made it.");
+      if ((err as Error).name === "AbortError") throw err;
+      // short of memory (or too slow to finish): say so, and point to the smaller model
+      const short = err instanceof ImageEngineError && (err.code === "stalled" || err.code === "memory");
+      const tip = short && dev.id !== DEVICE_MODELS[0].id ? ` ${DEVICE_MODELS[0].label} (Settings → Pictures on this phone) needs less memory.` : "";
+      if (s.image_engine === "device") throw short ? new ImageEngineError((err as Error).message + tip, (err as ImageEngineError).code) : err;
+      notes.add(short ? `Your phone ran short of memory making it with ${dev.label}, so the free online service made it.${tip}`
+        : "Making it on your phone didn't work this time, so the free online service made it.");
       return online(j);
     }
   };
@@ -1092,6 +1109,7 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
   const own = !row;
   if (!row) {
     row = { id: uid("msg"), conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [], created_at: now() + 0.001 };
+    live.add(row.id);
     await put("messages", row);
     h.onMeta?.({ user_message: userMsg, assistant_message: { id: row.id, model: modelId } });
   }
@@ -1195,6 +1213,7 @@ async function runImageTurn(cid: string, modelId: string, userMsg: Message | nul
     }
   } finally {
     if (own) {
+      live.delete(row.id);
       await put("messages", row);
       const c = await get<Conversation>("conversations", cid);
       if (c) await put("conversations", { ...c, updated_at: now() });
@@ -1327,6 +1346,7 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
   const aid = into?.id || uid("msg");
   const row: MsgRow = { id: aid, conversation_id: cid, role: "assistant", content: "", model: modelId, status: "streaming", error: null, attachments: [],
     created_at: into ? into.created_at : now() + 0.001 };
+  live.add(aid);
   await put("messages", row);
   h.onMeta?.({ user_message: userMsg, assistant_message: { id: aid, model: modelId } });
   // a page of a "Learn as a book" book: a quick start where the model thinks before it writes
@@ -1369,6 +1389,7 @@ async function runTurn(cid: string, modelId: string, userMsg: Message | null, h:
     row.error = err.message;
     h.onError?.(err);
   } finally {
+    live.delete(aid);
     await put("messages", row);
     const c = await get<Conversation>("conversations", cid);
     if (c) await put("conversations", { ...c, title: (await get<Conversation>("conversations", cid))!.title, updated_at: now() });

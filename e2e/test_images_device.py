@@ -2,6 +2,7 @@
 plays the phone's engine; it records what the app asks for and answers with a plain-colour PNG. The real engine
 is checked on the emulator (e2e/android) and by the zenvqo-image-engine workflow."""
 import json
+import re
 
 from playwright.sync_api import expect
 
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "frontend" / "dist-standalone" / "zenvqo-chat.html"
 
 FAKE = """
-window.__fake = { calls: [], files: %(files)s, fail: %(fail)s };
+window.__fake = { calls: [], files: %(files)s, fail: %(fail)s, stall: %(stall)s };
 window.ZenvqoImageGen = {
   info: () => JSON.stringify({ engine: true, abi: "arm64-v8a", cores: 8, ramMB: 6144, availMB: 3000, freeMB: 20000,
                                files: window.__fake.files, downloading: null, busy: false }),
@@ -33,6 +34,7 @@ window.ZenvqoImageGen = {
     const a = JSON.parse(json);
     window.__fake.calls.push(a);
     setTimeout(() => {
+      if (window.__fake.stall) { window.__zig("gen", { id, phase: "load", step: 0, steps: 0 }); return; }   // then nothing: stuck
       if (window.__fake.fail) { window.__zig("generr", { id, error: "boom", log: ["x"] }); return; }
       window.__zig("gen", { id, phase: "sample", step: 1, steps: 2 });
       const c = document.createElement("canvas"); c.width = a.width; c.height = a.height;
@@ -44,16 +46,16 @@ window.ZenvqoImageGen = {
     }, 150);
     return true;
   },
-  cancel() {},
+  cancel(id) { window.__fake.calls.push({ cancel: id }); },
 };
 """
 MODEL = {"sd_turbo-q4_0.gguf": 1700 * 1048576, "taesd.safetensors": 10 * 1048576}
 
 
-def phone(browser, settings, files=None, fail=False):
+def phone(browser, settings, files=None, fail=False, stall=False, extra=""):
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    ctx.add_init_script(f"localStorage.setItem('zc.local.settings', {json.dumps(json.dumps(settings))}); window.__zcPolliGap = 0;"
-                        + FAKE % {"files": json.dumps(files or {}), "fail": "true" if fail else "false"})
+    ctx.add_init_script(f"localStorage.setItem('zc.local.settings', {json.dumps(json.dumps(settings))}); window.__zcPolliGap = 0;" + extra
+                        + FAKE % {"files": json.dumps(files or {}), "fail": "true" if fail else "false", "stall": "true" if stall else "false"})
     polli = Pollinations()
     ctx.route("https://image.pollinations.ai/**", polli.handle)
     p = ctx.new_page()
@@ -148,3 +150,55 @@ def test_falls_back_online_or_says_what_to_do(browser):
     expect(r2).to_contain_text("Settings → Pictures on this phone")
     assert not polli2.calls
     assert not errors and not errors2, (errors, errors2)
+
+
+BETTER = {"sd_turbo-f16-q8_0.gguf": 2020 * 1048576, "taesd.safetensors": 10 * 1048576}
+
+
+def test_a_stuck_phone_engine_is_stopped(browser):
+    """The phone's engine stops showing signs of life (short of memory): the time keeps counting on screen, then the app
+    stops it and the free online service makes the picture, saying why and pointing to the smaller model."""
+    p, errors, polli = phone(browser, {"default_model": "echo", "device_model": "sd-turbo"}, BETTER, stall=True, extra="window.__zigStallMs = 4000;")
+    p.locator("#composer-input").fill("Generate an image of a red apple")
+    p.locator("#composer-input").press("Enter")
+    busy = p.locator("article.msg-assistant").last
+    expect(busy).to_contain_text(re.compile(r"Loading the picture model on your phone… [1-9] s"), timeout=5000)   # counts without news
+    reply = say_wait(p, 1)
+    expect(reply.locator("img").first).to_be_visible()
+    expect(reply).to_contain_text("Your phone ran short of memory making it with SD-Turbo — better detail, so the free online service made it.")
+    expect(reply).to_contain_text("SD-Turbo — small (Settings → Pictures on this phone) needs less memory.")
+    assert any("cancel" in c for c in calls(p)), calls(p)
+    assert len(polli.calls) == 1
+    # only on this phone: says what happened and what to do, never goes online
+    p2, errors2, polli2 = phone(browser, {"default_model": "echo", "device_model": "sd-turbo", "image_engine": "device"}, BETTER, stall=True,
+                                extra="window.__zigStallMs = 3000;")
+    p2.locator("#composer-input").fill("Generate an image of a red apple")
+    p2.locator("#composer-input").press("Enter")
+    expect(p2.locator("article.msg-assistant").last).to_contain_text("it made no progress for several minutes", timeout=15_000)
+    expect(p2.locator("article.msg-assistant").last).to_contain_text("SD-Turbo — small (Settings → Pictures on this phone) needs less memory.")
+    assert not polli2.calls
+    assert not errors and not errors2, (errors, errors2)
+
+
+def say_wait(p, n):
+    wait_reply(p, n)
+    return p.locator("article.msg-assistant").last
+
+
+def test_a_picture_cut_off_by_closing_the_app_can_be_made_again(browser):
+    """Android closed the app while the phone was making a picture (it needs a lot of memory): when the chat opens again
+    the picture says it wasn't finished, with Retry — it doesn't load forever."""
+    p, errors, polli = phone(browser, {"default_model": "echo", "device_model": "sd-turbo-small"}, MODEL, stall=True)
+    p.locator("#composer-input").fill("Generate an image of a red apple")
+    p.locator("#composer-input").press("Enter")
+    expect(p.locator("article.msg-assistant").last).to_contain_text("Loading the picture model on your phone")
+    p.reload()                                                               # the app was closed and opened again
+    reply = p.locator("article.msg-assistant").last
+    expect(reply).to_contain_text("This wasn't finished: the app was closed")
+    expect(reply).to_have_attribute("aria-busy", "false")
+    p.evaluate("window.__fake.stall = false")
+    reply.get_by_role("button", name="Retry").click()
+    wait_reply(p, 1)
+    expect(p.locator("article.msg-assistant").last.locator("img").first).to_be_visible()
+    assert not polli.calls
+    assert not errors, errors
