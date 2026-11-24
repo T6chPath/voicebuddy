@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Work Bell Plus</title>
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-dark: #0369a1;
+            --accent: #f97316;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 90px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 20px;
+            border-bottom-left-radius: 24px;
+            border-bottom-right-radius: 24px;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);
+            position: relative;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .settings-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .settings-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .time-display {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .next-alert {
+            font-size: 0.95rem;
+            opacity: 0.9;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 16px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 12px;
+            border-radius: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .stat-num {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 2px;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-title {
+            padding: 8px 20px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .list-container {
+            padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .item-card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .item-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: var(--primary);
+        }
+
+        .item-card.reminder::before { background: var(--accent); }
+        .item-card.occasion::before { background: var(--success); }
+
+        .item-info h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .item-info p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+            color: var(--text-light);
+        }
+
+        .icon-btn:hover {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .icon-btn.delete:hover {
+            color: var(--danger);
+        }
+
+        .whatsapp-btn {
+            background: #25d366;
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(37, 211, 102, 0.3);
+            transition: transform 0.1s;
+        }
+
+        .whatsapp-btn:active {
+            transform: scale(0.92);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-light);
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px dashed var(--border);
+            margin: 0 16px;
+        }
+
+        /* Bottom Floating Action Bar */
+        .fab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-around;
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+            z-index: 100;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .fab-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+            flex: 1;
+            margin: 0 4px;
+            justify-content: center;
+        }
+
+        .fab-btn.reminder-btn {
+            background: var(--accent);
+            box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);
+        }
+
+        .fab-btn.occasion-btn {
+            background: var(--success);
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Modal Overlay */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: flex-end;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            width: 100%;
+            max-height: 90vh;
+            border-top-left-radius: 24px;
+            border-top-right-radius: 24px;
+            padding: 24px;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .close-modal {
+            background: var(--bg);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 1rem;
+            background: var(--bg);
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            background: white;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .radio-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            background: var(--bg);
+            transition: all 0.2s;
+        }
+
+        .radio-btn.selected {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .day-chip {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--bg);
+        }
+
+        .day-chip.selected {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+
+        .btn-primary:active {
+            opacity: 0.9;
+        }
+
+        /* Full Screen Setup */
+        #setup-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 30px;
+            text-align: center;
+        }
+
+        #setup-screen h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        #setup-screen p {
+            color: var(--text-light);
+            margin-bottom: 30px;
+            font-size: 1rem;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Alert Overlay */
+        #alert-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            color: white;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .alert-bell-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            animation: ring 1s infinite;
+        }
+
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            20% { transform: rotate(15deg); }
+            40% { transform: rotate(-15deg); }
+            60% { transform: rotate(10deg); }
+            80% { transform: rotate(-10deg); }
+            100% { transform: rotate(0); }
+        }
+
+        .alert-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .alert-desc {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            margin-bottom: 40px;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        .dismiss-btn {
+            background: white;
+            color: var(--text);
+            border: none;
+            padding: 16px 40px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(255,255,255,0.3);
+        }
+    
+:root{--primary:#25645f;--primary-dark:#123d3a;--accent:#e6a348;--bg:#f4f5f0;--border:#dde4de;--success:#287b60}
+header{background:linear-gradient(120deg,#122333,#245d59);border-radius:0 0 28px 28px;padding-top:28px} .item-card{border:1px solid var(--border);box-shadow:0 3px 12px #123d3a08;border-radius:18px}.item-card.occasion{display:block}.occasion .item-info{width:100%}.occasion .item-actions{margin-top:12px;flex-wrap:wrap;gap:8px}.soft{color:#65756f;font-size:12px;line-height:1.65}.pill{display:inline-block;background:#e8f0e9;color:#21564d;padding:5px 9px;border-radius:7px;font-size:11px;font-weight:700;margin:8px 0}.action{border:1px solid #d8e2da;background:#fff;border-radius:10px;padding:9px 12px;color:#245d59;font-weight:600;cursor:pointer}.setup-card{margin:18px 16px 4px;padding:20px;border:1px solid #d9e5dc;background:#fff;border-radius:22px}.setup-card h2{font-size:18px;margin-bottom:6px}.setup-card p{font-size:13px;line-height:1.6;color:#66746e}.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0}.status-grid div{background:#f1f5ef;padding:9px;border-radius:8px;font-size:12px}.setup-actions{display:flex;flex-wrap:wrap;gap:8px}.message-preview{white-space:pre-wrap;background:#edf3ef;padding:14px;border-radius:12px;margin:10px 0;color:#284b42;line-height:1.55;font-size:14px}.form-control{border-radius:12px;min-height:46px}textarea.form-control{min-height:120px;resize:vertical}label{line-height:1.6}.modal-content{max-height:88vh;overflow:auto}.checkrow{display:flex;align-items:flex-start;gap:10px;background:#f0f5ef;padding:14px;border-radius:12px;margin:12px 0}.checkrow input{margin-top:5px;min-width:20px;height:20px}.template-row{display:flex;gap:7px;overflow:auto;margin:8px 0}.template-row button{white-space:nowrap}.btn-primary{background:#245d59;border-radius:12px}.fab-btn.occasion-btn{background:#245d59}.clock-subtitle{font-size:11px;text-transform:uppercase;letter-spacing:2px;opacity:.65;margin-bottom:6px}.empty-state{line-height:1.7;padding:35px 16px}.next-alert{font-size:12px}.footer-note{padding:10px 18px;font-size:12px;color:#758179;line-height:1.6}
+</style>
+</head>
+<body>
+
+    <!-- Welcome Setup Screen -->
+    <div id="setup-screen" class="hidden">
+        <img class="wlogo" id="wLogo" alt="Work Bell">
+        <h2>Welcome to Work Bell</h2>
+        <p>Your voice reminder for work, reminders and special days. What should I call you?</p>
+        <div class="form-group" style="text-align: left;">
+            <label>Your Name</label>
+            <input type="text" id="setup-name-input" class="form-control" placeholder="e.g. Rahul">
+        </div>
+        <div class="form-group" style="text-align: left;">
+            <label>Your Default WhatsApp Country Code & Number (Optional)</label>
+            <input type="tel" id="setup-whatsapp-input" class="form-control" placeholder="e.g. 9876543210 (Direct number, no +91 needed)">
+            <small style="color: var(--text-light); font-size: 0.75rem; margin-top: 4px; display: block;">Just type the person's number directly. You can also set a default country code if needed.</small>
+        </div>
+        <button class="btn-primary" onclick="completeSetup()">Continue</button>
+    </div>
+
+    <!-- Active Alert Overlay -->
+    <div id="alert-overlay" class="hidden">
+        <div class="alert-bell-icon">🔔</div>
+        <div class="alert-title" id="active-alert-title">Work Time</div>
+        <div class="alert-desc" id="active-alert-desc">Time to get to work!</div>
+        <button class="dismiss-btn" onclick="dismissAlert()">Dismiss (30s)</button>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-top">
+            <div class="brand"><img class="logo" id="logo" src="data:image/png;base64,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" alt="Work Bell logo"><h1 id="app-title">Work <span>Bell</span></h1></div>
+            <button class="settings-btn" onclick="openSettings()" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+        </div>
+        <div class="clock-subtitle" id="clock-sub">Make time for the people who matter</div><div class="time-display" id="current-time">--:--</div>
+        <div class="next-alert" id="next-alert-text">No upcoming alerts</div>
+    </header>
+
+    <!-- Stats -->
+<div class="home-alert hidden" id="home-alert" role="button" tabindex="0" onclick="wbOpenSetup()"></div>    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-num" id="stat-work">0</div>
+            <div class="stat-label">Work Today</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num" id="stat-reminders">0</div>
+            <div class="stat-label">Reminders</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num" id="stat-occasions">0</div>
+            <div class="stat-label">Occasions</div>
+        </div>
+    </div>
+
+    <!-- Work Section -->
+    <div class="section-title">
+        <span>Work Schedule</span>
+    </div>
+    <div class="list-container" id="work-list">
+        <!-- Rendered via JS -->
+    </div>
+
+    <!-- Reminders Section -->
+    <div class="section-title">
+        <span>Reminders</span>
+    </div>
+    <div class="list-container" id="reminder-list">
+        <!-- Rendered via JS -->
+    </div>
+
+    <!-- Occasions Section -->
+    <div class="section-title">
+        <span>Special Occasions</span>
+    </div>
+    <div class="list-container" id="occasion-list">
+        <!-- Rendered via JS -->
+    </div>
+
+    <!-- Floating Action Bar -->
+    <div class="fab-bar">
+        <button class="fab-btn" onclick="openWorkModal()">+ Work</button>
+        <button class="fab-btn reminder-btn" onclick="openReminderModal()">+ Reminder</button>
+        <button class="fab-btn occasion-btn" onclick="openOccasionModal()">+ Occasion</button>
+    </div>
+
+    <!-- Work Modal -->
+    <div class="modal" id="work-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Work</h2>
+                <button class="close-modal" onclick="closeModals()">✕</button>
+            </div>
+            <div class="form-group">
+                <label>Work Name</label>
+                <input type="text" id="work-name" class="form-control" placeholder="e.g. Morning Shift">
+            </div>
+            <div class="form-group">
+                <label>Phone number (for SMS or WhatsApp)</label>
+                <input type="tel" id="work-whatsapp" class="form-control" placeholder="e.g. 9876543210"><button type="button" class="action contact-pick" onclick="pickContact('work-whatsapp')">&#128100; Choose from contacts</button><div class="soft contact-selected" id="work-whatsapp-selected" aria-live="polite"></div>
+            </div>
+            <div class="form-group">
+                <label>Repeat</label>
+                <div class="radio-group">
+                    <div class="radio-btn selected" onclick="setWorkRepeat('one')">One day</div>
+                    <div class="radio-btn" onclick="setWorkRepeat('every')">Every day</div>
+                    <div class="radio-btn" onclick="setWorkRepeat('specific')">Specific</div>
+                </div>
+            </div>
+            <div class="form-group" id="work-days-container" style="display: none;">
+                <label>Which Days</label>
+                <div class="days-grid">
+                    <div class="day-chip" onclick="toggleDay(this, 1)">Mon</div>
+                    <div class="day-chip" onclick="toggleDay(this, 2)">Tue</div>
+                    <div class="day-chip" onclick="toggleDay(this, 3)">Wed</div>
+                    <div class="day-chip" onclick="toggleDay(this, 4)">Thu</div>
+                    <div class="day-chip" onclick="toggleDay(this, 5)">Fri</div>
+                    <div class="day-chip" onclick="toggleDay(this, 6)">Sat</div>
+                    <div class="day-chip" onclick="toggleDay(this, 0)">Sun</div>
+                </div>
+            </div>
+            <div class="form-group" id="work-date-container">
+                <label>Date</label>
+                <input type="date" id="work-date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Start Time</label>
+                <input type="time" id="work-start" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>End Time</label>
+                <input type="time" id="work-end" class="form-control">
+            </div>
+            <div class="form-group"><div class="lbl">At the start time</div>
+                <div class="mode-group" id="work-mode" data-mode="ring"><button type="button" class="mode-btn selected" data-mode="ring" onclick="wbSetMode('work','ring')">🔊 Speak</button><button type="button" class="mode-btn" data-mode="sms" onclick="wbSetMode('work','sms')">💬 Send SMS</button></div>
+                <div class="soft mode-help" id="work-mode-help"></div>
+            </div>
+            <div class="form-group hidden" id="work-sms-box"><label>SMS text</label><textarea id="work-sms-message" class="form-control" maxlength="500" placeholder="Leave empty to send the work name"></textarea></div>
+            <button class="btn-primary" onclick="saveWork()">Save Work</button>
+        </div>
+    </div>
+
+    <!-- Reminder Modal -->
+    <div class="modal" id="reminder-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Reminder</h2>
+                <button class="close-modal" onclick="closeModals()">✕</button>
+            </div>
+            <div class="form-group">
+                <label>Reminder Message</label>
+                <input type="text" id="reminder-name" class="form-control" placeholder="e.g. Drink Water">
+            </div>
+            <div class="form-group">
+                <label>Phone number (for SMS or WhatsApp)</label>
+                <input type="tel" id="reminder-whatsapp" class="form-control" placeholder="e.g. 9876543210"><button type="button" class="action contact-pick" onclick="pickContact('reminder-whatsapp')">&#128100; Choose from contacts</button><div class="soft contact-selected" id="reminder-whatsapp-selected" aria-live="polite"></div>
+            </div>
+            <div class="form-group">
+                <label>Time</label>
+                <input type="time" id="reminder-time" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Repeat</label>
+                <div class="radio-group">
+                    <div class="radio-btn selected" onclick="setRemRepeat('once')">Once</div>
+                    <div class="radio-btn" onclick="setRemRepeat('daily')">Daily</div>
+                </div>
+            </div>
+            <div class="form-group"><div class="lbl">At this time</div>
+                <div class="mode-group" id="reminder-mode" data-mode="ring"><button type="button" class="mode-btn selected" data-mode="ring" onclick="wbSetMode('reminder','ring')">🔊 Speak</button><button type="button" class="mode-btn" data-mode="sms" onclick="wbSetMode('reminder','sms')">💬 Send SMS</button></div>
+                <div class="soft mode-help" id="reminder-mode-help"></div>
+            </div>
+            <div class="form-group hidden" id="reminder-sms-box"><label>SMS text</label><textarea id="reminder-sms-message" class="form-control" maxlength="500" placeholder="Leave empty to send the reminder text"></textarea></div>
+            <button class="btn-primary" onclick="saveReminder()">Save Reminder</button>
+        </div>
+    </div>
+
+<div class="modal" id="occasion-modal"><div class="modal-content">
+<div class="modal-header"><h2 id="occasion-modal-title">A thoughtful greeting</h2><button class="close-modal" onclick="closeModals()">✕</button></div>
+<p class="soft">Choose a person, write your message, and pick the moment. Times follow this phone's local time zone.</p>
+<div class="form-group"><label>Occasion name</label><input id="occasion-name" class="form-control" maxlength="100" placeholder="Mom’s birthday"></div>
+<div class="form-group"><label>Recipient number</label><input id="occasion-whatsapp" class="form-control" type="tel" maxlength="20" placeholder="+91 98765 43210"><button type="button" class="action contact-pick" onclick="pickContact('occasion-whatsapp')">&#128100; Choose from contacts</button><div class="soft contact-selected" id="occasion-whatsapp-selected" aria-live="polite"></div><div class="soft">Use +country code, or a 10-digit number with your default country code.</div></div>
+<div class="form-group"><label>Message</label><div class="template-row"><button class="action" onclick="useTemplate('birthday')">🎂 Birthday</button><button class="action" onclick="useTemplate('anniversary')">♡ Anniversary</button><button class="action" onclick="useTemplate('festival')">✦ Festival</button></div><textarea class="form-control" id="occasion-message" maxlength="500" oninput="countMessage()" placeholder="Write something personal…"></textarea><div class="soft" id="message-count">0 / 500 characters</div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label>Date</label><input class="form-control" id="occasion-date" type="date"></div><div class="form-group"><label>Time</label><input class="form-control" id="occasion-time" type="time"></div></div>
+<label class="checkrow"><input type="checkbox" id="occasion-yearly"><span>Repeat every year<div class="soft">February 29 uses February 28 in non-leap years. Festival dates may change each year.</div></span></label>
+<input type="checkbox" id="occasion-auto" class="hidden">
+            <div class="form-group"><div class="lbl">At this time</div>
+                <div class="mode-group" id="occasion-mode" data-mode="ring"><button type="button" class="mode-btn selected" data-mode="ring" onclick="wbSetMode('occasion','ring')">🔊 Speak</button><button type="button" class="mode-btn" data-mode="sms" onclick="wbSetMode('occasion','sms')">💬 Send SMS</button></div>
+                <div class="soft mode-help" id="occasion-mode-help"></div>
+            </div>
+<div class="soft">WhatsApp uses a prepared message and requires you to tap Send. Phone must be powered on, with an active SIM and signal for SMS. Automatic SMS does not require the app screen to stay open. Keep battery restrictions off. Force-stopping the app prevents alarms until reopened. A delayed alarm still sends up to 6 hours after its scheduled time; older messages are marked missed.</div>
+<button class="btn-primary" style="margin-top:16px" onclick="saveOccasion()">Review & schedule</button>
+</div></div>
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-modal" onclick="closeModals()">✕</button>
+            </div>
+            <div class="form-group">
+                <label>Your Name</label>
+                <input type="text" id="settings-name" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Default Country Code (e.g. 91 for India, 1 for US)</label>
+                <input type="tel" id="settings-cc" class="form-control" placeholder="91">
+                <small style="color: var(--text-light); font-size: 0.75rem; margin-top: 4px; display: block;">If you enter 10-digit numbers without country code, this code will be added automatically for WhatsApp.</small>
+            </div>
+            <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+            <div class="set-group" id="bg-group">Voice alerts &amp; SMS</div>
+            <section id="bg-health"></section>
+        </div>
+    </div>
+
+    <script>
+        // App State
+        let state = JSON.parse(localStorage.getItem('work_bell_state')) || {
+            user: { name: '', countryCode: '91' },
+            works: [],
+            reminders: [],
+            occasions: []
+        };
+
+        let workRepeatMode = 'one';
+        let workSelectedDays = [];
+        let remRepeatMode = 'once';
+        let occRepeatMode = 'once';
+        let activeAlertTimer = null;
+
+        // Init
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!state.user.name) {
+                document.getElementById('setup-screen').classList.remove('hidden');
+            } else {
+                initApp();
+            }
+        });
+
+        function completeSetup() {
+            const name = document.getElementById('setup-name-input').value.trim();
+            const wp = document.getElementById('setup-whatsapp-input').value.trim();
+            if (!name) {
+                alert('Please enter your name');
+                return;
+            }
+            state.user.name = name;
+            if (wp) {
+                // if they put a number in setup, we can store it or let them use per item
+                state.user.defaultNumber = wp.replace(/\D/g, '');
+            }
+            saveState();
+            document.getElementById('setup-screen').classList.add('hidden');
+            initApp();
+        }
+
+        function initApp() {
+            updateClock();
+            setInterval(updateClock, 1000);
+            setInterval(checkAlerts, 10000);
+            renderAll();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('current-time').innerText = `${hours}:${minutes}`;
+        }
+
+        function saveState() {
+            localStorage.setItem('work_bell_state', JSON.stringify(state));
+        }
+
+        // Render UI
+        function renderAll() {
+            renderWorks();
+            renderReminders();
+            renderOccasions();
+            updateStats();
+        }
+
+        function renderWorks() {
+            const container = document.getElementById('work-list');
+            if (state.works.length === 0) {
+                container.innerHTML = `<div class="empty-state">No work scheduled</div>`;
+                return;
+            }
+            container.innerHTML = state.works.map((w, index) => `
+                <div class="item-card">
+                    <div class="item-info">
+                        <h3>${escapeHtml(w.name)}</h3>
+                        <p>${w.start} - ${w.end} · ${formatRepeat(w)}</p>
+                    </div>
+                    <div class="item-actions">
+                        ${w.whatsapp ? `<button class="whatsapp-btn" onclick="openWhatsApp('${w.whatsapp}')" title="Send WhatsApp">💬</button>` : ''}
+                        <button class="icon-btn delete" onclick="deleteWork(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderReminders() {
+            const container = document.getElementById('reminder-list');
+            if (state.reminders.length === 0) {
+                container.innerHTML = `<div class="empty-state">No reminders set</div>`;
+                return;
+            }
+            container.innerHTML = state.reminders.map((r, index) => `
+                <div class="item-card reminder">
+                    <div class="item-info">
+                        <h3>${escapeHtml(r.name)}</h3>
+                        <p>${r.time} · ${r.repeat === 'daily' ? 'Daily' : 'Once'}</p>
+                    </div>
+                    <div class="item-actions">
+                        ${r.whatsapp ? `<button class="whatsapp-btn" onclick="openWhatsApp('${r.whatsapp}')" title="Send WhatsApp">💬</button>` : ''}
+                        <button class="icon-btn delete" onclick="deleteReminder(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderOccasions() {
+            const container = document.getElementById('occasion-list');
+            if (state.occasions.length === 0) {
+                container.innerHTML = `<div class="empty-state">No occasions added</div>`;
+                return;
+            }
+            container.innerHTML = state.occasions.map((o, index) => `
+                <div class="item-card occasion">
+                    <div class="item-info">
+                        <h3>${escapeHtml(o.name)}</h3>
+                        <p>${o.date} at ${o.time}</p>
+                    </div>
+                    <div class="item-actions">
+                        ${o.whatsapp ? `<button class="whatsapp-btn" onclick="openWhatsApp('${o.whatsapp}')" title="Send WhatsApp">💬</button>` : ''}
+                        <button class="icon-btn delete" onclick="deleteOccasion(${index})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            document.getElementById('stat-work').innerText = state.works.length;
+            document.getElementById('stat-reminders').innerText = state.reminders.length;
+            document.getElementById('stat-occasions').innerText = state.occasions.length;
+        }
+
+        // WhatsApp Direct Link Helper (No Country Code Prefix needed by user)
+        function openWhatsApp(numberStr) {
+            let cleanNum = numberStr.replace(/\D/g, '');
+            // If user entered a direct 10 digit number, automatically prepend country code (default 91)
+            if (cleanNum.length === 10 && state.user.countryCode) {
+                cleanNum = state.user.countryCode + cleanNum;
+            }
+            const url = `https://api.whatsapp.com/send?phone=${cleanNum}`;
+            window.open(url, '_blank');
+        }
+
+        // Modal Controls
+        function openWorkModal() {
+            document.getElementById('work-modal').classList.add('active');
+            document.getElementById('work-date').valueAsDate = new Date();
+        }
+
+        function openReminderModal() {
+            document.getElementById('reminder-modal').classList.add('active');
+        }
+
+        function openOccasionModal() {
+            document.getElementById('occasion-modal').classList.add('active');
+            document.getElementById('occasion-date').valueAsDate = new Date();
+        }
+
+        function openSettings() {
+            document.getElementById('settings-name').value = state.user.name;
+            document.getElementById('settings-cc').value = state.user.countryCode || '91';
+            document.getElementById('settings-modal').classList.add('active');
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        // Work Repeat selectors
+        function setWorkRepeat(mode) {
+            workRepeatMode = mode;
+            document.querySelectorAll('#work-modal .radio-btn').forEach(b => b.classList.remove('selected'));
+            event.target.classList.add('selected');
+            
+            document.getElementById('work-days-container').style.display = mode === 'specific' ? 'block' : 'none';
+            document.getElementById('work-date-container').style.display = mode === 'one' ? 'block' : 'none';
+        }
+
+        function toggleDay(el, dayNum) {
+            el.classList.toggle('selected');
+            const idx = workSelectedDays.indexOf(dayNum);
+            if (idx > -1) workSelectedDays.splice(idx, 1);
+            else workSelectedDays.push(dayNum);
+        }
+
+        function setRemRepeat(mode) {
+            remRepeatMode = mode;
+            event.target.parentElement.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function setOccRepeat(mode) {
+            occRepeatMode = mode;
+            event.target.parentElement.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        // Save Actions
+        function saveWork() {
+            const name = document.getElementById('work-name').value.trim();
+            const whatsapp = document.getElementById('work-whatsapp').value.trim();
+            const start = document.getElementById('work-start').value;
+            const end = document.getElementById('work-end').value;
+            const date = document.getElementById('work-date').value;
+
+            if (!name || !start || !end) {
+                alert('Please fill in name, start time and end time');
+                return;
+            }
+
+            state.works.push({
+                name,
+                whatsapp,
+                repeat: workRepeatMode,
+                days: [...workSelectedDays],
+                date,
+                start,
+                end
+            });
+
+            saveState();
+            closeModals();
+            renderAll();
+            clearWorkForm();
+        }
+
+        function saveReminder() {
+            const name = document.getElementById('reminder-name').value.trim();
+            const whatsapp = document.getElementById('reminder-whatsapp').value.trim();
+            const time = document.getElementById('reminder-time').value;
+
+            if (!name || !time) {
+                alert('Please fill in reminder message and time');
+                return;
+            }
+
+            state.reminders.push({
+                name,
+                whatsapp,
+                time,
+                repeat: remRepeatMode
+            });
+
+            saveState();
+            closeModals();
+            renderAll();
+        }
+
+        function saveOccasion() {
+            const name = document.getElementById('occasion-name').value.trim();
+            const whatsapp = document.getElementById('occasion-whatsapp').value.trim();
+            const date = document.getElementById('occasion-date').value;
+            const time = document.getElementById('occasion-time').value;
+
+            if (!name || !date || !time) {
+                alert('Please fill in occasion name, date and time');
+                return;
+            }
+
+            state.occasions.push({
+                name,
+                whatsapp,
+                date,
+                time,
+                repeat: occRepeatMode
+            });
+
+            saveState();
+            closeModals();
+            renderAll();
+        }
+
+        function saveSettings() {
+            const name = document.getElementById('settings-name').value.trim();
+            const cc = document.getElementById('settings-cc').value.trim();
+            if (!name) {
+                alert('Name cannot be empty');
+                return;
+            }
+            state.user.name = name;
+            state.user.countryCode = cc || '91';
+            saveState();
+            closeModals();
+            document.getElementById('app-title').innerText = `${state.user.name}'s Work Bell`;
+        }
+
+        function deleteWork(index) {
+            state.works.splice(index, 1);
+            saveState();
+            renderAll();
+        }
+
+        function deleteReminder(index) {
+            state.reminders.splice(index, 1);
+            saveState();
+            renderAll();
+        }
+
+        function deleteOccasion(index) {
+            state.occasions.splice(index, 1);
+            saveState();
+            renderAll();
+        }
+
+        function clearWorkForm() {
+            document.getElementById('work-name').value = '';
+            document.getElementById('work-whatsapp').value = '';
+            document.getElementById('work-start').value = '';
+            document.getElementById('work-end').value = '';
+        }
+
+        function formatRepeat(w) {
+            if (w.repeat === 'every') return 'Every day';
+            if (w.repeat === 'specific') return 'Specific days';
+            return w.date || 'One day';
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Background Voice Alert simulation
+        function checkAlerts() {
+            const now = new Date();
+            const currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            
+            // Check work start times
+            state.works.forEach(w => {
+                if (w.start === currentTime) {
+                    triggerAlert(w.name, `Time for ${w.name}! Hello ${state.user.name}, your shift starts now.`);
+                }
+            });
+
+            // Check reminders
+            state.reminders.forEach(r => {
+                if (r.time === currentTime) {
+                    triggerAlert(r.name, `Reminder: ${r.name}. Attention ${state.user.name}!`);
+                }
+            });
+        }
+
+        function triggerAlert(title, message) {
+            document.getElementById('active-alert-title').innerText = title;
+            document.getElementById('active-alert-desc').innerText = message;
+            document.getElementById('alert-overlay').classList.remove('hidden');
+
+            // Speech Synthesis
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(message);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function dismissAlert() {
+            document.getElementById('alert-overlay').classList.add('hidden');
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        }
+    </script>
+<script>
+let nativeJobs={}, editOccasionId=null;
+function nativeRead(){try{nativeJobs=window.OccasionNative?JSON.parse(OccasionNative.jobs()):{};}catch(e){nativeJobs={};}}
+function refreshNative(){nativeRead();let st={};try{st=JSON.parse(OccasionNative.status());}catch(e){}try{st.battery=!!(window.ContactNative&&ContactNative.batteryReady());}catch(e){}const el=document.getElementById('native-status');if(el)el.innerHTML=window.OccasionNative?['sms','exact','sim','notifications','battery'].map((k,i)=>'<div>'+(['SMS access','Exact alarms','Default SIM','Notifications','Battery unrestricted'][i])+': '+(st[k]?'✓ Ready':'Needs setup')+'</div>').join(''):'<div>Install the Android app to schedule messages.</div>';renderOccasions();}
+function enableMessaging(){if(window.OccasionNative)OccasionNative.permissions();else alert('Install the APK to enable SMS.');}
+function enableAlarms(){if(window.OccasionNative)OccasionNative.exact();else alert('Install the APK to schedule background alarms.');}
+function normalizeNumber(raw){let trimmed=raw.trim(),digits=trimmed.replace(/\D/g,'');if(trimmed.startsWith('+'))return '+'+digits;if(digits.length===10)digits=String(state.user.countryCode||'91').replace(/\D/g,'')+digits;return '+'+digits;}
+function countMessage(){document.getElementById('message-count').textContent=document.getElementById('occasion-message').value.length+' / 500 characters';}
+function useTemplate(k){const t={birthday:'Happy birthday! Wishing you a wonderful day filled with love, laughter, and happiness.',anniversary:'Happy anniversary! Wishing you both many more years of love and beautiful memories.',festival:'Wishing you and your family a joyful celebration filled with peace, happiness, and togetherness.'};document.getElementById('occasion-message').value=t[k];countMessage();}
+function localDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function openOccasionModal(id){nativeRead();editOccasionId=id||null;const j=id?nativeJobs[id]:null;const d=j?new Date(j.at):new Date(Date.now()+3600000);document.getElementById('occasion-name').value=j?j.name:'';document.getElementById('occasion-whatsapp').value=j?j.phone:'';document.getElementById('occasion-message').value=j?j.message:'';document.getElementById('occasion-date').value=localDate(d);document.getElementById('occasion-time').value=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');document.getElementById('occasion-auto').checked=j?j.auto:false;document.getElementById('occasion-yearly').checked=j?j.yearly:false;document.getElementById('occasion-modal-title').textContent=j?'Edit your greeting':'A thoughtful greeting';countMessage();document.getElementById('occasion-modal').classList.add('active');}
+function saveOccasion(){if(!window.OccasionNative){alert('Install the Android APK to schedule an occasion.');return;}const name=document.getElementById('occasion-name').value.trim(),phone=normalizeNumber(document.getElementById('occasion-whatsapp').value),message=document.getElementById('occasion-message').value.trim(),date=document.getElementById('occasion-date').value,time=document.getElementById('occasion-time').value,auto=document.getElementById('occasion-auto').checked,yearly=document.getElementById('occasion-yearly').checked,d=new Date(date+'T'+time+':00');if(!name||!date||!time||!Number.isFinite(+d)||+d<Date.now()+5000){alert('Enter an occasion name and a future date and time.');return;}if(auto&&(!/^\+[1-9]\d{7,14}$/.test(phone)||!message)){alert('Enter a valid recipient number and your message.');return;}if(message.length>500){alert('Keep the message within 500 characters.');return;}if(!confirm((auto?'Schedule automatic SMS':'Schedule reminder')+'\n\n'+name+'\n'+(auto?'To: '+phone+'\n':'')+d.toLocaleString()+(yearly?'\nRepeats every year':'')+'\n\n'+message+(auto?'\n\nCarrier charges may apply.':'')))return;let error=OccasionNative.save(JSON.stringify({id:editOccasionId||'o'+Date.now().toString(36),name,phone:phone==='+'?'':phone,message,at:+d,month:d.getMonth(),day:d.getDate(),yearly,auto}));if(error){alert(error);return;}closeModals();refreshNative();}
+function removeNative(id){if(confirm('Cancel this schedule and remove the occasion?')){OccasionNative.cancel(id);refreshNative();}}
+function whatsappNative(id){const j=nativeJobs[id];if(!j||!/^\+[1-9]\d{7,14}$/.test(j.phone)){alert('Edit the occasion and add an international phone number.');return;}location.href='https://wa.me/'+j.phone.slice(1)+'?text='+encodeURIComponent(j.message||'');}
+function renderOccasions(){nativeRead();const container=document.getElementById('occasion-list');if(!container)return;const arr=Object.values(nativeJobs).sort((a,b)=>(b.enabled-a.enabled)||(a.at-b.at));document.getElementById('stat-occasions').textContent=arr.length;container.innerHTML=arr.length?arr.map(j=>'<div class="item-card occasion"><div class="item-info"><span class="pill">'+(j.auto?'AUTOMATIC SMS':'REMINDER')+(j.yearly?' · YEARLY':'')+'</span><h3>'+escapeHtml(j.name)+'</h3><p>'+escapeHtml(new Date(j.at).toLocaleString())+'</p><p>'+escapeHtml(j.phone||'No recipient added')+'</p><div class="message-preview">'+escapeHtml(j.message||'Add a personal greeting')+'</div><p style="font-weight:600">'+escapeHtml(j.status||'Scheduled')+'</p>'+(j.last?'<div class="soft">'+escapeHtml(j.last)+'</div>':'')+'</div><div class="item-actions"><button class="action" onclick="openOccasionModal(\''+j.id+'\')">Edit</button><button class="action" onclick="whatsappNative(\''+j.id+'\')">Open WhatsApp</button><button class="action" onclick="removeNative(\''+j.id+'\')">Cancel / delete</button></div></div>').join(''):'<div class="empty-state">🎂<br><strong>Be there, even on busy days.</strong><br>Add a birthday, anniversary, or celebration.<br>Your next thoughtful message starts here.</div>';}
+// Keep the original task and reminder features, and refresh native results on return.
+const originalStats=updateStats;updateStats=function(){originalStats();document.getElementById('stat-occasions').textContent=Object.keys(nativeJobs).length;};
+window.addEventListener('DOMContentLoaded',refreshNative);window.addEventListener('focus',refreshNative);setInterval(refreshNative,15000);
+</script>
+<style>.contact-pick{width:100%;margin-top:8px;padding:10px;text-align:center}.contact-selected{margin-top:5px;overflow-wrap:anywhere}</style>
+<script>
+let contactTarget=null;
+function pickContact(field){if(!window.ContactNative){alert('Contact picker is not available. You can enter the number manually.');return;}contactTarget=field;ContactNative.pick();}
+function contactPicked(number,name){const field=contactTarget;contactTarget=null;if(!field)return;const input=document.getElementById(field);if(!input)return;let raw=String(number||'').trim();let clean=raw.replace(/[^0-9+]/g,'');if(clean.startsWith('00'))clean='+'+clean.slice(2);clean=(clean.startsWith('+')?'+':'')+clean.replace(/\D/g,'');if(!clean||clean==='+'){contactPickError();return;}input.value=clean;document.getElementById(field+'-selected').textContent=(name?String(name)+' · ':'')+clean;input.dispatchEvent(new Event('input',{bubbles:true}));}
+function contactPickError(){contactTarget=null;alert('Could not open or read the selected contact. Please select a phone number, or enter it manually.');}
+for(const id of ['occasion-whatsapp','work-whatsapp','reminder-whatsapp']){document.getElementById(id).addEventListener('input',function(){const label=document.getElementById(id+'-selected');if(label.textContent&&!label.textContent.endsWith(this.value))label.textContent='';});}
+const openWithContacts=openOccasionModal;openOccasionModal=function(id){document.getElementById('occasion-whatsapp-selected').textContent='';openWithContacts(id);};
+</script>
+<script>
+/* =====================================================================
+   BACKGROUND SMS UPGRADE
+   Lets Work and Reminder items send an SMS automatically at their time,
+   even when the app is CLOSED or the screen is LOCKED.
+   It reuses the same native engine the Occasion feature already uses:
+   OccasionNative.save() schedules an exact alarm; the app's AlarmReceiver
+   + SmsGuard foreground service actually send the SMS in the background.
+   Job id prefixes: o = occasion, w = work, r = reminder.
+   ===================================================================== */
+
+// ---- time helpers (all in this phone's local time) ----
+function _hm(t){const p=String(t||'').split(':');return [parseInt(p[0],10)||0, parseInt(p[1],10)||0];}
+function nextDailyMs(hhmm){const [h,m]=_hm(hhmm);const d=new Date();d.setHours(h,m,0,0);if(+d<=Date.now()+5000)d.setDate(d.getDate()+1);return +d;}
+function nextWeekdayMs(hhmm,days){const [h,m]=_hm(hhmm);for(let i=0;i<8;i++){const d=new Date();d.setDate(d.getDate()+i);d.setHours(h,m,0,0);if(days.indexOf(d.getDay())>-1 && +d>Date.now()+5000)return +d;}return nextDailyMs(hhmm);}
+function oneShotMs(dateStr,hhmm){const d=new Date((dateStr||localDate(new Date()))+'T'+(hhmm||'00:00')+':00');return +d;}
+
+function _isRepeating(item,kind){return kind==='work' ? (item.repeat==='every'||item.repeat==='specific') : (item.repeat==='daily');}
+function _itemNextAt(item,kind){
+    if(kind==='work'){
+        if(item.repeat==='specific' && item.days && item.days.length) return nextWeekdayMs(item.start,item.days);
+        if(item.repeat==='every') return nextDailyMs(item.start);
+        return oneShotMs(item.date,item.start);            // 'one' day
+    }
+    return item.repeat==='daily' ? nextDailyMs(item.time) : nextDailyMs(item.time); // reminder (once = next occurrence)
+}
+
+// ---- schedule / reschedule one item's background SMS via the native engine ----
+function scheduleItemSms(item,kind){
+    if(!window.OccasionNative) return 'Install the Android app to send background SMS.';
+    const phone = (typeof normalizeNumber==='function') ? normalizeNumber(item.whatsapp||'') : ('+'+String(item.whatsapp||'').replace(/\D/g,''));
+    if(!/^\+[1-9]\d{7,14}$/.test(phone)) return 'Add a valid recipient number (with country code) for automatic SMS.';
+    const message = (item.smsMessage || item.name || 'Reminder').trim();
+    if(!message) return 'Add a message for automatic SMS.';
+    const at = item._nextAt;
+    if(!at || at < Date.now()+5000) return 'Pick a future time.';
+    const id = item.smsId || ((kind==='work'?'w':'r') + Date.now().toString(36) + Math.floor(Math.random()*1000));
+    const d = new Date(at);
+    const err = OccasionNative.save(JSON.stringify({
+        id, name:(kind==='work'?'Work: ':'Reminder: ')+item.name,
+        phone, message, at, month:d.getMonth(), day:d.getDate(), yearly:false, auto:true
+    }));
+    if(err) return err;
+    item.smsId = id; item.smsAt = at; item.smsOn = true;
+    return '';
+}
+
+// ---- re-arm repeating jobs (daily/weekly) whenever the app is opened/focused ----
+// The native engine repeats only yearly, so daily/weekly items are kept one step
+// ahead: the NEXT occurrence is always armed, and the one after it is armed the
+// next time you open the app.
+function rearmAutoJobs(){
+    if(!window.OccasionNative) return;
+    nativeRead();
+    let changed=false;
+    const scan=(arr,kind)=>{(arr||[]).forEach(item=>{
+        if(!item.smsOn || !item.smsId) return;
+        if(!_isRepeating(item,kind)) return;              // one-shots: native keeps them, no re-arm
+        const job = nativeJobs[item.smsId];
+        const fired = !job || !job.at || job.at < Date.now()+1000 || (job.status && /sent|missed|failed/i.test(job.status));
+        if(fired){
+            item._nextAt = _itemNextAt(item,kind);
+            if(!scheduleItemSms(item,kind)){ delete item._nextAt; changed=true; }
+        }
+    });};
+    scan(state.works,'work');
+    scan(state.reminders,'reminder');
+    if(changed) saveState();
+}
+
+// ---- override saveWork to also schedule background SMS ----
+function saveWork(){
+    const g=id=>document.getElementById(id);
+    const name=g('work-name').value.trim(), whatsapp=g('work-whatsapp').value.trim();
+    const start=g('work-start').value, end=g('work-end').value, date=g('work-date').value;
+    const auto = g('work-auto') && g('work-auto').checked;
+    const smsMessage = g('work-sms-message') ? g('work-sms-message').value.trim() : '';
+    if(!name || !start || !end){ alert('Please fill in name, start time and end time'); return; }
+    const item={ name, whatsapp, repeat:workRepeatMode, days:[...workSelectedDays], date, start, end, smsMessage, smsOn:false };
+    state.works.push(item);
+    if(auto){
+        item._nextAt=_itemNextAt(item,'work');
+        const err=scheduleItemSms(item,'work');
+        delete item._nextAt;
+        if(err) alert('Work saved, but automatic SMS was not scheduled:\n\n'+err);
+    }
+    saveState(); closeModals(); renderAll(); clearWorkForm();
+    if(g('work-auto')) g('work-auto').checked=false;
+    if(g('work-sms-message')) g('work-sms-message').value='';
+}
+
+// ---- override saveReminder to also schedule background SMS ----
+function saveReminder(){
+    const g=id=>document.getElementById(id);
+    const name=g('reminder-name').value.trim(), whatsapp=g('reminder-whatsapp').value.trim(), time=g('reminder-time').value;
+    const auto = g('reminder-auto') && g('reminder-auto').checked;
+    const smsMessage = g('reminder-sms-message') ? g('reminder-sms-message').value.trim() : '';
+    if(!name || !time){ alert('Please fill in reminder message and time'); return; }
+    const item={ name, whatsapp, time, repeat:remRepeatMode, smsMessage, smsOn:false };
+    state.reminders.push(item);
+    if(auto){
+        item._nextAt=_itemNextAt(item,'reminder');
+        const err=scheduleItemSms(item,'reminder');
+        delete item._nextAt;
+        if(err) alert('Reminder saved, but automatic SMS was not scheduled:\n\n'+err);
+    }
+    saveState(); closeModals(); renderAll();
+    if(g('reminder-auto')) g('reminder-auto').checked=false;
+    if(g('reminder-sms-message')) g('reminder-sms-message').value='';
+    if(g('reminder-name')) g('reminder-name').value='';
+    if(g('reminder-whatsapp')) g('reminder-whatsapp').value='';
+    if(g('reminder-time')) g('reminder-time').value='';
+}
+
+// ---- overrides: cancel the native job when an item is deleted ----
+function deleteWork(i){ const w=state.works[i]; if(w && w.smsId && window.OccasionNative){ try{ OccasionNative.cancel(w.smsId); }catch(e){} } state.works.splice(i,1); saveState(); renderAll(); }
+function deleteReminder(i){ const r=state.reminders[i]; if(r && r.smsId && window.OccasionNative){ try{ OccasionNative.cancel(r.smsId); }catch(e){} } state.reminders.splice(i,1); saveState(); renderAll(); }
+
+// ---- small helper: show the background-SMS status under an item ----
+function _smsStatusHtml(item){
+    if(!item.smsOn) return '';
+    let s='Scheduled';
+    try{ const j=nativeJobs[item.smsId]; if(j && j.status) s=j.status; }catch(e){}
+    return '<p style="font-weight:600;color:var(--primary)">📩 Auto SMS: '+escapeHtml(s)+'</p>';
+}
+
+// ---- overrides: render Work / Reminder lists with the SMS status line ----
+function renderWorks(){
+    nativeRead();
+    const container=document.getElementById('work-list');
+    if(state.works.length===0){ container.innerHTML='<div class="empty-state"><img class="elogo" src="'+((document.getElementById('logo')||{}).src||'')+'" alt="">No work scheduled.<br>Tap <b>+ Work</b> below to add your first one.</div>'; return; }
+    container.innerHTML=state.works.map((w,index)=>'<div class="item-card"><div class="item-info"><h3>'+escapeHtml(w.name)+'</h3><p>'+w.start+' - '+w.end+' · '+formatRepeat(w)+'</p>'+_smsStatusHtml(w)+'</div><div class="item-actions">'+(w.whatsapp?'<button class="whatsapp-btn" onclick="openWhatsApp(\''+w.whatsapp+'\')" title="Send WhatsApp">💬</button>':'')+'<button class="icon-btn delete" onclick="deleteWork('+index+')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button></div></div>').join('');
+}
+function renderReminders(){
+    nativeRead();
+    const container=document.getElementById('reminder-list');
+    if(state.reminders.length===0){ container.innerHTML='<div class="empty-state">No reminders set</div>'; return; }
+    container.innerHTML=state.reminders.map((r,index)=>'<div class="item-card reminder"><div class="item-info"><h3>'+escapeHtml(r.name)+'</h3><p>'+r.time+' · '+(r.repeat==='daily'?'Daily':'Once')+'</p>'+_smsStatusHtml(r)+'</div><div class="item-actions">'+(r.whatsapp?'<button class="whatsapp-btn" onclick="openWhatsApp(\''+r.whatsapp+'\')" title="Send WhatsApp">💬</button>':'')+'<button class="icon-btn delete" onclick="deleteReminder('+index+')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button></div></div>').join('');
+}
+
+// ---- override renderOccasions so the Occasions list shows ONLY occasion jobs (id 'o'),
+//      not the new work/reminder SMS jobs ('w'/'r') ----
+function renderOccasions(){
+    nativeRead();
+    const container=document.getElementById('occasion-list'); if(!container) return;
+    const arr=Object.values(nativeJobs).filter(j=>String(j.id).charAt(0)==='o').sort((a,b)=>(b.enabled-a.enabled)||(a.at-b.at));
+    const so=document.getElementById('stat-occasions'); if(so) so.textContent=arr.length;
+    container.innerHTML=arr.length?arr.map(j=>'<div class="item-card occasion"><div class="item-info"><span class="pill">'+(j.auto?'AUTOMATIC SMS':'REMINDER')+(j.yearly?' · YEARLY':'')+'</span><h3>'+escapeHtml(j.name)+'</h3><p>'+escapeHtml(new Date(j.at).toLocaleString())+'</p><p>'+escapeHtml(j.phone||'No recipient added')+'</p><div class="message-preview">'+escapeHtml(j.message||'Add a personal greeting')+'</div><p style="font-weight:600">'+escapeHtml(j.status||'Scheduled')+'</p>'+(j.last?'<div class="soft">'+escapeHtml(j.last)+'</div>':'')+'</div><div class="item-actions"><button class="action" onclick="openOccasionModal(\''+j.id+'\')">Edit</button><button class="action" onclick="whatsappNative(\''+j.id+'\')">Open WhatsApp</button><button class="action" onclick="removeNative(\''+j.id+'\')">Cancel / delete</button></div></div>').join(''):'<div class="empty-state">🎂<br><strong>Be there, even on busy days.</strong><br>Add a birthday, anniversary, or celebration.<br>Your next thoughtful message starts here.</div>';
+}
+
+// ---- keep the occasion stat counting only occasion jobs ----
+updateStats=function(){
+    document.getElementById('stat-work').innerText=state.works.length;
+    document.getElementById('stat-reminders').innerText=state.reminders.length;
+    document.getElementById('stat-occasions').innerText=Object.values(nativeJobs).filter(j=>String(j.id).charAt(0)==='o').length;
+};
+
+// ---- run the re-arm check on open, on focus, and periodically ----
+window.addEventListener('DOMContentLoaded',()=>{ setTimeout(rearmAutoJobs,1200); });
+window.addEventListener('focus',rearmAutoJobs);
+setInterval(rearmAutoJobs,15000);
+</script>
+<style>
+#bg-health details{margin-top:12px;background:#f6f8f5;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6;color:#33463f}
+#bg-health summary{font-weight:700;cursor:pointer;color:#245d59}
+#bg-health ol{padding-left:18px;margin:6px 0 10px}
+#bg-health .bad{color:#b42318;font-weight:700}
+#bg-health .ok{color:#287b60;font-weight:700}
+#bg-health .pill.warn{background:#fde8e8;color:#9b1c1c}
+.action.now{background:#245d59;color:#fff;border-color:#245d59}
+</style>
+<script>
+/* =====================================================================
+   BACKGROUND RELIABILITY FIX
+   Why SMS only went out while the app was open:
+   the native SmsGuard foreground service (which keeps the app alive so
+   its alarms can fire) only started when you tapped "Start background SMS
+   mode". Without it, closing the app let the phone kill it, so the alarm
+   could not wake it, and on reopening the job was marked "Missed".
+   This block starts the service automatically whenever an automatic SMS
+   is waiting, shows a health check, and adds a 2-minute background test.
+   ===================================================================== */
+let _guardAt = 0, _guardOk = false;
+
+function hasPendingAuto(){
+    try{ nativeRead(); }catch(e){}
+    return Object.values(nativeJobs||{}).some(j => j && j.auto && j.enabled && j.at > Date.now() - 60000);
+}
+
+// Start the background service (SmsGuard). Throttled unless forced.
+function ensureGuard(force){
+    if(!window.ContactNative) return false;
+    if(!force && !hasPendingAuto()) return _guardOk;
+    if(!force && Date.now() - _guardAt < 60000) return _guardOk;
+    _guardAt = Date.now();
+    try{ _guardOk = !!ContactNative.startGuard(); }catch(e){ _guardOk = false; }
+    return _guardOk;
+}
+
+function _batteryOk(){ try{ return !!(window.ContactNative && ContactNative.batteryReady()); }catch(e){ return false; } }
+function openBatteryList(){ try{ if(window.ContactNative && ContactNative.batterySettings()) return; }catch(e){} if(window.OccasionNative) OccasionNative.appSettings(); }
+function openAppInfo(){ if(window.OccasionNative) OccasionNative.appSettings(); }
+function restartGuard(){ const ok = ensureGuard(true); renderHealth(); alert(ok ? 'Background mode is ON. You should see a "Work Bell Plus: background mode" notification.' : 'Could not start background mode. Allow notifications and SMS for Work Bell Plus, then try again.'); }
+
+function renderHealth(){
+    const el = document.getElementById('bg-health');
+    if(!el) return;
+    if(!window.OccasionNative){ el.classList.add('hidden'); return; }
+    let st = {}; try{ st = JSON.parse(OccasionNative.status()); }catch(e){}
+    const bat = _batteryOk(), pend = hasPendingAuto();
+    const rows = [
+        ['SMS permission', !!st.sms],
+        ['Default SMS SIM', !!st.sim],
+        ['Battery unrestricted', bat],
+        ['Background service', _guardOk]
+    ];
+    const bad = rows.filter(r => !r[1]).length;
+    el.classList.remove('hidden');
+    el.innerHTML =
+        '<span class="pill'+(bad?' warn':'')+'">'+(bad ? 'ACTION NEEDED' : 'BACKGROUND READY')+'</span>'+
+        '<h2>Background SMS check</h2>'+
+        '<p>'+(pend ? 'You have automatic SMS scheduled. ' : '')+'For SMS to go out when the app is closed or the screen is locked, everything below must show ✓, and <b>Autostart</b> must be on (see your phone’s steps).</p>'+
+        '<div class="status-grid">'+rows.map(r => '<div>'+r[0]+': '+(r[1] ? '<span class="ok">✓</span>' : '<span class="bad">✗ fix</span>')+'</div>').join('')+'</div>'+
+        '<div class="setup-actions">'+
+            (st.sms ? '' : '<button class="action" onclick="enableMessaging()">Allow SMS</button>')+
+            (bat ? '' : '<button class="action" onclick="openBatteryList()">Battery: Don’t optimize</button>')+
+            '<button class="action" onclick="openAppInfo()">App info (Autostart / Battery)</button>'+
+            '<button class="action" onclick="restartGuard()">Restart background mode</button>'+
+            '<button class="action now" onclick="quickTest()">Test: SMS me in 2 minutes</button>'+
+        '</div>'+
+        '<details><summary>Steps for your phone (Xiaomi, Vivo, Oppo, Realme, Samsung…)</summary>'+
+        '<p><b>All phones:</b> Work Bell Plus is hidden from Recents on purpose, so it can’t be swiped away and killed — press Home to leave it and open it again from its icon. Don’t force-stop it or use “clean all” booster apps. After reinstalling, redo these settings.</p>'+
+        '<p><b>Xiaomi / Redmi / POCO</b></p><ol><li>App info → <b>Autostart</b> → ON</li><li>App info → Battery saver → <b>No restrictions</b></li></ol>'+
+        '<p><b>Vivo / iQOO</b></p><ol><li>Settings → Battery → Background power consumption → Work Bell Plus → <b>Allow</b></li><li>Turn on <b>Autostart</b> for Work Bell Plus (i Manager or App settings)</li></ol>'+
+        '<p><b>Oppo / Realme / OnePlus</b></p><ol><li>App info → Battery usage → <b>Allow background activity</b> and <b>Allow auto launch</b></li></ol>'+
+        '<p><b>Samsung</b></p><ol><li>App info → Battery → <b>Unrestricted</b></li><li>Settings → Battery → Background usage limits → make sure Work Bell Plus is NOT in Sleeping / Deep sleeping apps</li></ol>'+
+        '<p><b>Then test:</b> tap “Test: SMS me in 2 minutes”, press Home, lock the screen and wait. If it arrives, background SMS works.</p>'+
+        '</details>';
+}
+
+// Schedule a real automatic SMS 2 minutes from now (shows in Special Occasions).
+function quickTest(){
+    if(!window.OccasionNative){ alert('Install the Android app to test.'); return; }
+    const def = (state.user && state.user.defaultNumber) ? state.user.defaultNumber : '';
+    const raw = prompt('Your own phone number for the test SMS (10 digits or +country code):', def);
+    if(raw === null) return;
+    const phone = normalizeNumber(raw);
+    if(!/^\+[1-9]\d{7,14}$/.test(phone)){ alert('Enter a valid phone number.'); return; }
+    const at = Date.now() + 120000, d = new Date(at);
+    const err = OccasionNative.save(JSON.stringify({
+        id: 'otest' + Date.now().toString(36), name: 'Background test',
+        phone, message: 'Work Bell Plus test: background SMS works ✓', at,
+        month: d.getMonth(), day: d.getDate(), yearly: false, auto: true
+    }));
+    if(err){ alert(err); return; }
+    ensureGuard(true);
+    try{ refreshNative(); renderAll(); }catch(e){}
+    renderHealth();
+    alert('Test SMS scheduled for ' + d.toLocaleTimeString() + '.\n\nNow press Home (the app keeps running in the background and is hidden from Recents), lock the screen, and wait 2–3 minutes.');
+}
+
+// Re-send a missed/failed one-time SMS right now.
+function sendNowNative(id){
+    try{ nativeRead(); }catch(e){}
+    const j = nativeJobs[id];
+    if(!j){ alert('Schedule not found.'); return; }
+    if(!confirm('Send this SMS now?\n\nTo: ' + j.phone + '\n\n' + j.message)) return;
+    const now = new Date();
+    const err = OccasionNative.save(JSON.stringify({
+        id: j.id, name: j.name, phone: j.phone, message: j.message, at: Date.now() + 8000,
+        month: (j.month != null ? j.month : now.getMonth()), day: (j.day != null ? j.day : now.getDate()),
+        yearly: false, auto: true
+    }));
+    if(err){ alert(err); return; }
+    ensureGuard(true);
+    setTimeout(() => { try{ refreshNative(); renderAll(); }catch(e){} }, 15000);
+    alert('Sending in a few seconds. Keep the app open until the status shows Sent.');
+}
+function _canSendNow(j){ return j && j.auto && !j.yearly && /missed|failed/i.test(String(j.status||'')); }
+
+// Status line under Work / Reminder items, now with "Send now" for missed one-time items.
+function _smsStatusHtml(item){
+    if(!item.smsOn) return '';
+    let s = 'Scheduled', j = null;
+    try{ j = nativeJobs[item.smsId]; if(j && j.status) s = j.status; }catch(e){}
+    const repeating = item.repeat === 'every' || item.repeat === 'specific' || item.repeat === 'daily';
+    const btn = (!repeating && _canSendNow(j)) ? ' <button class="action now" onclick="sendNowNative(\'' + item.smsId + '\')">Send now</button>' : '';
+    return '<p style="font-weight:600;color:var(--primary)">📩 Auto SMS: ' + escapeHtml(s) + btn + '</p>';
+}
+
+// Occasions list, now with "Send now" for missed one-time SMS.
+function renderOccasions(){
+    try{ nativeRead(); }catch(e){}
+    const container = document.getElementById('occasion-list'); if(!container) return;
+    const arr = Object.values(nativeJobs).filter(j => String(j.id).charAt(0) === 'o').sort((a,b) => (b.enabled - a.enabled) || (a.at - b.at));
+    const so = document.getElementById('stat-occasions'); if(so) so.textContent = arr.length;
+    container.innerHTML = arr.length ? arr.map(j =>
+        '<div class="item-card occasion"><div class="item-info"><span class="pill">' + (j.auto ? '💬 SMS' : '🔊 VOICE') + (j.yearly ? ' · YEARLY' : '') + '</span>' +
+        '<h3>' + escapeHtml(j.name) + '</h3><p>' + escapeHtml(new Date(j.at).toLocaleString()) + '</p><p>' + escapeHtml(j.phone || 'No recipient added') + '</p>' +
+        '<div class="message-preview">' + escapeHtml(j.message || 'Add a personal greeting') + '</div>' +
+        '<p style="font-weight:600">' + escapeHtml(j.status || 'Scheduled') + '</p>' + (j.last ? '<div class="soft">' + escapeHtml(j.last) + '</div>' : '') + '</div>' +
+        '<div class="item-actions">' + (_canSendNow(j) ? '<button class="action now" onclick="sendNowNative(\'' + j.id + '\')">Send now</button>' : '') +
+        '<button class="action" onclick="openOccasionModal(\'' + j.id + '\')">Edit</button>' +
+        '<button class="action" onclick="whatsappNative(\'' + j.id + '\')">Open WhatsApp</button>' +
+        '<button class="action" onclick="removeNative(\'' + j.id + '\')">Cancel / delete</button></div></div>'
+    ).join('') : '<div class="empty-state">🎂<br><strong>Be there, even on busy days.</strong><br>Add a birthday, anniversary, or celebration.<br>Your next thoughtful message starts here.</div>';
+}
+
+// After any save, start the background service right away.
+(function(){
+    const wrap = (name) => {
+        const orig = window[name];
+        if(typeof orig !== 'function') return;
+        window[name] = function(){ const r = orig.apply(this, arguments); setTimeout(() => { ensureGuard(true); renderHealth(); }, 300); return r; };
+    };
+    wrap('saveWork'); wrap('saveReminder'); wrap('saveOccasion');
+})();
+
+// Run on open, when returning from Settings, and periodically.
+window.addEventListener('DOMContentLoaded', () => { setTimeout(() => { ensureGuard(false); renderHealth(); }, 1500); });
+window.addEventListener('focus', () => { ensureGuard(false); renderHealth(); });
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ ensureGuard(false); renderHealth(); } });
+setInterval(() => { ensureGuard(false); renderHealth(); }, 30000);
+</script>
+<style>
+/* WORK BELL LOOK — same colours and logo as Work Bell for PC (WorkBell_9) */
+:root{--primary:#f57c12;--primary-dark:#0b1f5c;--accent:#1f4fd1;--bg:#f3f5fb;--card-bg:#fff;--text:#0f1a3a;--text-light:#64708a;--border:#dde3f0;--success:#1f8a55;--danger:#c2312a;
+  --blue:#1f4fd1;--orange:#f57c12;--gold:#ffb066;--surface2:#eef2fb;--blue-soft:#e8eefc;--orange-soft:#fff1e3;--ok-soft:#e3f5ec;--shadow:0 1px 2px rgba(15,26,58,.06),0 6px 18px rgba(15,26,58,.07)}
+body{background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#0b1f5c,#1f4fd1);box-shadow:0 10px 30px rgba(11,31,92,.25)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:38px;height:38px;border-radius:10px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);flex:none}
+#app-title span{color:var(--gold)}
+.settings-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2)}
+.settings-btn svg{display:block}
+.clock-subtitle{opacity:.75}
+.time-display{color:var(--gold);font-variant-numeric:tabular-nums}
+.next-alert{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16)}
+.next-alert::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px rgba(255,176,102,.25);margin-right:9px;vertical-align:1px}
+.setup-card{border-color:var(--border);box-shadow:var(--shadow)}
+.setup-card p,.soft{color:var(--text-light)}
+.pill{background:var(--blue-soft);color:var(--blue)}
+#bg-health .pill.warn{background:#fde8e8;color:#9b1c1c}
+.item-card.occasion .pill{background:var(--ok-soft);color:var(--success)}
+.status-grid div{background:var(--surface2)}
+.action{border-color:var(--border);color:var(--blue)}
+.action.now{background:var(--orange);border-color:var(--orange);color:#fff}
+.stat-card{border-color:var(--border);box-shadow:var(--shadow)}
+#stat-work{color:var(--orange)} #stat-reminders{color:var(--blue)} #stat-occasions{color:var(--success)}
+.item-card{border-color:var(--border);box-shadow:var(--shadow)}
+.item-card::before{background:var(--orange)}
+.item-card.reminder::before{background:var(--blue)}
+.item-card.occasion::before{background:var(--success)}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center}
+.icon-btn.delete:hover{color:var(--danger)}
+.message-preview{background:var(--surface2);color:var(--text)}
+.empty-state{border:1.5px dashed var(--border)}
+.elogo{width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 10px;opacity:.9}
+.fab-bar{border-top-color:var(--border)}
+.fab-btn,.fab-btn.reminder-btn,.fab-btn.occasion-btn{background:var(--orange);box-shadow:0 4px 12px rgba(245,124,18,.3)}
+.modal{background:rgba(6,10,24,.55)}
+.close-modal{background:var(--surface2)}
+.form-control{background:var(--surface2);border-color:var(--border)}
+.form-control:focus{border-color:var(--orange);background:#fff}
+.radio-btn{background:var(--surface2);border-color:var(--border)}
+.radio-btn.selected{background:var(--blue);border-color:var(--blue);color:#fff}
+.day-chip{background:var(--surface2);border-color:var(--border)}
+.day-chip.selected{background:var(--blue);border-color:var(--blue);color:#fff}
+.checkrow{background:var(--surface2)}
+.checkrow input{accent-color:var(--blue)}
+.btn-primary{background:var(--orange);box-shadow:0 8px 20px rgba(245,124,18,.3)}
+#setup-screen{background:linear-gradient(160deg,#0b1f5c,#1f4fd1);color:#fff}
+#setup-screen h2{color:#fff}
+#setup-screen p,#setup-screen label,#setup-screen small{color:rgba(255,255,255,.8)!important}
+#setup-screen .form-control{background:rgba(255,255,255,.95);color:#0f1a3a;border-color:transparent}
+.wlogo{width:120px;height:120px;border-radius:30px;background:#fff;box-shadow:0 18px 40px rgba(0,0,0,.35);display:block;margin:0 auto 22px}
+#alert-overlay{background:rgba(6,10,24,.92)}
+#bg-health details{background:var(--surface2)}
+#bg-health summary{color:var(--blue)}
+#bg-health .ok{color:var(--success)}
+</style>
+<script>
+/* WORK BELL LOOK — personalised title, greeting line and 12-hour clock like Work Bell for PC */
+function wbFirstName(){try{return String((state.user&&state.user.name)||'').trim().split(/\s+/)[0]||'';}catch(e){return '';}}
+function wbSetTitle(){const t=document.getElementById('app-title');if(!t)return;const f=wbFirstName();t.innerHTML=(f?escapeHtml(f)+"'s ":'')+'Work <span>Bell</span>';}
+function updateClock(){
+    const n=new Date(), el=document.getElementById('current-time');
+    if(el) el.innerText=n.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const sub=document.getElementById('clock-sub');
+    if(sub){const h=n.getHours(), f=wbFirstName();
+        sub.textContent=(h<5?'Good night':h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(f?', '+f:'')+' · '+n.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});}
+}
+(function(){
+    const logo=document.getElementById('logo'), w=document.getElementById('wLogo');
+    if(logo && w) w.src=logo.src;
+    ['saveSettings','completeSetup'].forEach(name=>{const orig=window[name];
+        if(typeof orig==='function') window[name]=function(){const r=orig.apply(this,arguments);wbSetTitle();updateClock();return r;};});
+})();
+window.addEventListener('DOMContentLoaded',()=>{wbSetTitle();updateClock();});
+</script>
+<style>
+/* CLEAN HOME + SETTINGS */
+.home-alert{margin:16px 16px 0;padding:12px 14px;border-radius:16px;background:#fff1e3;border:1px solid #ffd2a3;color:#7a3f06;display:flex;align-items:center;gap:12px;cursor:pointer;font-size:13px;line-height:1.45}
+.home-alert .ha-ic{width:28px;height:28px;border-radius:50%;background:#f57c12;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+.home-alert .ha-go{margin-left:auto;font-weight:700;color:#c2560a;white-space:nowrap}
+.set-group{font-size:.75rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.8px;margin:26px 0 12px;padding-top:20px;border-top:1px solid var(--border)}
+#bg-health .pill{margin:0 0 8px}
+#bg-health .status-grid{grid-template-columns:1fr 1fr;margin:12px 0 14px}
+#bg-health .status-grid div{display:flex;justify-content:space-between;gap:6px}
+#bg-health .ok{color:var(--success);font-weight:700}
+#bg-health .bad{color:var(--danger);font-weight:700}
+#bg-health .setup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#bg-health .action{text-align:center;padding:11px 8px}
+.action.need{background:#fff1e3;border-color:#ffc98f;color:#b45309}
+.action.wide{width:100%;margin-top:10px;padding:13px;text-align:center}
+#bg-health details{margin-top:12px;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6}
+#bg-health summary{font-weight:700;cursor:pointer}
+#bg-health ol{padding-left:18px;margin:6px 0 10px}
+.wb-help{margin-top:12px}
+</style>
+<script>
+/* CLEAN HOME + SETTINGS
+   - all background-SMS setup buttons live in Settings (gear, top right)
+   - home shows a small "Fix" banner only when scheduled SMS would be blocked
+   - header shows the real next alert; "Work today" counts only today's work
+   - "Stop background SMS mode" stays stopped until you start it again */
+function wbGuardOff(){try{return localStorage.getItem('wb_guard_off')==='1';}catch(e){return false;}}
+function ensureGuard(force){
+    if(!window.ContactNative) return false;
+    if(wbGuardOff() && force!=='user'){ _guardOk=false; return false; }
+    if(force==='user'){ try{localStorage.setItem('wb_guard_off','0');}catch(e){} }
+    if(!force && !hasPendingAuto()) return _guardOk;
+    if(!force && Date.now()-_guardAt<60000) return _guardOk;
+    _guardAt=Date.now();
+    try{ _guardOk=!!ContactNative.startGuard(); }catch(e){ _guardOk=false; }
+    return _guardOk;
+}
+function wbStartGuard(){ const ok=ensureGuard('user'); renderHealth(); alert(ok?'Background SMS mode is ON. You will see a "Work Bell Plus: background mode" notification.':'Could not start background mode. Tap "Enable SMS & alerts" first, then try again.'); }
+function wbStopGuard(){ try{localStorage.setItem('wb_guard_off','1');}catch(e){} try{ if(window.ContactNative) ContactNative.stopGuard(); }catch(e){} _guardOk=false; renderHealth();
+    alert('Background SMS mode stopped. Automatic SMS may not go out while the app is closed until you tap "Start background SMS mode" again.'); }
+function restartGuard(){ wbStartGuard(); }
+function wbOpenSetup(){ openSettings(); setTimeout(()=>{const g=document.getElementById('bg-group'); if(g && g.scrollIntoView) g.scrollIntoView({behavior:'smooth',block:'start'});},380); }
+
+function renderHealth(){
+    const el=document.getElementById('bg-health'), ban=document.getElementById('home-alert');
+    if(!window.OccasionNative){ if(ban) ban.classList.add('hidden'); if(el) el.innerHTML='<p class="soft">Install the Android app to send automatic SMS.</p>'; return; }
+    let st={}; try{ st=JSON.parse(OccasionNative.status()); }catch(e){}
+    const bat=_batteryOk(), pend=hasPendingAuto();
+    const rows=[['SMS permission',!!st.sms],['Notifications',!!st.notifications],['Default SMS SIM',!!st.sim],['Exact alarms',!!st.exact],['Battery unrestricted',bat],['Background service',_guardOk]];
+    const bad=rows.filter(r=>!r[1]).length;
+    if(ban){
+        if(pend && bad){ ban.classList.remove('hidden');
+            ban.innerHTML='<span class="ha-ic">!</span><span><b>Alerts and SMS may not work when the app is closed.</b><br>'+bad+(bad>1?' settings need':' setting needs')+' attention.</span><span class="ha-go">Fix ›</span>'; }
+        else ban.classList.add('hidden');
+    }
+    if(!el) return;
+    el.classList.remove('hidden');
+    const btn=(label,fn,need)=>'<button class="action'+(need?' need':'')+'" onclick="'+fn+'">'+label+'</button>';
+    el.innerHTML=
+        '<span class="pill'+(bad?' warn':'')+'">'+(bad?'ACTION NEEDED':'BACKGROUND READY')+'</span>'+
+        '<p class="soft">For automatic SMS when the app is closed or the screen is locked, everything below should show ✓. Buttons that need your attention are highlighted.</p>'+
+        '<div class="status-grid">'+rows.map(r=>'<div><span>'+r[0]+'</span>'+(r[1]?'<span class="ok">✓</span>':'<span class="bad">✗</span>')+'</div>').join('')+'</div>'+
+        '<div class="setup-actions">'+
+            btn('Enable SMS &amp; alerts','enableMessaging()',!st.sms||!st.notifications)+
+            btn('Allow exact alarms','enableAlarms()',!st.exact)+
+            btn('Background battery settings','openBatteryList()',!bat)+
+            btn('Phone settings','openAppInfo()',!st.sim)+
+            btn('Start background SMS mode','wbStartGuard()',!_guardOk)+
+            btn('Stop background SMS mode','wbStopGuard()',false)+
+        '</div>'+
+        '<button class="action now wide" onclick="wbTestVoice()">🔊 Test voice</button>'+
+        '<button class="action now wide" onclick="quickTest()">Test: SMS me in 2 minutes</button>'+
+        '<details><summary>Steps for your phone (Xiaomi, Vivo, Oppo, Realme, Samsung…)</summary>'+
+        '<p><b>All phones:</b> Work Bell Plus is hidden from Recents on purpose, so it can’t be swiped away — press Home to leave it and open it from its icon. Don’t force-stop it or use “clean all” booster apps. After reinstalling, redo these settings.</p>'+
+        '<p><b>Xiaomi / Redmi / POCO</b></p><ol><li>Phone settings → <b>Autostart</b> → ON</li><li>Battery saver → <b>No restrictions</b></li></ol>'+
+        '<p><b>Vivo / iQOO</b></p><ol><li>Settings → Battery → Background power consumption → Work Bell Plus → <b>Allow</b></li><li>Turn on <b>Autostart</b> for Work Bell Plus</li></ol>'+
+        '<p><b>Oppo / Realme / OnePlus</b></p><ol><li>Phone settings → Battery usage → <b>Allow background activity</b> and <b>Allow auto launch</b></li></ol>'+
+        '<p><b>Samsung</b></p><ol><li>Phone settings → Battery → <b>Unrestricted</b></li><li>Settings → Battery → Background usage limits → keep Work Bell Plus out of Sleeping / Deep sleeping apps</li></ol>'+
+        '</details>'+
+        '<p class="soft wb-help">Choose your default SMS SIM in your phone’s Settings → SIM. In Background battery settings choose All apps → Work Bell Plus → Don’t optimize. After restarting the phone, unlock it and open Work Bell once to check your schedules.</p>';
+}
+
+// header: real next alert
+function wbNextAlert(){
+    const el=document.getElementById('next-alert-text'); if(!el) return;
+    const now=Date.now(); let best=null;
+    const consider=(at,name,sms)=>{ if(at>now && (!best||at<best.at)) best={at:at,name:name,sms:!!sms}; };
+    try{ (state.works||[]).forEach(w=>{ consider(_itemNextAt(w,'work'),w.name,w.smsOn); }); }catch(e){}
+    try{ (state.reminders||[]).forEach(r=>{ consider(_itemNextAt(r,'reminder'),r.name,r.smsOn); }); }catch(e){}
+    try{ nativeRead(); Object.values(nativeJobs).forEach(j=>{ if(j && j.enabled && String(j.id).charAt(0)==='o') consider(j.at,j.name,j.auto); }); }catch(e){}
+    if(!best){ el.textContent='No upcoming alerts'; return; }
+    const d=new Date(best.at), t=new Date(), tm=new Date(t.getTime()+864e5);
+    const day=d.toDateString()===t.toDateString()?'Today':d.toDateString()===tm.toDateString()?'Tomorrow':d.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'});
+    el.textContent='Next: '+best.name+' · '+day+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+(best.sms?' · SMS':'');
+}
+
+// stats: "Work today" = work that actually happens today
+updateStats=function(){
+    const t=new Date(), ds=localDate(t), dow=t.getDay();
+    const today=(state.works||[]).filter(w=>w.repeat==='every'||(w.repeat==='specific'?(w.days||[]).indexOf(dow)>-1:w.date===ds)).length;
+    const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+    set('stat-work',today); set('stat-reminders',(state.reminders||[]).length);
+    set('stat-occasions',Object.values(nativeJobs||{}).filter(j=>String(j.id).charAt(0)==='o').length);
+    wbNextAlert();
+};
+
+(function(){
+    const os=window.openSettings;
+    if(typeof os==='function') window.openSettings=function(){ const r=os.apply(this,arguments); renderHealth(); return r; };
+})();
+window.addEventListener('DOMContentLoaded',()=>{ setTimeout(()=>{ renderHealth(); wbNextAlert(); },1600); });
+setInterval(wbNextAlert,30000);
+</script>
+<style>
+.alert-note{align-items:center;cursor:default}
+.alert-note .an-ic{font-size:20px}
+.alert-line{font-weight:600;color:var(--blue);margin-top:4px}
+</style>
+<script>
+/* WORK & REMINDER = PHONE ALERTS, NO SMS
+   - Work and Reminder never send SMS (only Special Occasions do)
+   - each Work / Reminder schedules a native alarm (auto:false) -> at the time Android
+     shows a Work Bell notification with sound, even with the app closed or locked
+   - old Work/Reminder SMS schedules are cancelled automatically */
+function hasPendingAuto(){ try{ nativeRead(); }catch(e){}
+    return Object.values(nativeJobs||{}).some(j=>j && j.enabled && j.at > Date.now()-60000); }
+function _alertId(kind){ return (kind==='work'?'wa':'ra')+Date.now().toString(36)+Math.floor(Math.random()*1000); }
+function scheduleItemAlert(item,kind){
+    if(!window.OccasionNative) return 'Install the Android app for phone alerts.';
+    const at=_itemNextAt(item,kind);
+    if(!at || at<Date.now()+5000) return '';
+    const id=item.alertId||_alertId(kind), d=new Date(at);
+    const err=OccasionNative.save(JSON.stringify({id:id,name:(kind==='work'?'Work: ':'Reminder: ')+item.name,phone:'',message:'',at:at,month:d.getMonth(),day:d.getDate(),yearly:false,auto:false}));
+    if(err) return err;
+    item.alertId=id; item.alertAt=at; return '';
+}
+function _cancelNative(id){ if(id && window.OccasionNative){ try{ OccasionNative.cancel(id); }catch(e){} } }
+// one-time clean-up: stop every Work/Reminder SMS, give items a phone alert instead
+function wbMigrateToAlerts(){
+    if(!window.OccasionNative) return;
+    try{ nativeRead(); }catch(e){}
+    let changed=false;
+    Object.values(nativeJobs||{}).forEach(j=>{ const c=String(j.id).charAt(0); if((c==='w'||c==='r') && j.auto){ _cancelNative(j.id); changed=true; } });
+    [['work',state.works],['reminder',state.reminders]].forEach(([kind,arr])=>(arr||[]).forEach(it=>{
+        if(it.smsId||it.smsOn||it.smsMessage){ _cancelNative(it.smsId); delete it.smsId; delete it.smsOn; delete it.smsAt; delete it.smsMessage; changed=true; }
+    }));
+    if(changed) saveState();
+}
+// keep every Work/Reminder alarm armed (repeating ones roll to the next day)
+function rearmAutoJobs(){
+    if(!window.OccasionNative) return;
+    try{ nativeRead(); }catch(e){}
+    let changed=false;
+    [['work',state.works],['reminder',state.reminders]].forEach(([kind,arr])=>(arr||[]).forEach(it=>{
+        const j=it.alertId?nativeJobs[it.alertId]:null;
+        const fired=!j || !j.enabled || !j.at || j.at<Date.now()-1000;
+        if(it.alertId && !fired) return;
+        if(it.alertId && !_isRepeating(it,kind)) return;          // one-time item already rang
+        if(!scheduleItemAlert(it,kind)) changed=true;
+    }));
+    if(changed) saveState();
+}
+function saveWork(){
+    const g=id=>document.getElementById(id);
+    const name=g('work-name').value.trim(), whatsapp=g('work-whatsapp').value.trim();
+    const start=g('work-start').value, end=g('work-end').value, date=g('work-date').value;
+    if(!name||!start||!end){ alert('Please fill in name, start time and end time'); return; }
+    const item={name:name,whatsapp:whatsapp,repeat:workRepeatMode,days:[...workSelectedDays],date:date,start:start,end:end};
+    state.works.push(item);
+    const err=scheduleItemAlert(item,'work'); if(err) alert('Work saved, but the phone alert was not set:\n\n'+err);
+    saveState(); closeModals(); renderAll(); clearWorkForm(); ensureGuard(true); renderHealth();
+}
+function saveReminder(){
+    const g=id=>document.getElementById(id);
+    const name=g('reminder-name').value.trim(), whatsapp=g('reminder-whatsapp').value.trim(), time=g('reminder-time').value;
+    if(!name||!time){ alert('Please fill in reminder message and time'); return; }
+    const item={name:name,whatsapp:whatsapp,time:time,repeat:remRepeatMode};
+    state.reminders.push(item);
+    const err=scheduleItemAlert(item,'reminder'); if(err) alert('Reminder saved, but the phone alert was not set:\n\n'+err);
+    saveState(); closeModals(); renderAll(); ensureGuard(true); renderHealth();
+    ['reminder-name','reminder-whatsapp','reminder-time'].forEach(id=>{ if(g(id)) g(id).value=''; });
+}
+function deleteWork(i){ const w=state.works[i]; if(w){ _cancelNative(w.alertId); _cancelNative(w.smsId); } state.works.splice(i,1); saveState(); renderAll(); }
+function deleteReminder(i){ const r=state.reminders[i]; if(r){ _cancelNative(r.alertId); _cancelNative(r.smsId); } state.reminders.splice(i,1); saveState(); renderAll(); }
+// line under each Work/Reminder card
+function _smsStatusHtml(item){
+    if(!window.OccasionNative) return '';
+    let j=null; try{ j=nativeJobs[item.alertId]; }catch(e){}
+    let txt;
+    if(j && j.enabled && j.at>Date.now()){ const d=new Date(j.at), t=new Date();
+        txt='Phone alert: '+(d.toDateString()===t.toDateString()?'today':d.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}))+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+    else if(j && j.status) txt='Phone alert: '+j.status;
+    else txt='Phone alert: not set';
+    return '<p class="alert-line">🔔 '+escapeHtml(txt)+'</p>';
+}
+setInterval(()=>rearmAutoJobs(),15000);
+window.addEventListener('focus',()=>rearmAutoJobs());
+window.addEventListener('DOMContentLoaded',()=>{ setTimeout(()=>{ wbMigrateToAlerts(); rearmAutoJobs(); try{ renderAll(); }catch(e){} ensureGuard(false); renderHealth(); },1300); });
+</script>
+<style>
+.mode-group{display:flex;gap:10px}
+.mode-btn{flex:1;padding:11px 8px;text-align:center;border:1px solid var(--border);border-radius:12px;font-size:.92rem;font-weight:600;background:var(--surface2);color:var(--text);cursor:pointer}
+.mode-btn.selected{background:var(--blue);border-color:var(--blue);color:#fff}
+.mode-help{margin-top:8px}
+.form-group>.lbl{display:block;font-size:.85rem;font-weight:600;color:var(--text-light);margin-bottom:6px}
+</style>
+<script>
+/* CHOOSE PER ITEM: RING ALERT or SEND SMS (Work, Reminder and Special Occasion)
+   ring -> native alarm with auto:false (Work Bell notification with sound)
+   sms  -> native alarm with auto:true  (sends the SMS from the default SIM)
+   both work with the app closed or the phone locked */
+const WB_HELP={
+  ring:'Work Bell speaks it out loud at this time — “Suraj, it is time for …” — like the PC app, even when the app is closed or the screen is locked.',
+  sms:'Sends an SMS from your default SIM to the phone number above at this time — even when the app is closed. Carrier charges may apply.',
+  occasion_sms:'Sends your message to the recipient from your default SIM at this time — even when the app is closed. Carrier charges may apply, including extra parts for long messages.'};
+function wbMode(kind){ const g=document.getElementById(kind+'-mode'); return g && g.dataset && g.dataset.mode==='sms' ? 'sms' : 'ring'; }
+function wbSetMode(kind,mode){
+    const g=document.getElementById(kind+'-mode'); if(!g) return;
+    if(g.dataset) g.dataset.mode=mode;
+    if(g.querySelectorAll) g.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('selected',b.getAttribute('data-mode')===mode));
+    const box=document.getElementById(kind+'-sms-box'); if(box) box.classList.toggle('hidden',mode!=='sms');
+    const help=document.getElementById(kind+'-mode-help'); if(help) help.textContent=mode==='sms'?(kind==='occasion'?WB_HELP.occasion_sms:WB_HELP.sms):(kind==='occasion'?WB_HELP.ring.replace('it is time for','today is'):WB_HELP.ring);
+    if(kind==='occasion'){ const cb=document.getElementById('occasion-auto'); if(cb) cb.checked=(mode==='sms'); }
+}
+function scheduleItemAlert(item,kind){
+    if(!window.OccasionNative) return 'Install the Android app for alerts and SMS.';
+    const at=_itemNextAt(item,kind);
+    if(!at || at<Date.now()+5000) return '';
+    const sms=item.mode==='sms', d=new Date(at);
+    const id=item.alertId||((kind==='work'?'w':'r')+(sms?'s':'a')+Date.now().toString(36)+Math.floor(Math.random()*1000));
+    const job={id:id,name:(kind==='work'?'Work: ':'Reminder: ')+item.name,phone:'',message:'',at:at,month:d.getMonth(),day:d.getDate(),yearly:false,auto:false,speak:true};
+    if(sms){ job.phone=normalizeNumber(item.whatsapp||''); job.message=(item.smsMessage||item.name||'Reminder').trim(); job.auto=true; }
+    const err=OccasionNative.save(JSON.stringify(job));
+    if(err) return err;
+    item.alertId=id; item.alertAt=at; return '';
+}
+function _wbSmsOk(kind,phoneRaw,text,whenText){
+    const ph=normalizeNumber(phoneRaw||'');
+    if(!/^\+[1-9]\d{7,14}$/.test(ph)){ alert('Enter the phone number for the SMS (10 digits, or + and the country code).'); return false; }
+    return confirm('Send an SMS at '+whenText+'?\n\nTo: '+ph+'\n\n'+text+'\n\nCarrier charges may apply.');
+}
+function saveWork(){
+    const g=id=>document.getElementById(id);
+    const name=g('work-name').value.trim(), whatsapp=g('work-whatsapp').value.trim();
+    const start=g('work-start').value, end=g('work-end').value, date=g('work-date').value;
+    if(!name||!start||!end){ alert('Please fill in name, start time and end time'); return; }
+    const mode=wbMode('work'), smsMessage=((g('work-sms-message')||{}).value||'').trim();
+    if(mode==='sms' && !_wbSmsOk('work',whatsapp,smsMessage||name,start)) return;
+    const item={name:name,whatsapp:whatsapp,repeat:workRepeatMode,days:[...workSelectedDays],date:date,start:start,end:end,mode:mode,smsMessage:smsMessage};
+    state.works.push(item);
+    const err=scheduleItemAlert(item,'work'); if(err) alert('Work saved, but '+(mode==='sms'?'the SMS':'the ring alert')+' was not scheduled:\n\n'+err);
+    saveState(); closeModals(); renderAll(); clearWorkForm(); wbSetMode('work','ring'); if(g('work-sms-message')) g('work-sms-message').value='';
+    ensureGuard(true); renderHealth();
+}
+function saveReminder(){
+    const g=id=>document.getElementById(id);
+    const name=g('reminder-name').value.trim(), whatsapp=g('reminder-whatsapp').value.trim(), time=g('reminder-time').value;
+    if(!name||!time){ alert('Please fill in reminder message and time'); return; }
+    const mode=wbMode('reminder'), smsMessage=((g('reminder-sms-message')||{}).value||'').trim();
+    if(mode==='sms' && !_wbSmsOk('reminder',whatsapp,smsMessage||name,time)) return;
+    const item={name:name,whatsapp:whatsapp,time:time,repeat:remRepeatMode,mode:mode,smsMessage:smsMessage};
+    state.reminders.push(item);
+    const err=scheduleItemAlert(item,'reminder'); if(err) alert('Reminder saved, but '+(mode==='sms'?'the SMS':'the ring alert')+' was not scheduled:\n\n'+err);
+    saveState(); closeModals(); renderAll(); wbSetMode('reminder','ring');
+    ['reminder-name','reminder-whatsapp','reminder-time','reminder-sms-message'].forEach(id=>{ if(g(id)) g(id).value=''; });
+    ensureGuard(true); renderHealth();
+}
+// keep old items working: v3-v6 SMS items stay SMS, v7 items are ring alerts; remove leftover schedules of deleted items
+function wbMigrateToAlerts(){
+    if(!window.OccasionNative) return;
+    _wbMigrated=true;
+    try{ nativeRead(); }catch(e){}
+    let changed=false; const used=new Set();
+    [state.works,state.reminders].forEach(arr=>(arr||[]).forEach(it=>{
+        if(it.smsOn && it.smsId){ it.mode='sms'; if(!it.alertId) it.alertId=it.smsId; changed=true; }
+        if('smsOn' in it || 'smsId' in it || 'smsAt' in it){ delete it.smsOn; delete it.smsId; delete it.smsAt; changed=true; }
+        if(!it.mode){ it.mode='ring'; changed=true; }
+        if(it.alertId) used.add(it.alertId);
+    }));
+    Object.values(nativeJobs||{}).forEach(j=>{ const c=String(j.id).charAt(0); if((c==='w'||c==='r') && !used.has(j.id)){ _cancelNative(j.id); changed=true; } });
+    if(changed) saveState();
+}
+function _smsStatusHtml(item){
+    if(!window.OccasionNative) return '';
+    let j=null; try{ j=nativeJobs[item.alertId]; }catch(e){}
+    const sms=item.mode==='sms', label=sms?'SMS'+(j&&j.phone?' to '+j.phone:''):'Voice alert';
+    let txt;
+    if(j && j.enabled && j.at>Date.now()){ const d=new Date(j.at), t=new Date();
+        txt=label+': '+(d.toDateString()===t.toDateString()?'today':d.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}))+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+    else if(j && j.status) txt=label+': '+j.status;
+    else txt=label+': not set';
+    const repeating=item.repeat==='every'||item.repeat==='specific'||item.repeat==='daily';
+    const btn=(sms && !repeating && _canSendNow(j))?' <button class="action now" onclick="sendNowNative(\''+item.alertId+'\')">Send now</button>':'';
+    return '<p class="alert-line">'+(sms?'💬 ':'🔊 ')+escapeHtml(txt)+btn+'</p>';
+}
+function wbNextAlert(){
+    const el=document.getElementById('next-alert-text'); if(!el) return;
+    const now=Date.now(); let best=null;
+    const consider=(at,name,sms)=>{ if(at>now && (!best||at<best.at)) best={at:at,name:name,sms:!!sms}; };
+    try{ (state.works||[]).forEach(w=>consider(_itemNextAt(w,'work'),w.name,w.mode==='sms')); }catch(e){}
+    try{ (state.reminders||[]).forEach(r=>consider(_itemNextAt(r,'reminder'),r.name,r.mode==='sms')); }catch(e){}
+    try{ nativeRead(); Object.values(nativeJobs).forEach(j=>{ if(j && j.enabled && String(j.id).charAt(0)==='o') consider(j.at,j.name,j.auto); }); }catch(e){}
+    if(!best){ el.textContent='No upcoming alerts'; return; }
+    const d=new Date(best.at), t=new Date(), tm=new Date(t.getTime()+864e5);
+    const day=d.toDateString()===t.toDateString()?'Today':d.toDateString()===tm.toDateString()?'Tomorrow':d.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'});
+    el.textContent='Next: '+best.name+' · '+day+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+(best.sms?' · SMS':' · Voice');
+}
+// re-arm runs the upgrade step first (an older startup timer calls this before the upgrade timer)
+let _wbMigrated=false;
+function rearmAutoJobs(){
+    if(!window.OccasionNative) return;
+    if(!_wbMigrated){ _wbMigrated=true; wbMigrateToAlerts(); }
+    try{ nativeRead(); }catch(e){}
+    let changed=false;
+    [['work',state.works],['reminder',state.reminders]].forEach(([kind,arr])=>(arr||[]).forEach(it=>{
+        const j=it.alertId?nativeJobs[it.alertId]:null;
+        const fired=!j || !j.enabled || !j.at || j.at<Date.now()-1000;
+        if(it.alertId && !fired) return;
+        if(it.alertId && !_isRepeating(it,kind)) return;
+        if(!scheduleItemAlert(it,kind)) changed=true;
+    }));
+    if(changed) saveState();
+}
+// opening a form starts on "Ring alert"; editing an occasion shows its saved choice
+(function(){
+    const wrap=(name,after)=>{ const o=window[name]; if(typeof o==='function') window[name]=function(){ const r=o.apply(this,arguments); after(); return r; }; };
+    wrap('openWorkModal',()=>{ wbSetMode('work','ring'); const t=document.getElementById('work-sms-message'); if(t) t.value=''; });
+    wrap('openReminderModal',()=>{ wbSetMode('reminder','ring'); const t=document.getElementById('reminder-sms-message'); if(t) t.value=''; });
+    wrap('openOccasionModal',()=>{ const cb=document.getElementById('occasion-auto'); wbSetMode('occasion',cb&&cb.checked?'sms':'ring'); });
+    ['work','reminder','occasion'].forEach(k=>wbSetMode(k,'ring'));
+})();
+</script>
+<script>
+/* VOICE (native Android text-to-speech, like Work Bell for PC) */
+function wbSendName(){ try{ if(window.OccasionNative && OccasionNative.setName) OccasionNative.setName(String((state.user&&state.user.name)||'')); }catch(e){} }
+function wbTestVoice(){
+    const f=String((state.user&&state.user.name)||'').trim().split(/\s+/)[0];
+    const text=(f?f+', ':'')+'your work reminder is working.';
+    let ok=false; try{ ok=!!(window.OccasionNative && OccasionNative.speak && OccasionNative.speak(text.charAt(0).toUpperCase()+text.slice(1))); }catch(e){}
+    if(!ok) alert('Voice is not available. Check that a text-to-speech engine (for example Speech Services by Google) is installed and turned on in phone settings.');
+}
+(function(){
+    ['saveSettings','completeSetup'].forEach(n=>{ const o=window[n]; if(typeof o==='function') window[n]=function(){ const r=o.apply(this,arguments); wbSendName(); return r; }; });
+})();
+window.addEventListener('DOMContentLoaded',()=>{ wbSendName(); });
+</script>
+</body>
+</html>

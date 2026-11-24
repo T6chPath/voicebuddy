@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Each GitHub build gets a higher version code, so it always installs as an update.
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
+android {
+    namespace 'app.workbell.plus'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.workbell.plus'
+        minSdk 24
+        // 29 = same as the installed v8, so the signed APK installs over it
+        targetSdk 29
+        versionCode 10 + buildNumber
+        versionName "3.0." + buildNumber
+    }
+
+    // Built unsigned on GitHub; signed afterwards with the Work Bell Plus key (kept private, never uploaded).
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
